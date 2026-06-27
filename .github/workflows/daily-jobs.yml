@@ -1,0 +1,48 @@
+name: 毎朝AI案件取得
+
+on:
+  schedule:
+    # 毎朝6:00 JST = 21:00 UTC（前日）
+    - cron: '0 21 * * *'
+  # 手動実行ボタン（テスト用）
+  workflow_dispatch:
+
+jobs:
+  fetch-and-publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    permissions:
+      contents: write  # gh-pagesへのpushに必要
+
+    steps:
+      - name: リポジトリをチェックアウト
+        uses: actions/checkout@v4
+
+      - name: Node.js セットアップ
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: 依存パッケージをインストール
+        run: npm ci
+
+      - name: Playwright Chromium をインストール
+        run: npx playwright install chromium --with-deps
+
+      - name: 案件取得・HTML生成
+        env:
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          PAGES_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
+        run: node run.js
+
+      - name: GitHub Pages へデプロイ
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./output
+          publish_branch: gh-pages
+          force_orphan: false
+          commit_message: "📋 案件更新 ${{ github.run_id }}"

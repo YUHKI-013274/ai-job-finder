@@ -1,0 +1,21 @@
+{
+    "name": "ai-job-finder",
+    "version": "1.0.0",
+    "description": "",
+    "main": "index.js",
+    "scripts": {
+        "start": "node run.js",
+        "test": "node run.js"
+    },
+    "keywords": [],
+    "author": "",
+    "license": "ISC",
+    "type": "commonjs",
+    "dependencies": {
+        "nodemailer": "^9.0.1",
+        "playwright": "^1.61.1"
+    },
+    "engines": {
+        "node": ">=18"
+    }
+}
