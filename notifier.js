@@ -65,6 +65,7 @@ async function sendGmailNotification({ jobs, pageUrl, date }) {
   const transporter = nodemailer.createTransport({
     service: 'gmail',
     auth: { user: email, pass: appPassword },
+    tls: { rejectUnauthorized: false },
   });
 
   await transporter.sendMail({

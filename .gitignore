@@ -3,3 +3,4 @@ output/jobs_*.html
 output/jobs_*.md
 .env
 last_run.log
+.gh-pages-worktree/
