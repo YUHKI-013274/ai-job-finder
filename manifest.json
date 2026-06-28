@@ -1,0 +1,9 @@
+{
+  "name": "AI案件チェッカー",
+  "short_name": "AI案件",
+  "description": "毎朝クラウドワークスのAI案件を確認",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#1a1a2e",
+  "theme_color": "#1a1a2e"
+}
