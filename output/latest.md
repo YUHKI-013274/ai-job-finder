@@ -14,9 +14,9 @@
 
 ---
 
-### 2. ⭐︎AIスキルで稼ぐ⭐︎画像制作のサポート業務・コピペ&調整でOK・マニュアル完備・フリーランス&副業歓迎・フィードバック会付き
+### 2. ネットショップの画像、AI生成だけでOK｜経験いりません
 
-- URL: https://crowdworks.jp/public/jobs/13244789
+- URL: https://crowdworks.jp/public/jobs/13267377
 - 報酬: 5,000円
 - ランク: **S**
 - AI実績: ★★★★☆
@@ -44,9 +44,9 @@ URL: https://crowdworks.jp/public/jobs/13274343
 
 ---
 
-## 2. [S] ⭐︎AIスキルで稼ぐ⭐︎画像制作のサポート業務・コピペ&調整でOK・マニュアル完備・フリーランス&副業歓迎・フィードバック会付き
+## 2. [S] ネットショップの画像、AI生成だけでOK｜経験いりません
 
-URL: https://crowdworks.jp/public/jobs/13244789
+URL: https://crowdworks.jp/public/jobs/13267377
 報酬: 5,000円
 応募理由: AI活用スキルを直接活かせる案件
 
@@ -68,23 +68,15 @@ URL: https://crowdworks.jp/public/jobs/13246231
 
 ---
 
-## 5. [B] 【初心者歓迎！/マニュアル完備！】短尺動画に関わる投稿文制作のご依頼です！
+## 5. [B] 【未経験OK・継続あり】LP制作・デザインスタッフ募集！　SNS投稿作成にも繋がるトータルデザインのお仕事依頼です！
 
-URL: https://crowdworks.jp/public/jobs/13249562
-報酬: 0円
-応募理由: 初心者歓迎で受注しやすい
-
----
-
-## 6. [B] 【主婦さん・初心者ユーザー大歓迎！ 】無料スマホゲームを《1日３つプレイ》するだけ♫ ［実績になる][マニュアル付き]
-
-URL: https://crowdworks.jp/public/jobs/13271693
+URL: https://crowdworks.jp/public/jobs/13252166
 報酬: 50,000円
 応募理由: 初心者歓迎で受注しやすい
 
 ---
 
-## 7. [B] 【時給1,320円/フルリモート】オンラインイベントでのチャットサポート｜週3日〜・午前中の3h勤務 #138
+## 6. [B] 【時給1,320円/フルリモート】オンラインイベントでのチャットサポート｜週3日〜・午前中の3h勤務 #138
 
 URL: https://crowdworks.jp/public/jobs/13199452
 報酬: 1,320円
@@ -92,7 +84,7 @@ URL: https://crowdworks.jp/public/jobs/13199452
 
 ---
 
-## 8. [B] 【リサーチ業務】海外で話題の出来事・映像ネタを調査してくれる方募集
+## 7. [B] 【リサーチ業務】海外で話題の出来事・映像ネタを調査してくれる方募集
 
 URL: https://crowdworks.jp/public/jobs/13274541
 報酬: 5,000円
@@ -100,7 +92,7 @@ URL: https://crowdworks.jp/public/jobs/13274541
 
 ---
 
-## 9. [B] 【継続依頼あり】SNSに投稿するショート動画編集（経験値問わず）
+## 8. [B] 【継続依頼あり】SNSに投稿するショート動画編集（経験値問わず）
 
 URL: https://crowdworks.jp/public/jobs/13274538
 報酬: 5,000円
@@ -108,10 +100,18 @@ URL: https://crowdworks.jp/public/jobs/13274538
 
 ---
 
-## 10. [B] 初心者OK！Instagram投稿用コンテンツ制作のサポート業務
+## 9. [B] 【簡単作業♪1件25円】LINEタイムライン(ディスカバー含)・LINE Newsの動画広告録画・URL入力のご依頼 6/30
 
-URL: https://crowdworks.jp/public/jobs/13253703
-報酬: 0円
+URL: https://crowdworks.jp/public/jobs/13274114
+報酬: 25円
+応募理由: ゆうきの管理・整理スキルを活かせる可能性がある
+
+---
+
+## 10. [B] 【未経験◎】関西の賃貸物件のInstagram運用者募集！！
+
+URL: https://crowdworks.jp/public/jobs/13274330
+報酬: 要確認
 応募理由: 初心者歓迎で受注しやすい
 
 ---
