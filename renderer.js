@@ -11,6 +11,7 @@ function getRankBg(rank) {
 function getReasonColor(reason) {
   return {
     '応募済み': '#27ae60',
+    '見送り': '#34495e',
     '既出': '#7f8c8d',
     '単価が低すぎる': '#e67e22',
     '条件不一致': '#8e44ad',
@@ -71,8 +72,12 @@ function renderJobCard(job, i, isTop3 = false) {
       </div>
 
       <div class="detail-section reason">
-        <div class="detail-label">✅ 応募すべき理由</div>
-        <div class="detail-text">${escapeHtml(job.reason)}</div>
+        <div class="detail-label">✅ 高評価の理由</div>
+        <div class="signal-chips">
+          ${(job.matchedSignals && job.matchedSignals.length > 0)
+            ? job.matchedSignals.map(s => `<span class="signal-chip">✓ ${escapeHtml(s)}</span>`).join('')
+            : `<span class="detail-text">${escapeHtml(job.reason)}</span>`}
+        </div>
       </div>
 
       <div class="detail-section strength">
@@ -86,6 +91,7 @@ function renderJobCard(job, i, isTop3 = false) {
       </div>
 
       <span class="applied-overlay">✅ 応募済み</span>
+      <span class="skipped-overlay">⏭ 見送り</span>
       <div class="card-actions">
         <a href="${job.url}" target="_blank" class="btn-view">案件を見る →</a>
         <button class="btn-save" onclick="toggleSave('${job.id}', '${escapeHtml(job.title.replace(/'/g, ''))}', '${job.url}', '${job.rank}')">
@@ -93,6 +99,9 @@ function renderJobCard(job, i, isTop3 = false) {
         </button>
         <button class="btn-applied" onclick="toggleApplied('${job.id}', '${escapeHtml(job.title.replace(/'/g, ''))}', '${job.url}')">
           <span class="applied-text">✅ 応募済み</span>
+        </button>
+        <button class="btn-skip" onclick="toggleSkip('${job.id}', '${escapeHtml(job.title.replace(/'/g, ''))}', '${job.url}')">
+          <span class="skip-text">⏭ 見送り</span>
         </button>
       </div>
     </div>
@@ -102,7 +111,7 @@ function renderJobCard(job, i, isTop3 = false) {
 function renderExcludedCard(job) {
   const color = getReasonColor(job.excludeReason);
   return `
-    <div class="excluded-card">
+    <div class="excluded-card" data-reason="${escapeHtml(job.excludeReason)}">
       <div class="excluded-header">
         <span class="reason-badge" style="background:${color}">${escapeHtml(job.excludeReason)}</span>
         <span class="genre-tag">${escapeHtml(job.genre || job.matchedKeyword || '')}</span>
@@ -113,6 +122,7 @@ function renderExcludedCard(job) {
       <div class="job-meta">
         <span class="meta-item">💰 ${escapeHtml(job.price || '要確認')}</span>
       </div>
+      ${job.skipReason ? `<div class="skip-reason-text">見送り理由: ${escapeHtml(job.skipReason)}</div>` : ''}
     </div>
   `;
 }
@@ -155,7 +165,7 @@ function renderHTML({ candidates, holds, excluded }, date, pageUrl) {
     acc[j.excludeReason] = (acc[j.excludeReason] || 0) + 1;
     return acc;
   }, {});
-  const reasonOrder = ['応募済み', '既出', '単価が低すぎる', '条件不一致', 'リスクあり'];
+  const reasonOrder = ['応募済み', '見送り', '既出', '単価が低すぎる', '条件不一致', 'リスクあり'];
   let excludedHtml = '';
   for (const reason of reasonOrder) {
     const list = excluded.filter(j => j.excludeReason === reason);
@@ -407,6 +417,16 @@ function renderHTML({ candidates, holds, excluded }, date, pageUrl) {
     .detail-section.strength { background: #f0f0ff; }
     .detail-label { font-weight: 700; font-size: 0.73rem; margin-bottom: 3px; color: #555; }
     .detail-text { line-height: 1.5; color: #333; }
+    .signal-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+    .signal-chip {
+      background: #dff0d8;
+      color: #2e7d32;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 0.76rem;
+      font-weight: 600;
+      white-space: nowrap;
+    }
 
     .card-actions {
       display: flex;
@@ -476,6 +496,45 @@ function renderHTML({ candidates, holds, excluded }, date, pageUrl) {
       border-radius: 10px;
     }
     .job-card.applied-card .applied-overlay { display: inline-block; }
+
+    .btn-skip {
+      background: #f8f9fa;
+      border: 2px solid #ddd;
+      color: #555;
+      padding: 10px 14px;
+      border-radius: 10px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+    .btn-skip.skipped {
+      background: #eceff1;
+      border-color: #607d8b;
+      color: #37474f;
+    }
+    .job-card.skipped-card {
+      opacity: 0.4;
+      position: relative;
+    }
+    .skipped-overlay {
+      display: none;
+      position: absolute;
+      top: 8px; right: 8px;
+      background: #607d8b;
+      color: white;
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 10px;
+    }
+    .job-card.skipped-card .skipped-overlay { display: inline-block; }
+    .skip-reason-text {
+      font-size: 0.75rem;
+      color: #607d8b;
+      margin-top: 4px;
+    }
 
     /* ===== 除外カード ===== */
     .excluded-card {
@@ -621,6 +680,19 @@ function renderHTML({ candidates, holds, excluded }, date, pageUrl) {
       justify-content: center;
     }
 
+    #applied-filter-bar, #skip-filter-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: white;
+      padding: 8px 12px;
+      border-radius: 10px;
+      margin-bottom: 10px;
+      font-size: 0.82rem;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+    }
+    #applied-filter-bar label, #skip-filter-bar label { cursor: pointer; color: #555; }
+
     /* ===== 更新時刻 ===== */
     .update-info {
       text-align: center;
@@ -683,13 +755,18 @@ function renderHTML({ candidates, holds, excluded }, date, pageUrl) {
 
   <!-- 除外タブ -->
   <div id="tab-excluded" class="tab-content">
-    <div class="update-info">応募済み・既出・単価が低い・条件不一致・リスクありの案件（理由付き）</div>
+    <div class="update-info">応募済み・見送り・既出・単価が低い・条件不一致・リスクありの案件（理由付き）</div>
+    <div id="skip-filter-bar">
+      <input type="checkbox" id="show-skipped" onchange="applySkippedFilter()">
+      <label for="show-skipped">見送り案件も表示する</label>
+    </div>
     ${excludedHtml}
   </div>
 
   <!-- 候補リストタブ -->
   <div id="tab-saved" class="tab-content">
     <div id="applied-export-container"></div>
+    <div id="skipped-export-container"></div>
     <div id="saved-list-container">
       <div class="saved-empty">
         🔖 「候補に追加」を押した案件がここに表示されます<br><br>
@@ -768,6 +845,7 @@ function renderHTML({ candidates, holds, excluded }, date, pageUrl) {
       const saved = getSaved();
       const container = document.getElementById('saved-list-container');
       renderAppliedExport();
+      renderSkippedExport();
       if (saved.length === 0) {
         container.innerHTML = '<div class="saved-empty">🔖 「候補に追加」を押した案件がここに表示されます<br><br>気になる案件を3件選んで、ChatGPTへ共有しましょう</div>';
         return;
@@ -918,10 +996,100 @@ function renderHTML({ candidates, holds, excluded }, date, pageUrl) {
       });
     }
 
+    // ===== 見送り管理 =====
+    // ここでの「見送り」もブラウザ内の一時保存のみ。
+    // 次回検索で永久に除外するには、ターミナルで mark-skipped.js を実行して data/job_status.json に登録する。
+    const SKIPPED_KEY = 'ai_jobs_skipped_v1';
+
+    function getSkipped() {
+      try { return JSON.parse(localStorage.getItem(SKIPPED_KEY) || '[]'); }
+      catch { return []; }
+    }
+    function setSkipped(list) {
+      localStorage.setItem(SKIPPED_KEY, JSON.stringify(list));
+    }
+
+    function toggleSkip(id, title, url) {
+      let skipped = getSkipped();
+      const exists = skipped.find(j => j.id === id);
+      if (exists) {
+        skipped = skipped.filter(j => j.id !== id);
+      } else {
+        const reason = window.prompt('見送り理由を入力してください（省略可）', '') || '理由未記入';
+        skipped.push({ id, title, url, reason, skippedAt: new Date().toISOString() });
+      }
+      setSkipped(skipped);
+      updateSkipButtons();
+      renderSkippedExport();
+    }
+
+    function updateSkipButtons() {
+      const skipped = getSkipped();
+      const ids = new Set(skipped.map(j => j.id));
+      document.querySelectorAll('.job-card').forEach(card => {
+        const id = card.dataset.id;
+        const btn = card.querySelector('.btn-skip');
+        const text = card.querySelector('.skip-text');
+        if (!btn) return;
+        if (ids.has(id)) {
+          btn.classList.add('skipped');
+          card.classList.add('skipped-card');
+          if (text) text.textContent = '↩ 見送り解除';
+        } else {
+          btn.classList.remove('skipped');
+          card.classList.remove('skipped-card');
+          if (text) text.textContent = '⏭ 見送り';
+        }
+      });
+    }
+
+    function applySkippedFilter() {
+      const show = document.getElementById('show-skipped') && document.getElementById('show-skipped').checked;
+      document.querySelectorAll('.excluded-card').forEach(card => {
+        if (card.dataset.reason === '見送り') {
+          card.style.display = show ? '' : 'none';
+        }
+      });
+    }
+
+    function renderSkippedExport() {
+      const container = document.getElementById('skipped-export-container');
+      if (!container) return;
+      const skipped = getSkipped();
+      if (skipped.length === 0) {
+        container.innerHTML = '';
+        return;
+      }
+      const args = skipped.map(j => '"' + j.id + '|' + j.reason.replace(/"/g, '') + '"').join(' ');
+      const cmd = 'node mark-skipped.js ' + args;
+      container.innerHTML =
+        '<div class="applied-export-box">' +
+        '<div style="font-weight:700; margin-bottom:4px">⏭ 見送り登録コマンド（PCのターミナルで実行）</div>' +
+        '<div>このコマンドを実行すると、次回以降の検索でこれらの案件を表示しなくなります。</div>' +
+        '<textarea id="skipped-export-textarea" rows="2" readonly>' + escHtml(cmd) + '</textarea>' +
+        '<button class="btn-copy" onclick="copySkippedExport()">📋 コマンドをコピー</button>' +
+        '</div>';
+    }
+
+    function copySkippedExport() {
+      const ta = document.getElementById('skipped-export-textarea');
+      navigator.clipboard.writeText(ta.value).then(() => {
+        const btn = event.target;
+        const original = btn.textContent;
+        btn.textContent = '✅ コピーしました';
+        setTimeout(() => { btn.textContent = original; }, 2000);
+      }).catch(() => {
+        ta.select();
+        document.execCommand('copy');
+      });
+    }
+
     // 初期化
     updateSaveButtons();
     updateAppliedButtons();
     applyAppliedFilter();
+    updateSkipButtons();
+    applySkippedFilter();
   </script>
 </body>
 </html>`;
@@ -956,13 +1124,13 @@ function renderMarkdown({ candidates, holds, excluded }, date) {
   });
 
   md += `## 🚫 除外（全${excluded.length}件）\n\n`;
-  const reasonOrder = ['応募済み', '既出', '単価が低すぎる', '条件不一致', 'リスクあり'];
+  const reasonOrder = ['応募済み', '見送り', '既出', '単価が低すぎる', '条件不一致', 'リスクあり'];
   for (const reason of reasonOrder) {
     const list = excluded.filter(j => j.excludeReason === reason);
     if (list.length === 0) continue;
     md += `### ${reason}（${list.length}件）\n\n`;
     list.forEach(job => {
-      md += `- ${job.title}\n  URL: ${job.url}\n`;
+      md += `- ${job.title}\n  URL: ${job.url}${job.skipReason ? `\n  見送り理由: ${job.skipReason}` : ''}\n`;
     });
     md += `\n`;
   }

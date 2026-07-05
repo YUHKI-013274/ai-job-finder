@@ -14,9 +14,9 @@ const { scrapeJobs } = require('./scraper');
 const { classifyJobs } = require('./evaluator');
 const { renderHTML, renderMarkdown } = require('./renderer');
 const { sendGmailNotification } = require('./notifier');
-const { loadSeenJobs, saveSeenJobs, loadAppliedJobs } = require('./store');
+const { loadSeenJobs, saveSeenJobs, loadAppliedJobs, loadJobStatus, filterJobStatus, JOB_STATUS } = require('./store');
 const { syncAppliedFromSheet } = require('./sheet-sync');
-const { MIN_RAW_JOBS } = require('./config');
+const { MIN_RAW_JOBS, CURRENT_PHASE, CURRENT_PHASE_KEY } = require('./config');
 
 const IS_CI = process.env.CI === 'true';
 const REPO_OWNER = 'YUHKI-013274';
@@ -55,9 +55,11 @@ async function main() {
   }
   const seenMap = loadSeenJobs();
   const appliedMap = loadAppliedJobs();
+  const rejectedMap = filterJobStatus(loadJobStatus(), JOB_STATUS.SKIPPED);
 
-  console.log('\n案件を評価・分類中...');
-  const { candidates, holds, excluded } = classifyJobs(rawJobs, appliedMap, seenMap);
+  console.log(`\nフェーズ: ${CURRENT_PHASE_KEY}（${CURRENT_PHASE.label}）`);
+  console.log('案件を評価・分類中...');
+  const { candidates, holds, excluded } = classifyJobs(rawJobs, appliedMap, seenMap, rejectedMap);
 
   if (candidates.length < 5) {
     console.log(`⚠️  応募候補が5件未満です（${candidates.length}件）。SEARCH_KEYWORDSを増やすことを検討してください。`);

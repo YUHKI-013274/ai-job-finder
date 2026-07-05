@@ -2,11 +2,12 @@ const {
   EXCLUDE_PATTERNS,
   PHASE0_PRIORITY_PATTERNS,
   CONTINUITY_PATTERNS,
+  CLIENT_TRUST_PATTERNS,
   RISK_PATTERNS,
   MIN_PRICE_YEN,
   MIN_CANDIDATES,
-  S_RANK_KEYWORDS,
-  A_RANK_KEYWORDS,
+  AI_FRIENDLY_KEYWORDS,
+  AI_TECHNICAL_KEYWORDS,
   STRENGTH_HINTS,
   CURRENT_PHASE,
   MAX_JOBS,
@@ -65,18 +66,19 @@ function evaluateJob(job) {
     return { ...job, excluded: true, excludeReason: '条件不一致', priceYen };
   }
 
-  // AI関連スコア（フェーズごとの重み付け。実績0件フェーズでは補助的な役割）
-  const sMatch = matchPatterns(text, S_RANK_KEYWORDS).length;
-  const aMatch = matchPatterns(text, A_RANK_KEYWORDS).length;
-  const aiScore = Math.min(5, sMatch * 2 + aMatch) * CURRENT_PHASE.aiWeight;
+  // AI関連スコア（今の強みを活かせるものだけ加点。技術系は加点せず注意喚起のみ）
+  const aiFriendlyMatches = matchPatterns(text, AI_FRIENDLY_KEYWORDS);
+  const technicalMatches = matchPatterns(text, AI_TECHNICAL_KEYWORDS);
+  const aiScore = Math.min(5, aiFriendlyMatches.length) * CURRENT_PHASE.aiWeight;
 
-  // 受注しやすさ・安全性スコア（未経験OK・マニュアル完備等の目印の数）
-  const priorityMatches = matchPatterns(text, PHASE0_PRIORITY_PATTERNS).length;
-  const priorityScore = Math.min(5, priorityMatches) * CURRENT_PHASE.priorityWeight;
+  // 受注しやすさ・安全性スコア（未経験OK・マニュアル完備・クライアント信頼性の目印の数）
+  const priorityMatches = matchPatterns(text, PHASE0_PRIORITY_PATTERNS);
+  const trustMatches = matchPatterns(text, CLIENT_TRUST_PATTERNS);
+  const priorityScore = Math.min(5, priorityMatches.length + trustMatches.length) * CURRENT_PHASE.priorityWeight;
 
   // 継続案件ボーナス（一度受注できれば実績を積み上げやすい）
-  const isContinuity = containsAny(text, CONTINUITY_PATTERNS);
-  const continuityScore = (isContinuity ? 1 : 0) * CURRENT_PHASE.continuityWeight;
+  const continuityMatches = matchPatterns(text, CONTINUITY_PATTERNS);
+  const continuityScore = (continuityMatches.length > 0 ? 1 : 0) * CURRENT_PHASE.continuityWeight;
 
   // 受注可能性スコア（未経験歓迎・マニュアル完備ほど高く、経験要件があるほど低い）
   let winScore = 3;
@@ -103,11 +105,14 @@ function evaluateJob(job) {
   // 案件ジャンル判定
   const genre = detectGenre(text);
 
-  // 応募すべき理由
-  const reason = buildReason(text, sMatch, isContinuity);
+  // 高評価の理由（✓チェックリスト形式で可視化）
+  const matchedSignals = buildMatchedSignals(priorityMatches, continuityMatches, aiFriendlyMatches, trustMatches);
+  const reason = matchedSignals.length > 0
+    ? matchedSignals.map(s => `✓ ${s}`).join('\n')
+    : '安全に完了できそうな案件（実績作りとして検討可）';
 
   // 注意点
-  const caution = buildCaution(text);
+  const caution = buildCaution(text, technicalMatches, aiFriendlyMatches);
 
   // 提案文の強み
   const strengthHint = buildStrengthHint(text);
@@ -121,6 +126,7 @@ function evaluateJob(job) {
     winScore,
     totalScore,
     rank,
+    matchedSignals,
     reason,
     caution,
     strengthHint,
@@ -145,21 +151,31 @@ function detectGenre(text) {
   return 'その他';
 }
 
-function buildReason(text, sMatch, isContinuity) {
-  const reasons = [];
-  if (/未経験|初心者/.test(text)) reasons.push('未経験・初心者歓迎で実績0件の今のフェーズで受注しやすい');
-  if (/マニュアル(あり|完備|整備)/.test(text)) reasons.push('マニュアル完備で安心して取り組める');
-  if (isContinuity) reasons.push('継続案件のため一度受注できれば実績を積み上げやすい');
-  if (sMatch > 0) reasons.push('AI活用スキルを活かせる案件で今後のブランディングにもつながる');
-  if (/業務改善|仕組み/.test(text)) reasons.push('飲食業界22年の業務改善経験を活かせる');
-  if (/採用|面接/.test(text)) reasons.push('300名以上の採用面接経験が強みになる');
-  if (/Notion/.test(text)) reasons.push('Notion活用スキルを実績化できる');
-  if (reasons.length === 0) reasons.push('安全に完了できそうな案件（実績作りとして検討可）');
-  return reasons.join('、');
+// マッチした信号をラベルの重複を除いて1つの配列にまとめる（表示用チェックリスト）
+function buildMatchedSignals(priorityMatches, continuityMatches, aiFriendlyMatches, trustMatches) {
+  const seen = new Set();
+  const signals = [];
+  for (const list of [priorityMatches, continuityMatches, aiFriendlyMatches, trustMatches]) {
+    for (const p of list) {
+      const label = String(p);
+      if (!seen.has(label)) {
+        seen.add(label);
+        signals.push(label);
+      }
+    }
+  }
+  // 短い語が別の長い語に完全に含まれる場合は、短い方を除いて表示を簡潔にする
+  // （例: "ChatGPT"と"GPT"が両方マッチした場合は"ChatGPT"だけ表示）
+  return signals.filter(label =>
+    !signals.some(other => other !== label && other.length > label.length && other.includes(label))
+  );
 }
 
-function buildCaution(text) {
+function buildCaution(text, technicalMatches, aiFriendlyMatches) {
   const cautions = [];
+  if (technicalMatches.length > 0 && aiFriendlyMatches.length === 0) {
+    cautions.push('本格的なエンジニアリング経験を求められる可能性があります（優先度低）');
+  }
   if (/実績\s*\d+\s*件以上/.test(text)) cautions.push('実績件数の要件（必須ではなく尚可の可能性）を確認して応募を判断');
   if (/週\s*\d+\s*時間/.test(text)) cautions.push('稼働時間の条件を確認');
   if (/単価|予算/.test(text)) cautions.push('予算が明記されていない場合は要確認');
@@ -187,8 +203,8 @@ function byRankThenScore(a, b) {
 }
 
 // 案件一覧を「応募候補」「保留」「除外」の3分類に振り分ける。
-// appliedMap / seenMap は { [jobId]: true相当の値 } の形。
-function classifyJobs(jobs, appliedMap = {}, seenMap = {}) {
+// appliedMap / seenMap / rejectedMap は { [jobId]: {...} } の形（値の有無だけを見る）。
+function classifyJobs(jobs, appliedMap = {}, seenMap = {}, rejectedMap = {}) {
   const candidates = [];
   const holds = [];
   const excluded = [];
@@ -196,6 +212,15 @@ function classifyJobs(jobs, appliedMap = {}, seenMap = {}) {
   for (const raw of jobs) {
     if (appliedMap[raw.id]) {
       excluded.push({ ...raw, excluded: true, excludeReason: '応募済み' });
+      continue;
+    }
+    if (rejectedMap[raw.id]) {
+      excluded.push({
+        ...raw,
+        excluded: true,
+        excludeReason: '見送り',
+        skipReason: rejectedMap[raw.id].reason || '理由未記入',
+      });
       continue;
     }
     if (seenMap[raw.id]) {

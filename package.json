@@ -6,7 +6,8 @@
     "scripts": {
         "start": "node run.js",
         "test": "node run.js",
-        "mark-applied": "node mark-applied.js"
+        "mark-applied": "node mark-applied.js",
+        "mark-skipped": "node mark-skipped.js"
     },
     "keywords": [],
     "author": "",
