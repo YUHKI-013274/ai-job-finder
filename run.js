@@ -154,6 +154,23 @@ async function main() {
 }
 
 function pushToGhPages(outputDir, repoDir, commitMsg) {
+  const worktreeDir = path.join(repoDir, '.gh-pages-worktree');
+
+  // 前回の失敗などでworktreeが残っていると、以降の全処理が失敗するため必ず先に片付ける
+  try {
+    execSync(`git worktree remove "${worktreeDir}" --force`, { cwd: repoDir, stdio: 'pipe' });
+  } catch {
+    // 登録が無い場合は何もしない
+  }
+  try {
+    execSync('git worktree prune', { cwd: repoDir, stdio: 'pipe' });
+  } catch {
+    // 無視
+  }
+  if (fs.existsSync(worktreeDir)) {
+    fs.rmSync(worktreeDir, { recursive: true, force: true });
+  }
+
   try {
     // リモートの最新状態を取得してローカルのgh-pages参照を合わせる
     // （GitHub Actions側のデプロイと競合してpushが拒否されるのを防ぐ）
@@ -161,10 +178,6 @@ function pushToGhPages(outputDir, repoDir, commitMsg) {
     execSync('git branch -f gh-pages origin/gh-pages', { cwd: repoDir, stdio: 'pipe' });
 
     // worktreeを使ってgh-pagesへデプロイ
-    const worktreeDir = path.join(repoDir, '.gh-pages-worktree');
-    if (fs.existsSync(worktreeDir)) {
-      execSync(`git worktree remove "${worktreeDir}" --force`, { cwd: repoDir, stdio: 'pipe' });
-    }
     execSync(`git worktree add "${worktreeDir}" gh-pages`, { cwd: repoDir, stdio: 'pipe' });
 
     // outputの内容をworktreeにコピー
@@ -179,10 +192,16 @@ function pushToGhPages(outputDir, repoDir, commitMsg) {
     execSync('git add -A', { cwd: worktreeDir, stdio: 'pipe' });
     execSync(`git commit -m "${commitMsg}" --allow-empty`, { cwd: worktreeDir, stdio: 'pipe' });
     execSync('git push origin gh-pages', { cwd: worktreeDir, stdio: 'inherit' });
-    execSync(`git worktree remove "${worktreeDir}" --force`, { cwd: repoDir, stdio: 'pipe' });
     console.log('✅ GitHub Pages (gh-pages) へデプロイ完了');
   } catch (err) {
     console.log(`⚠️  gh-pages push失敗: ${err.message}`);
+  } finally {
+    // 成功・失敗にかかわらずworktreeは必ず片付け、次回実行に影響を残さない
+    try {
+      execSync(`git worktree remove "${worktreeDir}" --force`, { cwd: repoDir, stdio: 'pipe' });
+    } catch {
+      // 無視
+    }
   }
 }
 
