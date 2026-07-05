@@ -5,7 +5,8 @@
     "main": "index.js",
     "scripts": {
         "start": "node run.js",
-        "test": "node run.js"
+        "test": "node run.js",
+        "mark-applied": "node mark-applied.js"
     },
     "keywords": [],
     "author": "",

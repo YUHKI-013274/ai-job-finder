@@ -11,10 +11,12 @@ if (fs.existsSync(envPath)) {
   });
 }
 const { scrapeJobs } = require('./scraper');
-const { rankAndSelect } = require('./evaluator');
+const { classifyJobs } = require('./evaluator');
 const { renderHTML, renderMarkdown } = require('./renderer');
 const { sendGmailNotification } = require('./notifier');
-const { MAX_JOBS } = require('./config');
+const { loadSeenJobs, saveSeenJobs, loadAppliedJobs } = require('./store');
+const { syncAppliedFromSheet } = require('./sheet-sync');
+const { MIN_RAW_JOBS } = require('./config');
 
 const IS_CI = process.env.CI === 'true';
 const REPO_OWNER = 'YUHKI-013274';
@@ -29,7 +31,7 @@ async function main() {
   const outputDir = path.join(__dirname, 'output');
   if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir);
 
-  console.log('=== AI案件獲得システム Ver2.0 ===');
+  console.log('=== AI案件獲得システム Ver3.0 ===');
   console.log(`実行日時: ${now.toLocaleString('ja-JP')}`);
   console.log(`公開URL: ${PAGE_URL}\n`);
 
@@ -40,21 +42,53 @@ async function main() {
     console.log('\n⚠️  案件を取得できませんでした。ネット接続を確認してください。');
     process.exit(1);
   }
+  if (rawJobs.length < MIN_RAW_JOBS) {
+    console.log(`\n⚠️  取得件数が目標(${MIN_RAW_JOBS}件)を下回っています（${rawJobs.length}件）。キーワードを増やすか時間をおいて再実行してください。`);
+  }
 
-  // 2. 評価・ランキング
-  console.log('\n案件を評価・ランキング中...');
-  const selected = rankAndSelect(rawJobs, MAX_JOBS);
-  const sCount = selected.filter(j => j.rank === 'S').length;
-  const aCount = selected.filter(j => j.rank === 'A').length;
-  console.log(`${selected.length}件選定 (S:${sCount} A:${aCount})`);
+  // 2. 案件管理シートから応募済みを同期 → 既出・応募済みチェック → 評価・分類
+  if (process.env.APPLIED_SHEET_URL) {
+    const syncResult = await syncAppliedFromSheet(process.env.APPLIED_SHEET_URL);
+    if (syncResult.synced > 0) {
+      console.log(`案件管理シートから応募済み${syncResult.synced}件を新規同期しました`);
+    }
+  }
+  const seenMap = loadSeenJobs();
+  const appliedMap = loadAppliedJobs();
 
-  // 3. HTML / Markdown 出力
-  const htmlContent = renderHTML(selected, now, PAGE_URL);
+  console.log('\n案件を評価・分類中...');
+  const { candidates, holds, excluded } = classifyJobs(rawJobs, appliedMap, seenMap);
+
+  if (candidates.length < 5) {
+    console.log(`⚠️  応募候補が5件未満です（${candidates.length}件）。SEARCH_KEYWORDSを増やすことを検討してください。`);
+  }
+
+  // 3. 既出リストを更新（今回取得した全案件を記録し、翌回以降は重複表示しない）
+  let newlySeenCount = 0;
+  for (const job of rawJobs) {
+    if (!seenMap[job.id]) {
+      seenMap[job.id] = { firstSeen: dateLabel, title: job.title, url: job.url };
+      newlySeenCount++;
+    }
+  }
+  saveSeenJobs(seenMap);
+
+  const excludeReasonCounts = excluded.reduce((acc, j) => {
+    acc[j.excludeReason] = (acc[j.excludeReason] || 0) + 1;
+    return acc;
+  }, {});
+
+  console.log(`応募候補 ${candidates.length}件 / 保留 ${holds.length}件 / 除外 ${excluded.length}件`);
+  console.log('除外内訳:', JSON.stringify(excludeReasonCounts));
+  console.log(`(新規に既出登録: ${newlySeenCount}件)`);
+
+  // 4. HTML / Markdown 出力
+  const htmlContent = renderHTML({ candidates, holds, excluded }, now, PAGE_URL);
   fs.writeFileSync(path.join(outputDir, `jobs_${dateLabel}.html`), htmlContent, 'utf8');
   fs.writeFileSync(path.join(outputDir, 'index.html'), htmlContent, 'utf8');
   fs.writeFileSync(path.join(outputDir, 'latest.html'), htmlContent, 'utf8');
 
-  const mdContent = renderMarkdown(selected, now);
+  const mdContent = renderMarkdown({ candidates, holds, excluded }, now);
   fs.writeFileSync(path.join(outputDir, `jobs_${dateLabel}.md`), mdContent, 'utf8');
   fs.writeFileSync(path.join(outputDir, 'latest.md'), mdContent, 'utf8');
 
@@ -74,23 +108,25 @@ async function main() {
     'utf8'
   );
 
-  // 4. 結果サマリー
-  console.log('\n=== 選定結果 ===');
-  selected.forEach((job, i) => {
+  // 5. 結果サマリー
+  console.log('\n=== 応募候補 ===');
+  candidates.forEach((job, i) => {
     const mark = i < 3 ? '🎯' : '  ';
     console.log(`${mark} ${i + 1}. [${job.rank}] ${job.title.substring(0, 45)}...`);
     console.log(`      ${job.url}`);
   });
 
-  // 5. GitHub Pages へ push（PC実行時のみ）
+  // 6. GitHub Pages へ push（PC実行時のみ）
   if (!IS_CI) {
     console.log('\nGitHub Pages へ push 中...');
     try {
       const repoDir = __dirname;
-      execSync('git add output/', { cwd: repoDir, stdio: 'inherit' });
+      const sCount = candidates.filter(j => j.rank === 'S').length;
+      const aCount = candidates.filter(j => j.rank === 'A').length;
+      execSync('git add output/ data/', { cwd: repoDir, stdio: 'inherit' });
 
       // gh-pages ブランチへ直接コミット&プッシュ
-      const msg = `📋 案件更新 ${dateLabel} (S:${sCount} A:${aCount})`;
+      const msg = `📋 案件更新 ${dateLabel} (候補:${candidates.length} 保留:${holds.length} 除外:${excluded.length})`;
       execSync(`git commit -m "${msg}" --allow-empty`, { cwd: repoDir, stdio: 'inherit' });
       execSync('git push origin master', { cwd: repoDir, stdio: 'inherit' });
       console.log('✅ masterへpush完了');
@@ -102,12 +138,12 @@ async function main() {
     }
   }
 
-  // 6. Gmail 通知
+  // 7. Gmail 通知（応募候補ベース）
   const gmailUser = process.env.GMAIL_USER || '';
   const gmailPass = process.env.GMAIL_APP_PASSWORD || '';
   if (gmailUser && gmailPass) {
     console.log('\nGmail通知を送信中...');
-    await sendGmailNotification({ jobs: selected, pageUrl: PAGE_URL, date: now });
+    await sendGmailNotification({ jobs: candidates, pageUrl: PAGE_URL, date: now });
   } else {
     console.log('\n💡 Gmail通知をスキップ（環境変数未設定）');
     console.log('   .env ファイルに GMAIL_USER と GMAIL_APP_PASSWORD を設定してください');
@@ -119,6 +155,11 @@ async function main() {
 
 function pushToGhPages(outputDir, repoDir, commitMsg) {
   try {
+    // リモートの最新状態を取得してローカルのgh-pages参照を合わせる
+    // （GitHub Actions側のデプロイと競合してpushが拒否されるのを防ぐ）
+    execSync('git fetch origin gh-pages', { cwd: repoDir, stdio: 'pipe' });
+    execSync('git branch -f gh-pages origin/gh-pages', { cwd: repoDir, stdio: 'pipe' });
+
     // worktreeを使ってgh-pagesへデプロイ
     const worktreeDir = path.join(repoDir, '.gh-pages-worktree');
     if (fs.existsSync(worktreeDir)) {

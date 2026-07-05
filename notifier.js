@@ -55,7 +55,7 @@ async function sendGmailNotification({ jobs, pageUrl, date }) {
       </a>
 
       <p style="text-align:center;color:#aaa;font-size:11px;margin:12px 0 0">
-        AI案件獲得システム Ver2.0 | 自動送信
+        AI案件獲得システム Ver3.0 | 自動送信
       </p>
     </div>
   </div>

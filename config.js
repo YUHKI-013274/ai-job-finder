@@ -2,17 +2,30 @@
 const SEARCH_KEYWORDS = [
   'ChatGPT',
   'Claude',
+  'Claude Code',
   '生成AI',
   'AI活用',
   'AI導入',
   'AI業務改善',
+  'AI導入支援',
+  'AIコンサル',
+  'AI研修',
   '業務効率化',
   '仕組み化',
   '自動化',
+  '業務改善',
+  'RPA',
   'Notion',
+  'Notion構築',
+  'Dify',
+  'チャットボット構築',
   'AI画像生成',
+  'AI漫画',
+  'プロンプト作成',
   '採用支援',
+  '採用代行',
   'マニュアル作成',
+  '業務マニュアル',
 ];
 
 // 除外パターン（完全除外）
@@ -47,6 +60,29 @@ const DOWNGRADE_PATTERNS = [
   'スライド用の画像',
   'Pinterest',
 ];
+
+// リスクありパターン（詐欺・トラブル警戒サイン）
+const RISK_PATTERNS = [
+  '登録料',
+  '保証金',
+  '前払い',
+  '身分証明書の写しを送付',
+  '口座情報を先に',
+  'LINEに誘導',
+  '外部サイトで契約',
+  '在宅で簡単に稼げる',
+  '誰でも高収入',
+  'マルチ商法',
+  '副業紹介',
+  '初期費用',
+];
+
+// 最低報酬ライン（円）。これを下回る固定報酬案件は「単価が低すぎる」として除外
+const MIN_PRICE_YEN = 3000;
+
+// 1回の検索で最低限確保したい生データ件数・応募候補の最低件数
+const MIN_RAW_JOBS = 20;
+const MIN_CANDIDATES = 5;
 
 // Sランク評価キーワード（AI導入・業務改善直結）
 const S_RANK_KEYWORDS = [
@@ -83,10 +119,15 @@ module.exports = {
   SEARCH_KEYWORDS,
   EXCLUDE_PATTERNS,
   DOWNGRADE_PATTERNS,
+  RISK_PATTERNS,
+  MIN_PRICE_YEN,
+  MIN_RAW_JOBS,
+  MIN_CANDIDATES,
   S_RANK_KEYWORDS,
   A_RANK_KEYWORDS,
   YUKI_STRENGTHS,
   STRENGTH_HINTS,
   MAX_JOBS: 10,
+  MAX_HOLDS: 15,
   SEARCH_DELAY_MS: 2000,
 };

@@ -8,6 +8,16 @@ function getRankBg(rank) {
   return { S: '#fef5f5', A: '#fff8f0', B: '#f0fff4', C: '#f5f5f5' }[rank] || '#fff';
 }
 
+function getReasonColor(reason) {
+  return {
+    '応募済み': '#27ae60',
+    '既出': '#7f8c8d',
+    '単価が低すぎる': '#e67e22',
+    '条件不一致': '#8e44ad',
+    'リスクあり': '#e74c3c',
+  }[reason] || '#555';
+}
+
 function escapeHtml(str) {
   if (!str) return '';
   return String(str)
@@ -74,47 +84,90 @@ function renderJobCard(job, i, isTop3 = false) {
         <div class="detail-text">${escapeHtml(job.caution)}</div>
       </div>
 
+      <span class="applied-overlay">✅ 応募済み</span>
       <div class="card-actions">
         <a href="${job.url}" target="_blank" class="btn-view">案件を見る →</a>
         <button class="btn-save" onclick="toggleSave('${job.id}', '${escapeHtml(job.title.replace(/'/g, ''))}', '${job.url}', '${job.rank}')">
           <span class="save-icon">🔖</span> <span class="save-text">候補に追加</span>
+        </button>
+        <button class="btn-applied" onclick="toggleApplied('${job.id}', '${escapeHtml(job.title.replace(/'/g, ''))}', '${job.url}')">
+          <span class="applied-text">✅ 応募済み</span>
         </button>
       </div>
     </div>
   `;
 }
 
-function renderHTML(jobs, date, pageUrl) {
-  const dateStr = date.toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
-  const sJobs = jobs.filter(j => j.rank === 'S');
-  const aJobs = jobs.filter(j => j.rank === 'A');
-  const bJobs = jobs.filter(j => j.rank === 'B');
-  const cJobs = jobs.filter(j => j.rank === 'C');
+function renderExcludedCard(job) {
+  const color = getReasonColor(job.excludeReason);
+  return `
+    <div class="excluded-card">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:${color}">${escapeHtml(job.excludeReason)}</span>
+        <span class="genre-tag">${escapeHtml(job.genre || job.matchedKeyword || '')}</span>
+      </div>
+      <div class="excluded-title">
+        <a href="${job.url}" target="_blank" rel="noopener">${escapeHtml(job.title)}</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 ${escapeHtml(job.price || '要確認')}</span>
+      </div>
+    </div>
+  `;
+}
 
-  const top3 = jobs.slice(0, 3);
-  const rest = jobs.slice(3);
-
-  const top3Cards = top3.map((job, i) => renderJobCard(job, i + 1, true)).join('\n');
-
-  let restCards = '';
-  let counter = top3.length + 1;
-
+function renderRankSections(jobs, startIndex) {
+  let html = '';
+  let counter = startIndex;
   const sections = [
-    { label: 'Sランク', list: rest.filter(j => j.rank === 'S'), color: '#e74c3c' },
-    { label: 'Aランク', list: rest.filter(j => j.rank === 'A'), color: '#e67e22' },
-    { label: 'Bランク', list: rest.filter(j => j.rank === 'B'), color: '#27ae60' },
-    { label: 'Cランク', list: rest.filter(j => j.rank === 'C'), color: '#7f8c8d' },
+    { label: 'Sランク', list: jobs.filter(j => j.rank === 'S'), color: '#e74c3c' },
+    { label: 'Aランク', list: jobs.filter(j => j.rank === 'A'), color: '#e67e22' },
+    { label: 'Bランク', list: jobs.filter(j => j.rank === 'B'), color: '#27ae60' },
+    { label: 'Cランク', list: jobs.filter(j => j.rank === 'C'), color: '#7f8c8d' },
   ];
-
   for (const sec of sections) {
     if (sec.list.length === 0) continue;
-    restCards += `<div class="rank-section-header" style="border-left:4px solid ${sec.color}">
+    html += `<div class="rank-section-header" style="border-left:4px solid ${sec.color}">
       <span style="color:${sec.color}">${sec.label}</span>
       <span class="count-badge" style="background:${sec.color}">${sec.list.length}件</span>
     </div>`;
     for (const job of sec.list) {
-      restCards += renderJobCard(job, counter++);
+      html += renderJobCard(job, counter++);
     }
+  }
+  return html;
+}
+
+function renderHTML({ candidates, holds, excluded }, date, pageUrl) {
+  const dateStr = date.toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
+  const sJobs = candidates.filter(j => j.rank === 'S');
+  const aJobs = candidates.filter(j => j.rank === 'A');
+
+  const top3 = candidates.slice(0, 3);
+  const rest = candidates.slice(3);
+
+  const top3Cards = top3.map((job, i) => renderJobCard(job, i, true)).join('\n');
+  const candidateRestCards = renderRankSections(rest, top3.length);
+  const holdCards = renderRankSections(holds, 0);
+
+  const reasonCounts = excluded.reduce((acc, j) => {
+    acc[j.excludeReason] = (acc[j.excludeReason] || 0) + 1;
+    return acc;
+  }, {});
+  const reasonOrder = ['応募済み', '既出', '単価が低すぎる', '条件不一致', 'リスクあり'];
+  let excludedHtml = '';
+  for (const reason of reasonOrder) {
+    const list = excluded.filter(j => j.excludeReason === reason);
+    if (list.length === 0) continue;
+    const color = getReasonColor(reason);
+    excludedHtml += `<div class="rank-section-header" style="border-left:4px solid ${color}">
+      <span style="color:${color}">${escapeHtml(reason)}</span>
+      <span class="count-badge" style="background:${color}">${list.length}件</span>
+    </div>`;
+    excludedHtml += list.map(renderExcludedCard).join('\n');
+  }
+  if (excluded.length === 0) {
+    excludedHtml = '<div class="saved-empty">今回は除外案件がありません</div>';
   }
 
   return `<!DOCTYPE html>
@@ -180,17 +233,19 @@ function renderHTML(jobs, date, pageUrl) {
       position: sticky;
       top: 82px;
       z-index: 99;
+      overflow-x: auto;
     }
     .tab {
       flex: 1;
       padding: 10px 4px;
       text-align: center;
-      font-size: 0.78rem;
+      font-size: 0.75rem;
       font-weight: 600;
       color: var(--text-muted);
       border-bottom: 3px solid transparent;
       cursor: pointer;
       transition: all 0.2s;
+      white-space: nowrap;
     }
     .tab.active {
       color: var(--primary);
@@ -348,6 +403,7 @@ function renderHTML(jobs, date, pageUrl) {
       display: flex;
       gap: 8px;
       margin-top: 12px;
+      flex-wrap: wrap;
     }
     .btn-view {
       flex: 1;
@@ -378,6 +434,64 @@ function renderHTML(jobs, date, pageUrl) {
       border-color: #ffc107;
       color: #856404;
     }
+    .btn-applied {
+      background: #f8f9fa;
+      border: 2px solid #ddd;
+      color: #555;
+      padding: 10px 14px;
+      border-radius: 10px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+    .btn-applied.applied {
+      background: #eaf4ea;
+      border-color: #27ae60;
+      color: #1a7a40;
+    }
+    .job-card.applied-card {
+      opacity: 0.4;
+      position: relative;
+    }
+    .applied-overlay {
+      display: none;
+      position: absolute;
+      top: 8px; right: 8px;
+      background: #27ae60;
+      color: white;
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 10px;
+    }
+    .job-card.applied-card .applied-overlay { display: inline-block; }
+
+    /* ===== 除外カード ===== */
+    .excluded-card {
+      background: var(--card-bg);
+      border-radius: 10px;
+      padding: 10px 12px;
+      margin-bottom: 8px;
+      opacity: 0.75;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+    }
+    .excluded-header {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 6px;
+    }
+    .reason-badge {
+      color: white;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 0.7rem;
+      font-weight: 700;
+    }
+    .excluded-title { font-size: 0.85rem; margin-bottom: 4px; }
+    .excluded-title a { color: var(--text); text-decoration: none; }
 
     /* ===== 候補リストタブ ===== */
     .saved-empty {
@@ -446,6 +560,25 @@ function renderHTML(jobs, date, pageUrl) {
       cursor: pointer;
       font-weight: 600;
     }
+    .applied-export-box {
+      background: #eaf4ea;
+      border-radius: 10px;
+      padding: 12px;
+      margin-bottom: 16px;
+      font-size: 0.8rem;
+      line-height: 1.6;
+    }
+    .applied-export-box textarea {
+      width: 100%;
+      border: 1px solid #b7ddb7;
+      border-radius: 8px;
+      padding: 8px;
+      font-size: 0.78rem;
+      resize: none;
+      background: white;
+      margin-top: 6px;
+      font-family: monospace;
+    }
 
     /* ===== フッター固定ボタン ===== */
     .footer-fab {
@@ -501,20 +634,27 @@ function renderHTML(jobs, date, pageUrl) {
     <div class="header-stats">
       <span class="stat-chip s">🔴 S ${sJobs.length}件</span>
       <span class="stat-chip a">🟠 A ${aJobs.length}件</span>
-      <span class="stat-chip b">🟢 B ${bJobs.length}件</span>
-      <span class="stat-chip">全${jobs.length}件</span>
+      <span class="stat-chip">応募候補 ${candidates.length}件</span>
+      <span class="stat-chip">保留 ${holds.length}件</span>
+      <span class="stat-chip">除外 ${excluded.length}件</span>
     </div>
   </div>
 
   <!-- タブバー -->
   <div class="tab-bar">
-    <div class="tab active" onclick="switchTab('all', this)">📋 全案件</div>
+    <div class="tab active" onclick="switchTab('candidates', this)">📋 応募候補</div>
+    <div class="tab" onclick="switchTab('holds', this)">⏸ 保留</div>
+    <div class="tab" onclick="switchTab('excluded', this)">🚫 除外</div>
     <div class="tab" onclick="switchTab('saved', this)">🔖 候補リスト</div>
   </div>
 
-  <!-- 全案件タブ -->
-  <div id="tab-all" class="tab-content active">
+  <!-- 応募候補タブ -->
+  <div id="tab-candidates" class="tab-content active">
     <div class="update-info">最終更新: ${date.toLocaleString('ja-JP')}</div>
+    <div id="applied-filter-bar">
+      <input type="checkbox" id="hide-applied" onchange="applyAppliedFilter()" checked>
+      <label for="hide-applied">応募済み案件を非表示にする</label>
+    </div>
 
     <!-- TOP3 -->
     <div class="top3-section">
@@ -522,12 +662,25 @@ function renderHTML(jobs, date, pageUrl) {
       ${top3Cards}
     </div>
 
-    <!-- 残り案件 -->
-    ${restCards}
+    <!-- 残り応募候補 -->
+    ${candidateRestCards}
+  </div>
+
+  <!-- 保留タブ -->
+  <div id="tab-holds" class="tab-content">
+    <div class="update-info">応募候補に届かなかった案件（今後の参考用）</div>
+    ${holdCards || '<div class="saved-empty">保留案件はありません</div>'}
+  </div>
+
+  <!-- 除外タブ -->
+  <div id="tab-excluded" class="tab-content">
+    <div class="update-info">応募済み・既出・単価が低い・条件不一致・リスクありの案件（理由付き）</div>
+    ${excludedHtml}
   </div>
 
   <!-- 候補リストタブ -->
   <div id="tab-saved" class="tab-content">
+    <div id="applied-export-container"></div>
     <div id="saved-list-container">
       <div class="saved-empty">
         🔖 「候補に追加」を押した案件がここに表示されます<br><br>
@@ -544,14 +697,16 @@ function renderHTML(jobs, date, pageUrl) {
 
   <script>
     // ===== タブ切り替え =====
+    const TAB_NAMES = ['candidates', 'holds', 'excluded', 'saved'];
     function switchTab(name, el) {
       document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
       document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
       document.getElementById('tab-' + name).classList.add('active');
       if (el) el.classList.add('active');
       else {
+        const idx = TAB_NAMES.indexOf(name);
         const tabs = document.querySelectorAll('.tab');
-        if (name === 'saved') tabs[1].classList.add('active');
+        if (tabs[idx]) tabs[idx].classList.add('active');
       }
       if (name === 'saved') renderSavedList();
     }
@@ -603,18 +758,19 @@ function renderHTML(jobs, date, pageUrl) {
     function renderSavedList() {
       const saved = getSaved();
       const container = document.getElementById('saved-list-container');
+      renderAppliedExport();
       if (saved.length === 0) {
         container.innerHTML = '<div class="saved-empty">🔖 「候補に追加」を押した案件がここに表示されます<br><br>気になる案件を3件選んで、ChatGPTへ共有しましょう</div>';
         return;
       }
       const rankColors = { S: '#e74c3c', A: '#e67e22', B: '#27ae60', C: '#7f8c8d' };
-      let html = '<div style="padding:12px">';
+      let html = '<div style="padding:12px 0">';
       html += '<div style="font-size:0.82rem; color:#666; margin-bottom:10px">候補リスト（' + saved.length + '件） — ChatGPTへコピーして応募文を作成しましょう</div>';
       saved.forEach(j => {
         html += '<div class="saved-item">';
         html += '<span class="saved-rank" style="color:' + (rankColors[j.rank]||'#333') + '">' + j.rank + '</span>';
         html += '<span class="saved-title"><a href="' + j.url + '" target="_blank">' + escHtml(j.title) + '</a></span>';
-        html += '<button class="btn-remove" onclick="removeSaved(\'' + j.id + '\')" title="削除">✕</button>';
+        html += '<button class="btn-remove" onclick="removeSaved(\\'' + j.id + '\\')" title="削除">✕</button>';
         html += '</div>';
       });
 
@@ -663,17 +819,111 @@ function renderHTML(jobs, date, pageUrl) {
       return String(str||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     }
 
+    // ===== 応募済み管理 =====
+    // ここでの「応募済み」はブラウザ内の一時的な表示切替のみ。
+    // 次回検索で永久に除外するには、ターミナルで mark-applied.js を実行して data/applied_jobs.json に登録する。
+    const APPLIED_KEY = 'ai_jobs_applied_v1';
+
+    function getApplied() {
+      try { return JSON.parse(localStorage.getItem(APPLIED_KEY) || '[]'); }
+      catch { return []; }
+    }
+    function setApplied(list) {
+      localStorage.setItem(APPLIED_KEY, JSON.stringify(list));
+    }
+
+    function toggleApplied(id, title, url) {
+      let applied = getApplied();
+      const exists = applied.find(j => j.id === id);
+      if (exists) {
+        applied = applied.filter(j => j.id !== id);
+      } else {
+        applied.push({ id, title, url, appliedAt: new Date().toISOString() });
+      }
+      setApplied(applied);
+      updateAppliedButtons();
+      applyAppliedFilter();
+      renderAppliedExport();
+    }
+
+    function updateAppliedButtons() {
+      const applied = getApplied();
+      const ids = new Set(applied.map(j => j.id));
+      document.querySelectorAll('.job-card').forEach(card => {
+        const id = card.dataset.id;
+        const btn = card.querySelector('.btn-applied');
+        const text = card.querySelector('.applied-text');
+        if (!btn) return;
+        if (ids.has(id)) {
+          btn.classList.add('applied');
+          card.classList.add('applied-card');
+          if (text) text.textContent = '↩ 応募済み解除';
+        } else {
+          btn.classList.remove('applied');
+          card.classList.remove('applied-card');
+          if (text) text.textContent = '✅ 応募済み';
+        }
+      });
+    }
+
+    function applyAppliedFilter() {
+      const hide = document.getElementById('hide-applied') && document.getElementById('hide-applied').checked;
+      const applied = getApplied();
+      const ids = new Set(applied.map(j => j.id));
+      document.querySelectorAll('.job-card').forEach(card => {
+        if (ids.has(card.dataset.id)) {
+          card.style.display = hide ? 'none' : '';
+        }
+      });
+    }
+
+    function renderAppliedExport() {
+      const container = document.getElementById('applied-export-container');
+      if (!container) return;
+      const applied = getApplied();
+      if (applied.length === 0) {
+        container.innerHTML = '';
+        return;
+      }
+      const ids = applied.map(j => j.id).join(' ');
+      const cmd = 'node mark-applied.js ' + ids;
+      container.innerHTML =
+        '<div class="applied-export-box">' +
+        '<div style="font-weight:700; margin-bottom:4px">✅ 応募済み登録コマンド（PCのターミナルで実行）</div>' +
+        '<div>このコマンドを実行すると、次回以降の検索でこれらの案件を表示しなくなります。</div>' +
+        '<textarea id="applied-export-textarea" rows="2" readonly>' + escHtml(cmd) + '</textarea>' +
+        '<button class="btn-copy" onclick="copyAppliedExport()">📋 コマンドをコピー</button>' +
+        '</div>';
+    }
+
+    function copyAppliedExport() {
+      const ta = document.getElementById('applied-export-textarea');
+      navigator.clipboard.writeText(ta.value).then(() => {
+        const btn = event.target;
+        const original = btn.textContent;
+        btn.textContent = '✅ コピーしました';
+        setTimeout(() => { btn.textContent = original; }, 2000);
+      }).catch(() => {
+        ta.select();
+        document.execCommand('copy');
+      });
+    }
+
     // 初期化
     updateSaveButtons();
+    updateAppliedButtons();
+    applyAppliedFilter();
   </script>
 </body>
 </html>`;
 }
 
-function renderMarkdown(jobs, date) {
+function renderMarkdown({ candidates, holds, excluded }, date) {
   const dateStr = date.toLocaleDateString('ja-JP');
-  const top3 = jobs.slice(0, 3);
+  const top3 = candidates.slice(0, 3);
   let md = `# 今日の応募候補\n\n**日付**: ${dateStr}\n\n`;
+  md += `応募候補 ${candidates.length}件 / 保留 ${holds.length}件 / 除外 ${excluded.length}件\n\n`;
+
   md += `## 🎯 TODAY TOP3\n\n`;
   top3.forEach((job, i) => {
     md += `### ${i + 1}. ${job.title}\n\n`;
@@ -684,10 +934,29 @@ function renderMarkdown(jobs, date) {
     md += `- 応募理由: ${job.reason}\n\n`;
     md += `---\n\n`;
   });
-  md += `## 全案件\n\n`;
-  jobs.forEach((job, i) => {
-    md += `## ${i + 1}. [${job.rank}] ${job.title}\n\nURL: ${job.url}\n報酬: ${job.price || '要確認'}\n応募理由: ${job.reason}\n\n---\n\n`;
+
+  md += `## 📋 応募候補（全${candidates.length}件）\n\n`;
+  candidates.forEach((job, i) => {
+    md += `${i + 1}. [${job.rank}] ${job.title}\n   URL: ${job.url}\n   報酬: ${job.price || '要確認'}\n   応募理由: ${job.reason}\n\n`;
   });
+
+  md += `## ⏸ 保留（全${holds.length}件）\n\n`;
+  holds.forEach((job, i) => {
+    md += `${i + 1}. [${job.rank}] ${job.title}\n   URL: ${job.url}\n   報酬: ${job.price || '要確認'}\n\n`;
+  });
+
+  md += `## 🚫 除外（全${excluded.length}件）\n\n`;
+  const reasonOrder = ['応募済み', '既出', '単価が低すぎる', '条件不一致', 'リスクあり'];
+  for (const reason of reasonOrder) {
+    const list = excluded.filter(j => j.excludeReason === reason);
+    if (list.length === 0) continue;
+    md += `### ${reason}（${list.length}件）\n\n`;
+    list.forEach(job => {
+      md += `- ${job.title}\n  URL: ${job.url}\n`;
+    });
+    md += `\n`;
+  }
+
   return md;
 }
 

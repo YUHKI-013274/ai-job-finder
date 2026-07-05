@@ -1,9 +1,14 @@
 const {
   EXCLUDE_PATTERNS,
   DOWNGRADE_PATTERNS,
+  RISK_PATTERNS,
+  MIN_PRICE_YEN,
+  MIN_CANDIDATES,
   S_RANK_KEYWORDS,
   A_RANK_KEYWORDS,
   STRENGTH_HINTS,
+  MAX_JOBS,
+  MAX_HOLDS,
 } = require('./config');
 
 function toStars(score, max = 5) {
@@ -16,13 +21,38 @@ function containsAny(text, patterns) {
   return patterns.some(p => lower.includes(p.toLowerCase()));
 }
 
+// 案件の報酬表記（例: "¥3,000〜5,000" "5万円" "3,000円〜5,000円"）から
+// 最低金額（円）を推定する。読み取れない場合は null を返す。
+function parsePriceToYen(priceStr) {
+  if (!priceStr || /要確認/.test(priceStr)) return null;
+  const re = /([\d,]+)\s*(万)?\s*円?/g;
+  const values = [];
+  let match;
+  while ((match = re.exec(priceStr)) !== null) {
+    const numStr = match[1].replace(/,/g, '');
+    if (!numStr) continue;
+    let num = parseInt(numStr, 10);
+    if (Number.isNaN(num)) continue;
+    if (match[2] === '万') num *= 10000;
+    values.push(num);
+  }
+  return values.length > 0 ? Math.min(...values) : null;
+}
+
 function evaluateJob(job) {
   const text = `${job.title} ${job.description || ''}`;
 
-  // 除外チェック
+  if (containsAny(text, RISK_PATTERNS)) {
+    return { ...job, excluded: true, excludeReason: 'リスクあり' };
+  }
+
+  const priceYen = parsePriceToYen(job.price);
+  if (priceYen !== null && priceYen < MIN_PRICE_YEN) {
+    return { ...job, excluded: true, excludeReason: '単価が低すぎる', priceYen };
+  }
+
   if (containsAny(text, EXCLUDE_PATTERNS)) {
-    job.excluded = true;
-    return job;
+    return { ...job, excluded: true, excludeReason: '条件不一致', priceYen };
   }
 
   // 降格フラグ（ランク計算後に強制C扱い）
@@ -90,7 +120,9 @@ function evaluateJob(job) {
     reason,
     caution,
     strengthHint,
+    priceYen,
     excluded: false,
+    excludeReason: null,
   };
 }
 
@@ -138,17 +170,57 @@ function buildStrengthHint(text) {
   return STRENGTH_HINTS.general;
 }
 
-function rankAndSelect(jobs, maxJobs = 10) {
-  const evaluated = jobs.map(evaluateJob).filter(j => !j.excluded);
+const RANK_ORDER = { S: 0, A: 1, B: 2, C: 3 };
 
-  const rankOrder = { S: 0, A: 1, B: 2, C: 3 };
-  evaluated.sort((a, b) => {
-    const rankDiff = rankOrder[a.rank] - rankOrder[b.rank];
-    if (rankDiff !== 0) return rankDiff;
-    return (b.aiScore + b.independenceScore) - (a.aiScore + a.independenceScore);
-  });
-
-  return evaluated.slice(0, maxJobs);
+function byRankThenScore(a, b) {
+  const rankDiff = RANK_ORDER[a.rank] - RANK_ORDER[b.rank];
+  if (rankDiff !== 0) return rankDiff;
+  return (b.aiScore + b.independenceScore) - (a.aiScore + a.independenceScore);
 }
 
-module.exports = { evaluateJob, rankAndSelect, toStars };
+// 案件一覧を「応募候補」「保留」「除外」の3分類に振り分ける。
+// appliedMap / seenMap は { [jobId]: true相当の値 } の形。
+function classifyJobs(jobs, appliedMap = {}, seenMap = {}) {
+  const candidates = [];
+  const holds = [];
+  const excluded = [];
+
+  for (const raw of jobs) {
+    if (appliedMap[raw.id]) {
+      excluded.push({ ...raw, excluded: true, excludeReason: '応募済み' });
+      continue;
+    }
+    if (seenMap[raw.id]) {
+      excluded.push({ ...raw, excluded: true, excludeReason: '既出' });
+      continue;
+    }
+
+    const job = evaluateJob(raw);
+    if (job.excluded) {
+      excluded.push(job);
+      continue;
+    }
+
+    if (job.rank === 'S' || job.rank === 'A') {
+      candidates.push(job);
+    } else {
+      holds.push(job);
+    }
+  }
+
+  candidates.sort(byRankThenScore);
+  holds.sort(byRankThenScore);
+
+  // 応募候補が最低件数に満たない場合、保留から上位を昇格させる
+  while (candidates.length < MIN_CANDIDATES && holds.length > 0) {
+    candidates.push(holds.shift());
+  }
+
+  return {
+    candidates: candidates.slice(0, MAX_JOBS),
+    holds: holds.slice(0, MAX_HOLDS),
+    excluded,
+  };
+}
+
+module.exports = { evaluateJob, classifyJobs, toStars, parsePriceToYen };
