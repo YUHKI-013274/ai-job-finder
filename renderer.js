@@ -57,12 +57,12 @@ function renderJobCard(job, i, isTop3 = false) {
 
       <div class="scores">
         <div class="score-row">
-          <span class="score-label">AI実績</span>
-          <span class="score-stars">${toStars(job.aiScore)}</span>
+          <span class="score-label">受注しやすさ</span>
+          <span class="score-stars">${toStars(job.priorityScore)}</span>
         </div>
         <div class="score-row">
-          <span class="score-label">独立につながる</span>
-          <span class="score-stars">${toStars(job.independenceScore)}</span>
+          <span class="score-label">継続期待度</span>
+          <span class="score-stars">${toStars(job.continuityScore)}</span>
         </div>
         <div class="score-row">
           <span class="score-label">受注可能性</span>
@@ -939,7 +939,7 @@ function renderMarkdown({ candidates, holds, excluded }, date) {
     md += `- URL: ${job.url}\n`;
     md += `- 報酬: ${job.price || '要確認'}\n`;
     md += `- ランク: **${job.rank}**\n`;
-    md += `- AI実績: ${toStars(job.aiScore)}\n`;
+    md += `- 受注しやすさ: ${toStars(job.priorityScore)}\n`;
     md += `- 応募理由: ${job.reason}\n\n`;
     md += `---\n\n`;
   });

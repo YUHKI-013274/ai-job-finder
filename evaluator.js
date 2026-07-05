@@ -1,12 +1,14 @@
 const {
   EXCLUDE_PATTERNS,
-  DOWNGRADE_PATTERNS,
+  PHASE0_PRIORITY_PATTERNS,
+  CONTINUITY_PATTERNS,
   RISK_PATTERNS,
   MIN_PRICE_YEN,
   MIN_CANDIDATES,
   S_RANK_KEYWORDS,
   A_RANK_KEYWORDS,
   STRENGTH_HINTS,
+  CURRENT_PHASE,
   MAX_JOBS,
   MAX_HOLDS,
 } = require('./config');
@@ -16,9 +18,17 @@ function toStars(score, max = 5) {
   return '★'.repeat(filled) + '☆'.repeat(max - filled);
 }
 
-function containsAny(text, patterns) {
+// パターンは文字列（部分一致）と正規表現（表記ゆれ対応）を混在できる
+function matchPatterns(text, patterns) {
   const lower = text.toLowerCase();
-  return patterns.some(p => lower.includes(p.toLowerCase()));
+  return patterns.filter(p => {
+    if (p instanceof RegExp) return p.test(text);
+    return lower.includes(String(p).toLowerCase());
+  });
+}
+
+function containsAny(text, patterns) {
+  return matchPatterns(text, patterns).length > 0;
 }
 
 // 案件の報酬表記（例: "¥3,000〜5,000" "5万円" "3,000円〜5,000円"）から
@@ -55,43 +65,36 @@ function evaluateJob(job) {
     return { ...job, excluded: true, excludeReason: '条件不一致', priceYen };
   }
 
-  // 降格フラグ（ランク計算後に強制C扱い）
-  const shouldDowngrade = containsAny(text, DOWNGRADE_PATTERNS);
+  // AI関連スコア（フェーズごとの重み付け。実績0件フェーズでは補助的な役割）
+  const sMatch = matchPatterns(text, S_RANK_KEYWORDS).length;
+  const aMatch = matchPatterns(text, A_RANK_KEYWORDS).length;
+  const aiScore = Math.min(5, sMatch * 2 + aMatch) * CURRENT_PHASE.aiWeight;
 
-  // AI実績スコア（S/Aランクキーワード×AI関連度）
-  const sMatch = S_RANK_KEYWORDS.filter(k => text.toLowerCase().includes(k.toLowerCase())).length;
-  const aMatch = A_RANK_KEYWORDS.filter(k => text.toLowerCase().includes(k.toLowerCase())).length;
+  // 受注しやすさ・安全性スコア（未経験OK・マニュアル完備等の目印の数）
+  const priorityMatches = matchPatterns(text, PHASE0_PRIORITY_PATTERNS).length;
+  const priorityScore = Math.min(5, priorityMatches) * CURRENT_PHASE.priorityWeight;
 
-  const aiScore = Math.min(5, sMatch * 2 + aMatch);
+  // 継続案件ボーナス（一度受注できれば実績を積み上げやすい）
+  const isContinuity = containsAny(text, CONTINUITY_PATTERNS);
+  const continuityScore = (isContinuity ? 1 : 0) * CURRENT_PHASE.continuityWeight;
 
-  // 独立・AI事業つながりスコア
-  const independenceScore = Math.min(5, sMatch * 2 + (aMatch > 0 ? 1 : 0));
-
-  // 受注可能性スコア（実績要件が低いほど高い）
+  // 受注可能性スコア（未経験歓迎・マニュアル完備ほど高く、経験要件があるほど低い）
   let winScore = 3;
-  if (/実績\s*\d+\s*件以上/.test(text)) winScore -= 2;
-  if (/経験者|エンジニア経験/.test(text)) winScore -= 1;
-  if (/初心者|未経験|初めて/.test(text)) winScore += 1;
-  if (/小規模|少量/.test(text)) winScore += 1;
+  if (/実績\s*\d+\s*件以上/.test(text)) winScore -= 1;
+  if (/初心者|未経験|初めて/.test(text)) winScore += 2;
+  if (/マニュアル(あり|完備|整備)/.test(text)) winScore += 1;
+  if (/小規模|少量|お試し/.test(text)) winScore += 1;
   winScore = Math.min(5, Math.max(1, winScore));
 
-  // 難易度（逆算：低い難易度=高いスコア）
-  let difficultyScore = 3;
-  if (sMatch > 0) difficultyScore = 3;
-  if (/専門|エンジニア|プログラミング必須/.test(text)) difficultyScore = 5;
-  if (/簡単|シンプル|基本|入力|リサーチ/.test(text)) difficultyScore = 1;
-  difficultyScore = Math.min(5, Math.max(1, difficultyScore));
+  // 総合スコア（フェーズの重み付けを反映）
+  const totalScore = priorityScore + continuityScore + aiScore + winScore;
 
-  // 総合ランク
-  const totalScore = aiScore + independenceScore + winScore - (difficultyScore - 3) * 0.5;
   let rank;
-  if (shouldDowngrade) {
-    rank = 'C';
-  } else if (totalScore >= 10 && sMatch > 0) {
+  if (totalScore >= 15) {
     rank = 'S';
-  } else if (totalScore >= 7 || aMatch > 0) {
+  } else if (totalScore >= 10) {
     rank = 'A';
-  } else if (totalScore >= 4) {
+  } else if (totalScore >= 6) {
     rank = 'B';
   } else {
     rank = 'C';
@@ -101,7 +104,7 @@ function evaluateJob(job) {
   const genre = detectGenre(text);
 
   // 応募すべき理由
-  const reason = buildReason(text, sMatch, aMatch, genre);
+  const reason = buildReason(text, sMatch, isContinuity);
 
   // 注意点
   const caution = buildCaution(text);
@@ -113,9 +116,10 @@ function evaluateJob(job) {
     ...job,
     genre,
     aiScore,
-    independenceScore,
+    priorityScore,
+    continuityScore,
     winScore,
-    difficultyScore,
+    totalScore,
     rank,
     reason,
     caution,
@@ -134,26 +138,29 @@ function detectGenre(text) {
   if (/採用|面接|人事/.test(text)) return '採用支援';
   if (/マニュアル|手順書|業務フロー/.test(text)) return 'マニュアル作成';
   if (/業務改善|業務効率|仕組み化|自動化/.test(text)) return '業務改善・自動化';
+  if (/Canva|SNS運用|SNS投稿/.test(text)) return 'SNS・画像制作';
+  if (/データ入力/.test(text)) return 'データ入力';
   if (/ライター|記事|コンテンツ/.test(text)) return 'ライティング';
   if (/リサーチ|調査/.test(text)) return 'リサーチ';
   return 'その他';
 }
 
-function buildReason(text, sMatch, aMatch, genre) {
+function buildReason(text, sMatch, isContinuity) {
   const reasons = [];
-  if (sMatch > 0) reasons.push('AI活用スキルを直接活かせる案件');
-  if (/初心者|未経験/.test(text)) reasons.push('初心者歓迎で受注しやすい');
+  if (/未経験|初心者/.test(text)) reasons.push('未経験・初心者歓迎で実績0件の今のフェーズで受注しやすい');
+  if (/マニュアル(あり|完備|整備)/.test(text)) reasons.push('マニュアル完備で安心して取り組める');
+  if (isContinuity) reasons.push('継続案件のため一度受注できれば実績を積み上げやすい');
+  if (sMatch > 0) reasons.push('AI活用スキルを活かせる案件で今後のブランディングにもつながる');
   if (/業務改善|仕組み/.test(text)) reasons.push('飲食業界22年の業務改善経験を活かせる');
   if (/採用|面接/.test(text)) reasons.push('300名以上の採用面接経験が強みになる');
   if (/Notion/.test(text)) reasons.push('Notion活用スキルを実績化できる');
-  if (aMatch > 0 && reasons.length === 0) reasons.push('AI事業ポートフォリオとして実績を積める');
-  if (reasons.length === 0) reasons.push('ゆうきの管理・整理スキルを活かせる可能性がある');
+  if (reasons.length === 0) reasons.push('安全に完了できそうな案件（実績作りとして検討可）');
   return reasons.join('、');
 }
 
 function buildCaution(text) {
   const cautions = [];
-  if (/実績\s*\d+\s*件以上/.test(text)) cautions.push('実績件数の要件を確認して応募を判断');
+  if (/実績\s*\d+\s*件以上/.test(text)) cautions.push('実績件数の要件（必須ではなく尚可の可能性）を確認して応募を判断');
   if (/週\s*\d+\s*時間/.test(text)) cautions.push('稼働時間の条件を確認');
   if (/単価|予算/.test(text)) cautions.push('予算が明記されていない場合は要確認');
   const appMatch = text.match(/(\d+)\s*人が応募/);
@@ -167,6 +174,7 @@ function buildStrengthHint(text) {
   if (/採用|面接|人事/.test(text)) return STRENGTH_HINTS.management;
   if (/マニュアル|業務改善|仕組み|自動化/.test(text)) return STRENGTH_HINTS.operations;
   if (/Notion/.test(text)) return STRENGTH_HINTS.notion;
+  if (/未経験|初心者/.test(text)) return STRENGTH_HINTS.beginner;
   return STRENGTH_HINTS.general;
 }
 
@@ -175,7 +183,7 @@ const RANK_ORDER = { S: 0, A: 1, B: 2, C: 3 };
 function byRankThenScore(a, b) {
   const rankDiff = RANK_ORDER[a.rank] - RANK_ORDER[b.rank];
   if (rankDiff !== 0) return rankDiff;
-  return (b.aiScore + b.independenceScore) - (a.aiScore + a.independenceScore);
+  return b.totalScore - a.totalScore;
 }
 
 // 案件一覧を「応募候補」「保留」「除外」の3分類に振り分ける。

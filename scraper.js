@@ -82,7 +82,7 @@ async function scrapeJobs() {
               price,
               applicants,
               deadline: null,
-              description: text.substring(0, 200),
+              description: text.substring(0, 500),
             });
           });
 
@@ -118,7 +118,7 @@ async function scrapeJobs() {
             price,
             applicants,
             deadline,
-            description: text.substring(0, 300),
+            description: text.substring(0, 600),
           });
         });
 
