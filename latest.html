@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="AI案件">
   <link rel="manifest" href="manifest.json">
-  <title>【AI案件】2026年7月4日土曜日</title>
+  <title>【AI案件】2026年7月5日日曜日</title>
   <style>
     :root {
       --primary: #1a1a2e;
@@ -61,17 +61,19 @@
       position: sticky;
       top: 82px;
       z-index: 99;
+      overflow-x: auto;
     }
     .tab {
       flex: 1;
       padding: 10px 4px;
       text-align: center;
-      font-size: 0.78rem;
+      font-size: 0.75rem;
       font-weight: 600;
       color: var(--text-muted);
       border-bottom: 3px solid transparent;
       cursor: pointer;
       transition: all 0.2s;
+      white-space: nowrap;
     }
     .tab.active {
       color: var(--primary);
@@ -229,6 +231,7 @@
       display: flex;
       gap: 8px;
       margin-top: 12px;
+      flex-wrap: wrap;
     }
     .btn-view {
       flex: 1;
@@ -259,6 +262,64 @@
       border-color: #ffc107;
       color: #856404;
     }
+    .btn-applied {
+      background: #f8f9fa;
+      border: 2px solid #ddd;
+      color: #555;
+      padding: 10px 14px;
+      border-radius: 10px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+    .btn-applied.applied {
+      background: #eaf4ea;
+      border-color: #27ae60;
+      color: #1a7a40;
+    }
+    .job-card.applied-card {
+      opacity: 0.4;
+      position: relative;
+    }
+    .applied-overlay {
+      display: none;
+      position: absolute;
+      top: 8px; right: 8px;
+      background: #27ae60;
+      color: white;
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 10px;
+    }
+    .job-card.applied-card .applied-overlay { display: inline-block; }
+
+    /* ===== 除外カード ===== */
+    .excluded-card {
+      background: var(--card-bg);
+      border-radius: 10px;
+      padding: 10px 12px;
+      margin-bottom: 8px;
+      opacity: 0.75;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+    }
+    .excluded-header {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 6px;
+    }
+    .reason-badge {
+      color: white;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 0.7rem;
+      font-weight: 700;
+    }
+    .excluded-title { font-size: 0.85rem; margin-bottom: 4px; }
+    .excluded-title a { color: var(--text); text-decoration: none; }
 
     /* ===== 候補リストタブ ===== */
     .saved-empty {
@@ -327,6 +388,25 @@
       cursor: pointer;
       font-weight: 600;
     }
+    .applied-export-box {
+      background: #eaf4ea;
+      border-radius: 10px;
+      padding: 12px;
+      margin-bottom: 16px;
+      font-size: 0.8rem;
+      line-height: 1.6;
+    }
+    .applied-export-box textarea {
+      width: 100%;
+      border: 1px solid #b7ddb7;
+      border-radius: 8px;
+      padding: 8px;
+      font-size: 0.78rem;
+      resize: none;
+      background: white;
+      margin-top: 6px;
+      font-family: monospace;
+    }
 
     /* ===== フッター固定ボタン ===== */
     .footer-fab {
@@ -376,105 +456,51 @@
     <div class="header-top">
       <div>
         <h1>📋 今日の応募候補</h1>
-        <div class="date">2026年7月4日土曜日</div>
+        <div class="date">2026年7月5日日曜日</div>
       </div>
     </div>
     <div class="header-stats">
-      <span class="stat-chip s">🔴 S 2件</span>
-      <span class="stat-chip a">🟠 A 0件</span>
-      <span class="stat-chip b">🟢 B 8件</span>
-      <span class="stat-chip">全10件</span>
+      <span class="stat-chip s">🔴 S 0件</span>
+      <span class="stat-chip a">🟠 A 1件</span>
+      <span class="stat-chip">応募候補 5件</span>
+      <span class="stat-chip">保留 15件</span>
+      <span class="stat-chip">除外 47件</span>
     </div>
   </div>
 
   <!-- タブバー -->
   <div class="tab-bar">
-    <div class="tab active" onclick="switchTab('all', this)">📋 全案件</div>
+    <div class="tab active" onclick="switchTab('candidates', this)">📋 応募候補</div>
+    <div class="tab" onclick="switchTab('holds', this)">⏸ 保留</div>
+    <div class="tab" onclick="switchTab('excluded', this)">🚫 除外</div>
     <div class="tab" onclick="switchTab('saved', this)">🔖 候補リスト</div>
   </div>
 
-  <!-- 全案件タブ -->
-  <div id="tab-all" class="tab-content active">
-    <div class="update-info">最終更新: 2026/7/4 21:53:48</div>
+  <!-- 応募候補タブ -->
+  <div id="tab-candidates" class="tab-content active">
+    <div class="update-info">最終更新: 2026/7/5 12:25:26</div>
+    <div id="applied-filter-bar">
+      <input type="checkbox" id="hide-applied" onchange="applyAppliedFilter()" checked>
+      <label for="hide-applied">応募済み案件を非表示にする</label>
+    </div>
 
     <!-- TOP3 -->
     <div class="top3-section">
       <div class="top3-header">🎯 今日応募するならこの3件</div>
       
-    <div class="job-card rank-s top3-card"
-         data-id="13267575"
-         style="border-left-color:#e74c3c; background:#fef5f5">
+    <div class="job-card rank-a top3-card"
+         data-id="13284460"
+         style="border-left-color:#e67e22; background:#fff8f0">
 
       <div class="job-header">
-        <span class="job-number" style="background:#e74c3c">2</span>
-        <span class="rank-badge" style="background:#e74c3c">Sランク</span>
+        <span class="job-number" style="background:#e67e22">1</span>
+        <span class="rank-badge" style="background:#e67e22">Aランク</span>
         <span class="top3-badge">🎯 TODAY TOP</span>
-        <span class="genre-tag">AI活用・生成AI</span>
+        <span class="genre-tag">業務改善・自動化</span>
       </div>
 
       <h2 class="job-title">
-        <a href="https://crowdworks.jp/public/jobs/13267575" target="_blank" rel="noopener">広告のビジュアル制作にチャレンジ｜AI活用・がんばり次第で単価UP</a>
-      </h2>
-
-      <div class="job-meta">
-        <span class="meta-item">💰 5,000円</span>
-        
-        
-        <span class="meta-item keyword-tag">🔑 AI業務改善</span>
-      </div>
-
-      <div class="scores">
-        <div class="score-row">
-          <span class="score-label">AI実績</span>
-          <span class="score-stars">★★★★★</span>
-        </div>
-        <div class="score-row">
-          <span class="score-label">独立につながる</span>
-          <span class="score-stars">★★★★★</span>
-        </div>
-        <div class="score-row">
-          <span class="score-label">受注可能性</span>
-          <span class="score-stars">★★★☆☆</span>
-        </div>
-      </div>
-
-      <div class="detail-section reason">
-        <div class="detail-label">✅ 応募すべき理由</div>
-        <div class="detail-text">AI活用スキルを直接活かせる案件</div>
-      </div>
-
-      <div class="detail-section strength">
-        <div class="detail-label">💡 提案文の軸</div>
-        <div class="detail-text">飲食業界22年の実務経験×ChatGPT/Claude活用スキルで、現場視点のAI導入を提案できます</div>
-      </div>
-
-      <div class="detail-section caution">
-        <div class="detail-label">⚠️ 注意点</div>
-        <div class="detail-text">予算が明記されていない場合は要確認</div>
-      </div>
-
-      <div class="card-actions">
-        <a href="https://crowdworks.jp/public/jobs/13267575" target="_blank" class="btn-view">案件を見る →</a>
-        <button class="btn-save" onclick="toggleSave('13267575', '広告のビジュアル制作にチャレンジ｜AI活用・がんばり次第で単価UP', 'https://crowdworks.jp/public/jobs/13267575', 'S')">
-          <span class="save-icon">🔖</span> <span class="save-text">候補に追加</span>
-        </button>
-      </div>
-    </div>
-  
-
-    <div class="job-card rank-s top3-card"
-         data-id="13284001"
-         style="border-left-color:#e74c3c; background:#fef5f5">
-
-      <div class="job-header">
-        <span class="job-number" style="background:#e74c3c">3</span>
-        <span class="rank-badge" style="background:#e74c3c">Sランク</span>
-        <span class="top3-badge">🎯 TODAY TOP</span>
-        <span class="genre-tag">AI活用・生成AI</span>
-      </div>
-
-      <h2 class="job-title">
-        <a href="https://crowdworks.jp/public/jobs/13284001" target="_blank" rel="noopener">チラシ・ポスターのビジュアルをAIで。長く続けてくれる方歓迎</a>
+        <a href="https://crowdworks.jp/public/jobs/13284460" target="_blank" rel="noopener">AI（Cursor / Codex）を活用した自動化ができる方募集</a>
       </h2>
 
       <div class="job-meta">
@@ -487,11 +513,11 @@
       <div class="scores">
         <div class="score-row">
           <span class="score-label">AI実績</span>
-          <span class="score-stars">★★★★☆</span>
+          <span class="score-stars">★★★☆☆</span>
         </div>
         <div class="score-row">
           <span class="score-label">独立につながる</span>
-          <span class="score-stars">★★★★☆</span>
+          <span class="score-stars">★★★☆☆</span>
         </div>
         <div class="score-row">
           <span class="score-label">受注可能性</span>
@@ -501,12 +527,12 @@
 
       <div class="detail-section reason">
         <div class="detail-label">✅ 応募すべき理由</div>
-        <div class="detail-text">AI活用スキルを直接活かせる案件</div>
+        <div class="detail-text">AI活用スキルを直接活かせる案件、飲食業界22年の業務改善経験を活かせる</div>
       </div>
 
       <div class="detail-section strength">
         <div class="detail-label">💡 提案文の軸</div>
-        <div class="detail-text">飲食業界22年の実務経験×ChatGPT/Claude活用スキルで、現場視点のAI導入を提案できます</div>
+        <div class="detail-text">10年以上の業務改善・事務管理経験で、再現性のあるマニュアルや仕組みを作れます</div>
       </div>
 
       <div class="detail-section caution">
@@ -514,10 +540,14 @@
         <div class="detail-text">案件詳細で業務範囲と納期を必ず確認</div>
       </div>
 
+      <span class="applied-overlay">✅ 応募済み</span>
       <div class="card-actions">
-        <a href="https://crowdworks.jp/public/jobs/13284001" target="_blank" class="btn-view">案件を見る →</a>
-        <button class="btn-save" onclick="toggleSave('13284001', 'チラシ・ポスターのビジュアルをAIで。長く続けてくれる方歓迎', 'https://crowdworks.jp/public/jobs/13284001', 'S')">
+        <a href="https://crowdworks.jp/public/jobs/13284460" target="_blank" class="btn-view">案件を見る →</a>
+        <button class="btn-save" onclick="toggleSave('13284460', 'AI（Cursor / Codex）を活用した自動化ができる方募集', 'https://crowdworks.jp/public/jobs/13284460', 'A')">
           <span class="save-icon">🔖</span> <span class="save-text">候補に追加</span>
+        </button>
+        <button class="btn-applied" onclick="toggleApplied('13284460', 'AI（Cursor / Codex）を活用した自動化ができる方募集', 'https://crowdworks.jp/public/jobs/13284460')">
+          <span class="applied-text">✅ 応募済み</span>
         </button>
       </div>
     </div>
@@ -528,7 +558,7 @@
          style="border-left-color:#27ae60; background:#f0fff4">
 
       <div class="job-header">
-        <span class="job-number" style="background:#27ae60">4</span>
+        <span class="job-number" style="background:#27ae60">2</span>
         <span class="rank-badge" style="background:#27ae60">Bランク</span>
         <span class="top3-badge">🎯 TODAY TOP</span>
         <span class="genre-tag">その他</span>
@@ -575,38 +605,107 @@
         <div class="detail-text">案件詳細で業務範囲と納期を必ず確認</div>
       </div>
 
+      <span class="applied-overlay">✅ 応募済み</span>
       <div class="card-actions">
         <a href="https://crowdworks.jp/public/jobs/13257298" target="_blank" class="btn-view">案件を見る →</a>
         <button class="btn-save" onclick="toggleSave('13257298', '縦型SNS運用代行者募集｜月額5万円｜中期継続｜未経験でもやる気のある方歓迎', 'https://crowdworks.jp/public/jobs/13257298', 'B')">
           <span class="save-icon">🔖</span> <span class="save-text">候補に追加</span>
+        </button>
+        <button class="btn-applied" onclick="toggleApplied('13257298', '縦型SNS運用代行者募集｜月額5万円｜中期継続｜未経験でもやる気のある方歓迎', 'https://crowdworks.jp/public/jobs/13257298')">
+          <span class="applied-text">✅ 応募済み</span>
+        </button>
+      </div>
+    </div>
+  
+
+    <div class="job-card rank-b top3-card"
+         data-id="13280389"
+         style="border-left-color:#27ae60; background:#f0fff4">
+
+      <div class="job-header">
+        <span class="job-number" style="background:#27ae60">3</span>
+        <span class="rank-badge" style="background:#27ae60">Bランク</span>
+        <span class="top3-badge">🎯 TODAY TOP</span>
+        <span class="genre-tag">AI画像生成</span>
+      </div>
+
+      <h2 class="job-title">
+        <a href="https://crowdworks.jp/public/jobs/13280389" target="_blank" rel="noopener">【未経験歓迎】AI画像制作に関わるテキスト作成スタッフ募集｜在宅｜マニュアル完備</a>
+      </h2>
+
+      <div class="job-meta">
+        <span class="meta-item">💰 5,000円</span>
+        
+        
+        <span class="meta-item keyword-tag">🔑 ChatGPT</span>
+      </div>
+
+      <div class="scores">
+        <div class="score-row">
+          <span class="score-label">AI実績</span>
+          <span class="score-stars">☆☆☆☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">独立につながる</span>
+          <span class="score-stars">☆☆☆☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">受注可能性</span>
+          <span class="score-stars">★★★★☆</span>
+        </div>
+      </div>
+
+      <div class="detail-section reason">
+        <div class="detail-label">✅ 応募すべき理由</div>
+        <div class="detail-text">初心者歓迎で受注しやすい</div>
+      </div>
+
+      <div class="detail-section strength">
+        <div class="detail-label">💡 提案文の軸</div>
+        <div class="detail-text">10年以上の業務改善・事務管理経験で、再現性のあるマニュアルや仕組みを作れます</div>
+      </div>
+
+      <div class="detail-section caution">
+        <div class="detail-label">⚠️ 注意点</div>
+        <div class="detail-text">案件詳細で業務範囲と納期を必ず確認</div>
+      </div>
+
+      <span class="applied-overlay">✅ 応募済み</span>
+      <div class="card-actions">
+        <a href="https://crowdworks.jp/public/jobs/13280389" target="_blank" class="btn-view">案件を見る →</a>
+        <button class="btn-save" onclick="toggleSave('13280389', '【未経験歓迎】AI画像制作に関わるテキスト作成スタッフ募集｜在宅｜マニュアル完備', 'https://crowdworks.jp/public/jobs/13280389', 'B')">
+          <span class="save-icon">🔖</span> <span class="save-text">候補に追加</span>
+        </button>
+        <button class="btn-applied" onclick="toggleApplied('13280389', '【未経験歓迎】AI画像制作に関わるテキスト作成スタッフ募集｜在宅｜マニュアル完備', 'https://crowdworks.jp/public/jobs/13280389')">
+          <span class="applied-text">✅ 応募済み</span>
         </button>
       </div>
     </div>
   
     </div>
 
-    <!-- 残り案件 -->
+    <!-- 残り応募候補 -->
     <div class="rank-section-header" style="border-left:4px solid #27ae60">
       <span style="color:#27ae60">Bランク</span>
-      <span class="count-badge" style="background:#27ae60">7件</span>
+      <span class="count-badge" style="background:#27ae60">2件</span>
     </div>
     <div class="job-card rank-b"
-         data-id="13284089"
+         data-id="13284475"
          style="border-left-color:#27ae60; background:#f0fff4">
 
       <div class="job-header">
-        <span class="job-number" style="background:#27ae60">5</span>
+        <span class="job-number" style="background:#27ae60">4</span>
         <span class="rank-badge" style="background:#27ae60">Bランク</span>
         
-        <span class="genre-tag">その他</span>
+        <span class="genre-tag">リサーチ</span>
       </div>
 
       <h2 class="job-title">
-        <a href="https://crowdworks.jp/public/jobs/13284089" target="_blank" rel="noopener">【経理アシスタント募集】時給2,500円／月50h前後</a>
+        <a href="https://crowdworks.jp/public/jobs/13284475" target="_blank" rel="noopener">✨実績作り◎✨SNS運用代行｜実績を作ってステップアップしたい方向け</a>
       </h2>
 
       <div class="job-meta">
-        <span class="meta-item">💰 2,500円</span>
+        <span class="meta-item">💰 30,000円</span>
         
         
         <span class="meta-item keyword-tag">🔑 ChatGPT</span>
@@ -639,210 +738,34 @@
 
       <div class="detail-section caution">
         <div class="detail-label">⚠️ 注意点</div>
-        <div class="detail-text">予算が明記されていない場合は要確認</div>
+        <div class="detail-text">案件詳細で業務範囲と納期を必ず確認</div>
       </div>
 
+      <span class="applied-overlay">✅ 応募済み</span>
       <div class="card-actions">
-        <a href="https://crowdworks.jp/public/jobs/13284089" target="_blank" class="btn-view">案件を見る →</a>
-        <button class="btn-save" onclick="toggleSave('13284089', '【経理アシスタント募集】時給2,500円／月50h前後', 'https://crowdworks.jp/public/jobs/13284089', 'B')">
+        <a href="https://crowdworks.jp/public/jobs/13284475" target="_blank" class="btn-view">案件を見る →</a>
+        <button class="btn-save" onclick="toggleSave('13284475', '✨実績作り◎✨SNS運用代行｜実績を作ってステップアップしたい方向け', 'https://crowdworks.jp/public/jobs/13284475', 'B')">
           <span class="save-icon">🔖</span> <span class="save-text">候補に追加</span>
+        </button>
+        <button class="btn-applied" onclick="toggleApplied('13284475', '✨実績作り◎✨SNS運用代行｜実績を作ってステップアップしたい方向け', 'https://crowdworks.jp/public/jobs/13284475')">
+          <span class="applied-text">✅ 応募済み</span>
         </button>
       </div>
     </div>
   
     <div class="job-card rank-b"
-         data-id="13225955"
+         data-id="13284472"
          style="border-left-color:#27ae60; background:#f0fff4">
 
       <div class="job-header">
-        <span class="job-number" style="background:#27ae60">6</span>
+        <span class="job-number" style="background:#27ae60">5</span>
         <span class="rank-badge" style="background:#27ae60">Bランク</span>
         
         <span class="genre-tag">その他</span>
       </div>
 
       <h2 class="job-title">
-        <a href="https://crowdworks.jp/public/jobs/13225955" target="_blank" rel="noopener">【在宅・未経験可】Instagramショート動画・投稿文作成スタッフ募集</a>
-      </h2>
-
-      <div class="job-meta">
-        <span class="meta-item">💰 50,000円</span>
-        
-        
-        <span class="meta-item keyword-tag">🔑 ChatGPT</span>
-      </div>
-
-      <div class="scores">
-        <div class="score-row">
-          <span class="score-label">AI実績</span>
-          <span class="score-stars">☆☆☆☆☆</span>
-        </div>
-        <div class="score-row">
-          <span class="score-label">独立につながる</span>
-          <span class="score-stars">☆☆☆☆☆</span>
-        </div>
-        <div class="score-row">
-          <span class="score-label">受注可能性</span>
-          <span class="score-stars">★★★★☆</span>
-        </div>
-      </div>
-
-      <div class="detail-section reason">
-        <div class="detail-label">✅ 応募すべき理由</div>
-        <div class="detail-text">初心者歓迎で受注しやすい</div>
-      </div>
-
-      <div class="detail-section strength">
-        <div class="detail-label">💡 提案文の軸</div>
-        <div class="detail-text">22年の実務経験を持つ現場出身者として、使える成果物を納品します</div>
-      </div>
-
-      <div class="detail-section caution">
-        <div class="detail-label">⚠️ 注意点</div>
-        <div class="detail-text">案件詳細で業務範囲と納期を必ず確認</div>
-      </div>
-
-      <div class="card-actions">
-        <a href="https://crowdworks.jp/public/jobs/13225955" target="_blank" class="btn-view">案件を見る →</a>
-        <button class="btn-save" onclick="toggleSave('13225955', '【在宅・未経験可】Instagramショート動画・投稿文作成スタッフ募集', 'https://crowdworks.jp/public/jobs/13225955', 'B')">
-          <span class="save-icon">🔖</span> <span class="save-text">候補に追加</span>
-        </button>
-      </div>
-    </div>
-  
-    <div class="job-card rank-b"
-         data-id="13284017"
-         style="border-left-color:#27ae60; background:#f0fff4">
-
-      <div class="job-header">
-        <span class="job-number" style="background:#27ae60">7</span>
-        <span class="rank-badge" style="background:#27ae60">Bランク</span>
-        
-        <span class="genre-tag">採用支援</span>
-      </div>
-
-      <h2 class="job-title">
-        <a href="https://crowdworks.jp/public/jobs/13284017" target="_blank" rel="noopener">スピリチュアル系のSNS投稿のリサーチができる方を募集します！</a>
-      </h2>
-
-      <div class="job-meta">
-        <span class="meta-item">💰 5,000円</span>
-        
-        
-        <span class="meta-item keyword-tag">🔑 ChatGPT</span>
-      </div>
-
-      <div class="scores">
-        <div class="score-row">
-          <span class="score-label">AI実績</span>
-          <span class="score-stars">☆☆☆☆☆</span>
-        </div>
-        <div class="score-row">
-          <span class="score-label">独立につながる</span>
-          <span class="score-stars">☆☆☆☆☆</span>
-        </div>
-        <div class="score-row">
-          <span class="score-label">受注可能性</span>
-          <span class="score-stars">★★★☆☆</span>
-        </div>
-      </div>
-
-      <div class="detail-section reason">
-        <div class="detail-label">✅ 応募すべき理由</div>
-        <div class="detail-text">300名以上の採用面接経験が強みになる</div>
-      </div>
-
-      <div class="detail-section strength">
-        <div class="detail-label">💡 提案文の軸</div>
-        <div class="detail-text">300名以上の採用面接経験と店舗マネジメント実績で、実用的な仕組みを構築できます</div>
-      </div>
-
-      <div class="detail-section caution">
-        <div class="detail-label">⚠️ 注意点</div>
-        <div class="detail-text">案件詳細で業務範囲と納期を必ず確認</div>
-      </div>
-
-      <div class="card-actions">
-        <a href="https://crowdworks.jp/public/jobs/13284017" target="_blank" class="btn-view">案件を見る →</a>
-        <button class="btn-save" onclick="toggleSave('13284017', 'スピリチュアル系のSNS投稿のリサーチができる方を募集します！', 'https://crowdworks.jp/public/jobs/13284017', 'B')">
-          <span class="save-icon">🔖</span> <span class="save-text">候補に追加</span>
-        </button>
-      </div>
-    </div>
-  
-    <div class="job-card rank-b"
-         data-id="13252446"
-         style="border-left-color:#27ae60; background:#f0fff4">
-
-      <div class="job-header">
-        <span class="job-number" style="background:#27ae60">8</span>
-        <span class="rank-badge" style="background:#27ae60">Bランク</span>
-        
-        <span class="genre-tag">その他</span>
-      </div>
-
-      <h2 class="job-title">
-        <a href="https://crowdworks.jp/public/jobs/13252446" target="_blank" rel="noopener">🍫｜コンビニスイーツが好きな方へ｜未経験OK◎20代におすすめ♪Instagramバナー制作｜継続あり｜</a>
-      </h2>
-
-      <div class="job-meta">
-        <span class="meta-item">💰 5,000円</span>
-        
-        
-        <span class="meta-item keyword-tag">🔑 ChatGPT</span>
-      </div>
-
-      <div class="scores">
-        <div class="score-row">
-          <span class="score-label">AI実績</span>
-          <span class="score-stars">☆☆☆☆☆</span>
-        </div>
-        <div class="score-row">
-          <span class="score-label">独立につながる</span>
-          <span class="score-stars">☆☆☆☆☆</span>
-        </div>
-        <div class="score-row">
-          <span class="score-label">受注可能性</span>
-          <span class="score-stars">★★★★☆</span>
-        </div>
-      </div>
-
-      <div class="detail-section reason">
-        <div class="detail-label">✅ 応募すべき理由</div>
-        <div class="detail-text">初心者歓迎で受注しやすい</div>
-      </div>
-
-      <div class="detail-section strength">
-        <div class="detail-label">💡 提案文の軸</div>
-        <div class="detail-text">22年の実務経験を持つ現場出身者として、使える成果物を納品します</div>
-      </div>
-
-      <div class="detail-section caution">
-        <div class="detail-label">⚠️ 注意点</div>
-        <div class="detail-text">案件詳細で業務範囲と納期を必ず確認</div>
-      </div>
-
-      <div class="card-actions">
-        <a href="https://crowdworks.jp/public/jobs/13252446" target="_blank" class="btn-view">案件を見る →</a>
-        <button class="btn-save" onclick="toggleSave('13252446', '🍫｜コンビニスイーツが好きな方へ｜未経験OK◎20代におすすめ♪Instagramバナー制作｜継続あり｜', 'https://crowdworks.jp/public/jobs/13252446', 'B')">
-          <span class="save-icon">🔖</span> <span class="save-text">候補に追加</span>
-        </button>
-      </div>
-    </div>
-  
-    <div class="job-card rank-b"
-         data-id="13243537"
-         style="border-left-color:#27ae60; background:#f0fff4">
-
-      <div class="job-header">
-        <span class="job-number" style="background:#27ae60">9</span>
-        <span class="rank-badge" style="background:#27ae60">Bランク</span>
-        
-        <span class="genre-tag">その他</span>
-      </div>
-
-      <h2 class="job-title">
-        <a href="https://crowdworks.jp/public/jobs/13243537" target="_blank" rel="noopener">【完全在宅/未経験OK】YouTubeから情報を集めるだけ！リスト作成業務</a>
+        <a href="https://crowdworks.jp/public/jobs/13284472" target="_blank" rel="noopener">【運用代行勉強中の歓迎】一緒に露天風呂に関するアカウントを運用していきませんか？リール動画の編集をしてくださる方を募集してます！</a>
       </h2>
 
       <div class="job-meta">
@@ -882,27 +805,168 @@
         <div class="detail-text">案件詳細で業務範囲と納期を必ず確認</div>
       </div>
 
+      <span class="applied-overlay">✅ 応募済み</span>
       <div class="card-actions">
-        <a href="https://crowdworks.jp/public/jobs/13243537" target="_blank" class="btn-view">案件を見る →</a>
-        <button class="btn-save" onclick="toggleSave('13243537', '【完全在宅/未経験OK】YouTubeから情報を集めるだけ！リスト作成業務', 'https://crowdworks.jp/public/jobs/13243537', 'B')">
+        <a href="https://crowdworks.jp/public/jobs/13284472" target="_blank" class="btn-view">案件を見る →</a>
+        <button class="btn-save" onclick="toggleSave('13284472', '【運用代行勉強中の歓迎】一緒に露天風呂に関するアカウントを運用していきませんか？リール動画の編集をしてくださる方を募集してます！', 'https://crowdworks.jp/public/jobs/13284472', 'B')">
           <span class="save-icon">🔖</span> <span class="save-text">候補に追加</span>
+        </button>
+        <button class="btn-applied" onclick="toggleApplied('13284472', '【運用代行勉強中の歓迎】一緒に露天風呂に関するアカウントを運用していきませんか？リール動画の編集をしてくださる方を募集してます！', 'https://crowdworks.jp/public/jobs/13284472')">
+          <span class="applied-text">✅ 応募済み</span>
         </button>
       </div>
     </div>
   
+  </div>
+
+  <!-- 保留タブ -->
+  <div id="tab-holds" class="tab-content">
+    <div class="update-info">応募候補に届かなかった案件（今後の参考用）</div>
+    <div class="rank-section-header" style="border-left:4px solid #27ae60">
+      <span style="color:#27ae60">Bランク</span>
+      <span class="count-badge" style="background:#27ae60">15件</span>
+    </div>
     <div class="job-card rank-b"
-         data-id="13258440"
+         data-id="13284471"
          style="border-left-color:#27ae60; background:#f0fff4">
 
       <div class="job-header">
-        <span class="job-number" style="background:#27ae60">10</span>
+        <span class="job-number" style="background:#27ae60">1</span>
         <span class="rank-badge" style="background:#27ae60">Bランク</span>
         
         <span class="genre-tag">その他</span>
       </div>
 
       <h2 class="job-title">
-        <a href="https://crowdworks.jp/public/jobs/13258440" target="_blank" rel="noopener">【未経験歓迎！】原神ゲームプレイ映像を5分程度撮影してくださる方を募集！実績作りに最適♪【素材のカットや編集不要】</a>
+        <a href="https://crowdworks.jp/public/jobs/13284471" target="_blank" rel="noopener">【実績0歓迎】動画の基本操作ができればOK！一緒にアカウントを育てるSNS運用のお仕事</a>
+      </h2>
+
+      <div class="job-meta">
+        <span class="meta-item">💰 10,000円</span>
+        
+        
+        <span class="meta-item keyword-tag">🔑 ChatGPT</span>
+      </div>
+
+      <div class="scores">
+        <div class="score-row">
+          <span class="score-label">AI実績</span>
+          <span class="score-stars">☆☆☆☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">独立につながる</span>
+          <span class="score-stars">☆☆☆☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">受注可能性</span>
+          <span class="score-stars">★★★☆☆</span>
+        </div>
+      </div>
+
+      <div class="detail-section reason">
+        <div class="detail-label">✅ 応募すべき理由</div>
+        <div class="detail-text">ゆうきの管理・整理スキルを活かせる可能性がある</div>
+      </div>
+
+      <div class="detail-section strength">
+        <div class="detail-label">💡 提案文の軸</div>
+        <div class="detail-text">22年の実務経験を持つ現場出身者として、使える成果物を納品します</div>
+      </div>
+
+      <div class="detail-section caution">
+        <div class="detail-label">⚠️ 注意点</div>
+        <div class="detail-text">案件詳細で業務範囲と納期を必ず確認</div>
+      </div>
+
+      <span class="applied-overlay">✅ 応募済み</span>
+      <div class="card-actions">
+        <a href="https://crowdworks.jp/public/jobs/13284471" target="_blank" class="btn-view">案件を見る →</a>
+        <button class="btn-save" onclick="toggleSave('13284471', '【実績0歓迎】動画の基本操作ができればOK！一緒にアカウントを育てるSNS運用のお仕事', 'https://crowdworks.jp/public/jobs/13284471', 'B')">
+          <span class="save-icon">🔖</span> <span class="save-text">候補に追加</span>
+        </button>
+        <button class="btn-applied" onclick="toggleApplied('13284471', '【実績0歓迎】動画の基本操作ができればOK！一緒にアカウントを育てるSNS運用のお仕事', 'https://crowdworks.jp/public/jobs/13284471')">
+          <span class="applied-text">✅ 応募済み</span>
+        </button>
+      </div>
+    </div>
+  
+    <div class="job-card rank-b"
+         data-id="12997832"
+         style="border-left-color:#27ae60; background:#f0fff4">
+
+      <div class="job-header">
+        <span class="job-number" style="background:#27ae60">2</span>
+        <span class="rank-badge" style="background:#27ae60">Bランク</span>
+        
+        <span class="genre-tag">その他</span>
+      </div>
+
+      <h2 class="job-title">
+        <a href="https://crowdworks.jp/public/jobs/12997832" target="_blank" rel="noopener">【運用代行勉強中の歓迎】一緒に旅行系に関するアカウントを運用していきませんか？リール動画の編集をしてくださる方を募集してます！</a>
+      </h2>
+
+      <div class="job-meta">
+        <span class="meta-item">💰 10,000円</span>
+        
+        
+        <span class="meta-item keyword-tag">🔑 ChatGPT</span>
+      </div>
+
+      <div class="scores">
+        <div class="score-row">
+          <span class="score-label">AI実績</span>
+          <span class="score-stars">☆☆☆☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">独立につながる</span>
+          <span class="score-stars">☆☆☆☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">受注可能性</span>
+          <span class="score-stars">★★★★☆</span>
+        </div>
+      </div>
+
+      <div class="detail-section reason">
+        <div class="detail-label">✅ 応募すべき理由</div>
+        <div class="detail-text">初心者歓迎で受注しやすい</div>
+      </div>
+
+      <div class="detail-section strength">
+        <div class="detail-label">💡 提案文の軸</div>
+        <div class="detail-text">22年の実務経験を持つ現場出身者として、使える成果物を納品します</div>
+      </div>
+
+      <div class="detail-section caution">
+        <div class="detail-label">⚠️ 注意点</div>
+        <div class="detail-text">案件詳細で業務範囲と納期を必ず確認</div>
+      </div>
+
+      <span class="applied-overlay">✅ 応募済み</span>
+      <div class="card-actions">
+        <a href="https://crowdworks.jp/public/jobs/12997832" target="_blank" class="btn-view">案件を見る →</a>
+        <button class="btn-save" onclick="toggleSave('12997832', '【運用代行勉強中の歓迎】一緒に旅行系に関するアカウントを運用していきませんか？リール動画の編集をしてくださる方を募集してます！', 'https://crowdworks.jp/public/jobs/12997832', 'B')">
+          <span class="save-icon">🔖</span> <span class="save-text">候補に追加</span>
+        </button>
+        <button class="btn-applied" onclick="toggleApplied('12997832', '【運用代行勉強中の歓迎】一緒に旅行系に関するアカウントを運用していきませんか？リール動画の編集をしてくださる方を募集してます！', 'https://crowdworks.jp/public/jobs/12997832')">
+          <span class="applied-text">✅ 応募済み</span>
+        </button>
+      </div>
+    </div>
+  
+    <div class="job-card rank-b"
+         data-id="13280268"
+         style="border-left-color:#27ae60; background:#f0fff4">
+
+      <div class="job-header">
+        <span class="job-number" style="background:#27ae60">3</span>
+        <span class="rank-badge" style="background:#27ae60">Bランク</span>
+        
+        <span class="genre-tag">その他</span>
+      </div>
+
+      <h2 class="job-title">
+        <a href="https://crowdworks.jp/public/jobs/13280268" target="_blank" rel="noopener">【安定】オンラインの在宅セミナー講師｜未経験からOK｜相性合えば長期歓迎！</a>
       </h2>
 
       <div class="job-meta">
@@ -942,31 +1006,99 @@
         <div class="detail-text">案件詳細で業務範囲と納期を必ず確認</div>
       </div>
 
+      <span class="applied-overlay">✅ 応募済み</span>
       <div class="card-actions">
-        <a href="https://crowdworks.jp/public/jobs/13258440" target="_blank" class="btn-view">案件を見る →</a>
-        <button class="btn-save" onclick="toggleSave('13258440', '【未経験歓迎！】原神ゲームプレイ映像を5分程度撮影してくださる方を募集！実績作りに最適♪【素材のカットや編集不要】', 'https://crowdworks.jp/public/jobs/13258440', 'B')">
+        <a href="https://crowdworks.jp/public/jobs/13280268" target="_blank" class="btn-view">案件を見る →</a>
+        <button class="btn-save" onclick="toggleSave('13280268', '【安定】オンラインの在宅セミナー講師｜未経験からOK｜相性合えば長期歓迎！', 'https://crowdworks.jp/public/jobs/13280268', 'B')">
           <span class="save-icon">🔖</span> <span class="save-text">候補に追加</span>
+        </button>
+        <button class="btn-applied" onclick="toggleApplied('13280268', '【安定】オンラインの在宅セミナー講師｜未経験からOK｜相性合えば長期歓迎！', 'https://crowdworks.jp/public/jobs/13280268')">
+          <span class="applied-text">✅ 応募済み</span>
         </button>
       </div>
     </div>
   
     <div class="job-card rank-b"
-         data-id="13283980"
+         data-id="13284185"
          style="border-left-color:#27ae60; background:#f0fff4">
 
       <div class="job-header">
-        <span class="job-number" style="background:#27ae60">11</span>
+        <span class="job-number" style="background:#27ae60">4</span>
         <span class="rank-badge" style="background:#27ae60">Bランク</span>
         
-        <span class="genre-tag">ライティング</span>
+        <span class="genre-tag">その他</span>
       </div>
 
       <h2 class="job-title">
-        <a href="https://crowdworks.jp/public/jobs/13283980" target="_blank" rel="noopener">【初心者OK】AIライティングについての簡単な記事作成できる方を募集</a>
+        <a href="https://crowdworks.jp/public/jobs/13284185" target="_blank" rel="noopener">【女性限定】音声作品(シチュエーションボイス)の収録</a>
       </h2>
 
       <div class="job-meta">
-        <span class="meta-item">💰 5円</span>
+        <span class="meta-item">💰 17,600円</span>
+        
+        
+        <span class="meta-item keyword-tag">🔑 ChatGPT</span>
+      </div>
+
+      <div class="scores">
+        <div class="score-row">
+          <span class="score-label">AI実績</span>
+          <span class="score-stars">☆☆☆☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">独立につながる</span>
+          <span class="score-stars">☆☆☆☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">受注可能性</span>
+          <span class="score-stars">★★★☆☆</span>
+        </div>
+      </div>
+
+      <div class="detail-section reason">
+        <div class="detail-label">✅ 応募すべき理由</div>
+        <div class="detail-text">ゆうきの管理・整理スキルを活かせる可能性がある</div>
+      </div>
+
+      <div class="detail-section strength">
+        <div class="detail-label">💡 提案文の軸</div>
+        <div class="detail-text">22年の実務経験を持つ現場出身者として、使える成果物を納品します</div>
+      </div>
+
+      <div class="detail-section caution">
+        <div class="detail-label">⚠️ 注意点</div>
+        <div class="detail-text">案件詳細で業務範囲と納期を必ず確認</div>
+      </div>
+
+      <span class="applied-overlay">✅ 応募済み</span>
+      <div class="card-actions">
+        <a href="https://crowdworks.jp/public/jobs/13284185" target="_blank" class="btn-view">案件を見る →</a>
+        <button class="btn-save" onclick="toggleSave('13284185', '【女性限定】音声作品(シチュエーションボイス)の収録', 'https://crowdworks.jp/public/jobs/13284185', 'B')">
+          <span class="save-icon">🔖</span> <span class="save-text">候補に追加</span>
+        </button>
+        <button class="btn-applied" onclick="toggleApplied('13284185', '【女性限定】音声作品(シチュエーションボイス)の収録', 'https://crowdworks.jp/public/jobs/13284185')">
+          <span class="applied-text">✅ 応募済み</span>
+        </button>
+      </div>
+    </div>
+  
+    <div class="job-card rank-b"
+         data-id="13284403"
+         style="border-left-color:#27ae60; background:#f0fff4">
+
+      <div class="job-header">
+        <span class="job-number" style="background:#27ae60">5</span>
+        <span class="rank-badge" style="background:#27ae60">Bランク</span>
+        
+        <span class="genre-tag">その他</span>
+      </div>
+
+      <h2 class="job-title">
+        <a href="https://crowdworks.jp/public/jobs/13284403" target="_blank" rel="noopener">【初心者歓迎✨デザインの経験を活かす】SNS運用パートナー｜画像作成から運用に幅を広げたい方</a>
+      </h2>
+
+      <div class="job-meta">
+        <span class="meta-item">💰 10,000円</span>
         
         
         <span class="meta-item keyword-tag">🔑 ChatGPT</span>
@@ -999,14 +1131,1326 @@
 
       <div class="detail-section caution">
         <div class="detail-label">⚠️ 注意点</div>
-        <div class="detail-text">予算が明記されていない場合は要確認</div>
+        <div class="detail-text">案件詳細で業務範囲と納期を必ず確認</div>
       </div>
 
+      <span class="applied-overlay">✅ 応募済み</span>
       <div class="card-actions">
-        <a href="https://crowdworks.jp/public/jobs/13283980" target="_blank" class="btn-view">案件を見る →</a>
-        <button class="btn-save" onclick="toggleSave('13283980', '【初心者OK】AIライティングについての簡単な記事作成できる方を募集', 'https://crowdworks.jp/public/jobs/13283980', 'B')">
+        <a href="https://crowdworks.jp/public/jobs/13284403" target="_blank" class="btn-view">案件を見る →</a>
+        <button class="btn-save" onclick="toggleSave('13284403', '【初心者歓迎✨デザインの経験を活かす】SNS運用パートナー｜画像作成から運用に幅を広げたい方', 'https://crowdworks.jp/public/jobs/13284403', 'B')">
           <span class="save-icon">🔖</span> <span class="save-text">候補に追加</span>
         </button>
+        <button class="btn-applied" onclick="toggleApplied('13284403', '【初心者歓迎✨デザインの経験を活かす】SNS運用パートナー｜画像作成から運用に幅を広げたい方', 'https://crowdworks.jp/public/jobs/13284403')">
+          <span class="applied-text">✅ 応募済み</span>
+        </button>
+      </div>
+    </div>
+  
+    <div class="job-card rank-b"
+         data-id="13284370"
+         style="border-left-color:#27ae60; background:#f0fff4">
+
+      <div class="job-header">
+        <span class="job-number" style="background:#27ae60">6</span>
+        <span class="rank-badge" style="background:#27ae60">Bランク</span>
+        
+        <span class="genre-tag">その他</span>
+      </div>
+
+      <h2 class="job-title">
+        <a href="https://crowdworks.jp/public/jobs/13284370" target="_blank" rel="noopener">（ドットイラスト）モンスターキャラクターのデザイン</a>
+      </h2>
+
+      <div class="job-meta">
+        <span class="meta-item">💰 要確認</span>
+        
+        
+        <span class="meta-item keyword-tag">🔑 ChatGPT</span>
+      </div>
+
+      <div class="scores">
+        <div class="score-row">
+          <span class="score-label">AI実績</span>
+          <span class="score-stars">☆☆☆☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">独立につながる</span>
+          <span class="score-stars">☆☆☆☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">受注可能性</span>
+          <span class="score-stars">★★★☆☆</span>
+        </div>
+      </div>
+
+      <div class="detail-section reason">
+        <div class="detail-label">✅ 応募すべき理由</div>
+        <div class="detail-text">ゆうきの管理・整理スキルを活かせる可能性がある</div>
+      </div>
+
+      <div class="detail-section strength">
+        <div class="detail-label">💡 提案文の軸</div>
+        <div class="detail-text">22年の実務経験を持つ現場出身者として、使える成果物を納品します</div>
+      </div>
+
+      <div class="detail-section caution">
+        <div class="detail-label">⚠️ 注意点</div>
+        <div class="detail-text">案件詳細で業務範囲と納期を必ず確認</div>
+      </div>
+
+      <span class="applied-overlay">✅ 応募済み</span>
+      <div class="card-actions">
+        <a href="https://crowdworks.jp/public/jobs/13284370" target="_blank" class="btn-view">案件を見る →</a>
+        <button class="btn-save" onclick="toggleSave('13284370', '（ドットイラスト）モンスターキャラクターのデザイン', 'https://crowdworks.jp/public/jobs/13284370', 'B')">
+          <span class="save-icon">🔖</span> <span class="save-text">候補に追加</span>
+        </button>
+        <button class="btn-applied" onclick="toggleApplied('13284370', '（ドットイラスト）モンスターキャラクターのデザイン', 'https://crowdworks.jp/public/jobs/13284370')">
+          <span class="applied-text">✅ 応募済み</span>
+        </button>
+      </div>
+    </div>
+  
+    <div class="job-card rank-b"
+         data-id="13225955"
+         style="border-left-color:#27ae60; background:#f0fff4">
+
+      <div class="job-header">
+        <span class="job-number" style="background:#27ae60">7</span>
+        <span class="rank-badge" style="background:#27ae60">Bランク</span>
+        
+        <span class="genre-tag">その他</span>
+      </div>
+
+      <h2 class="job-title">
+        <a href="https://crowdworks.jp/public/jobs/13225955" target="_blank" rel="noopener">【在宅・未経験可】Instagramショート動画・投稿文作成スタッフ募集</a>
+      </h2>
+
+      <div class="job-meta">
+        <span class="meta-item">💰 50,000円</span>
+        
+        
+        <span class="meta-item keyword-tag">🔑 Claude</span>
+      </div>
+
+      <div class="scores">
+        <div class="score-row">
+          <span class="score-label">AI実績</span>
+          <span class="score-stars">☆☆☆☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">独立につながる</span>
+          <span class="score-stars">☆☆☆☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">受注可能性</span>
+          <span class="score-stars">★★★★☆</span>
+        </div>
+      </div>
+
+      <div class="detail-section reason">
+        <div class="detail-label">✅ 応募すべき理由</div>
+        <div class="detail-text">初心者歓迎で受注しやすい</div>
+      </div>
+
+      <div class="detail-section strength">
+        <div class="detail-label">💡 提案文の軸</div>
+        <div class="detail-text">22年の実務経験を持つ現場出身者として、使える成果物を納品します</div>
+      </div>
+
+      <div class="detail-section caution">
+        <div class="detail-label">⚠️ 注意点</div>
+        <div class="detail-text">案件詳細で業務範囲と納期を必ず確認</div>
+      </div>
+
+      <span class="applied-overlay">✅ 応募済み</span>
+      <div class="card-actions">
+        <a href="https://crowdworks.jp/public/jobs/13225955" target="_blank" class="btn-view">案件を見る →</a>
+        <button class="btn-save" onclick="toggleSave('13225955', '【在宅・未経験可】Instagramショート動画・投稿文作成スタッフ募集', 'https://crowdworks.jp/public/jobs/13225955', 'B')">
+          <span class="save-icon">🔖</span> <span class="save-text">候補に追加</span>
+        </button>
+        <button class="btn-applied" onclick="toggleApplied('13225955', '【在宅・未経験可】Instagramショート動画・投稿文作成スタッフ募集', 'https://crowdworks.jp/public/jobs/13225955')">
+          <span class="applied-text">✅ 応募済み</span>
+        </button>
+      </div>
+    </div>
+  
+    <div class="job-card rank-b"
+         data-id="13258866"
+         style="border-left-color:#27ae60; background:#f0fff4">
+
+      <div class="job-header">
+        <span class="job-number" style="background:#27ae60">8</span>
+        <span class="rank-badge" style="background:#27ae60">Bランク</span>
+        
+        <span class="genre-tag">その他</span>
+      </div>
+
+      <h2 class="job-title">
+        <a href="https://crowdworks.jp/public/jobs/13258866" target="_blank" rel="noopener">大企業とスタートアップのM&amp;A後のPMIについてお話をお聞きしたい（MBA修士論文用インタビュー、1時間）</a>
+      </h2>
+
+      <div class="job-meta">
+        <span class="meta-item">💰 5,000円</span>
+        
+        
+        <span class="meta-item keyword-tag">🔑 Claude Code</span>
+      </div>
+
+      <div class="scores">
+        <div class="score-row">
+          <span class="score-label">AI実績</span>
+          <span class="score-stars">☆☆☆☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">独立につながる</span>
+          <span class="score-stars">☆☆☆☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">受注可能性</span>
+          <span class="score-stars">★★★☆☆</span>
+        </div>
+      </div>
+
+      <div class="detail-section reason">
+        <div class="detail-label">✅ 応募すべき理由</div>
+        <div class="detail-text">ゆうきの管理・整理スキルを活かせる可能性がある</div>
+      </div>
+
+      <div class="detail-section strength">
+        <div class="detail-label">💡 提案文の軸</div>
+        <div class="detail-text">22年の実務経験を持つ現場出身者として、使える成果物を納品します</div>
+      </div>
+
+      <div class="detail-section caution">
+        <div class="detail-label">⚠️ 注意点</div>
+        <div class="detail-text">案件詳細で業務範囲と納期を必ず確認</div>
+      </div>
+
+      <span class="applied-overlay">✅ 応募済み</span>
+      <div class="card-actions">
+        <a href="https://crowdworks.jp/public/jobs/13258866" target="_blank" class="btn-view">案件を見る →</a>
+        <button class="btn-save" onclick="toggleSave('13258866', '大企業とスタートアップのM&amp;A後のPMIについてお話をお聞きしたい（MBA修士論文用インタビュー、1時間）', 'https://crowdworks.jp/public/jobs/13258866', 'B')">
+          <span class="save-icon">🔖</span> <span class="save-text">候補に追加</span>
+        </button>
+        <button class="btn-applied" onclick="toggleApplied('13258866', '大企業とスタートアップのM&amp;A後のPMIについてお話をお聞きしたい（MBA修士論文用インタビュー、1時間）', 'https://crowdworks.jp/public/jobs/13258866')">
+          <span class="applied-text">✅ 応募済み</span>
+        </button>
+      </div>
+    </div>
+  
+    <div class="job-card rank-b"
+         data-id="13280302"
+         style="border-left-color:#27ae60; background:#f0fff4">
+
+      <div class="job-header">
+        <span class="job-number" style="background:#27ae60">9</span>
+        <span class="rank-badge" style="background:#27ae60">Bランク</span>
+        
+        <span class="genre-tag">AI画像生成</span>
+      </div>
+
+      <h2 class="job-title">
+        <a href="https://crowdworks.jp/public/jobs/13280302" target="_blank" rel="noopener">再掲載【在宅OK】LP制作に必須スキル！AI画像作成のお手伝い募集｜未経験OK・手順案内あり</a>
+      </h2>
+
+      <div class="job-meta">
+        <span class="meta-item">💰 5,000円</span>
+        
+        
+        <span class="meta-item keyword-tag">🔑 AI活用</span>
+      </div>
+
+      <div class="scores">
+        <div class="score-row">
+          <span class="score-label">AI実績</span>
+          <span class="score-stars">☆☆☆☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">独立につながる</span>
+          <span class="score-stars">☆☆☆☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">受注可能性</span>
+          <span class="score-stars">★★★★☆</span>
+        </div>
+      </div>
+
+      <div class="detail-section reason">
+        <div class="detail-label">✅ 応募すべき理由</div>
+        <div class="detail-text">初心者歓迎で受注しやすい</div>
+      </div>
+
+      <div class="detail-section strength">
+        <div class="detail-label">💡 提案文の軸</div>
+        <div class="detail-text">22年の実務経験を持つ現場出身者として、使える成果物を納品します</div>
+      </div>
+
+      <div class="detail-section caution">
+        <div class="detail-label">⚠️ 注意点</div>
+        <div class="detail-text">案件詳細で業務範囲と納期を必ず確認</div>
+      </div>
+
+      <span class="applied-overlay">✅ 応募済み</span>
+      <div class="card-actions">
+        <a href="https://crowdworks.jp/public/jobs/13280302" target="_blank" class="btn-view">案件を見る →</a>
+        <button class="btn-save" onclick="toggleSave('13280302', '再掲載【在宅OK】LP制作に必須スキル！AI画像作成のお手伝い募集｜未経験OK・手順案内あり', 'https://crowdworks.jp/public/jobs/13280302', 'B')">
+          <span class="save-icon">🔖</span> <span class="save-text">候補に追加</span>
+        </button>
+        <button class="btn-applied" onclick="toggleApplied('13280302', '再掲載【在宅OK】LP制作に必須スキル！AI画像作成のお手伝い募集｜未経験OK・手順案内あり', 'https://crowdworks.jp/public/jobs/13280302')">
+          <span class="applied-text">✅ 応募済み</span>
+        </button>
+      </div>
+    </div>
+  
+    <div class="job-card rank-b"
+         data-id="13266866"
+         style="border-left-color:#27ae60; background:#f0fff4">
+
+      <div class="job-header">
+        <span class="job-number" style="background:#27ae60">10</span>
+        <span class="rank-badge" style="background:#27ae60">Bランク</span>
+        
+        <span class="genre-tag">その他</span>
+      </div>
+
+      <h2 class="job-title">
+        <a href="https://crowdworks.jp/public/jobs/13266866" target="_blank" rel="noopener">【これから動画編集で食べていきたいと考えている方！】ゲーム好きな方！初心者ok！VtuberのYouTube編集 学生大歓迎</a>
+      </h2>
+
+      <div class="job-meta">
+        <span class="meta-item">💰 30,000円</span>
+        
+        
+        <span class="meta-item keyword-tag">🔑 AI導入支援</span>
+      </div>
+
+      <div class="scores">
+        <div class="score-row">
+          <span class="score-label">AI実績</span>
+          <span class="score-stars">☆☆☆☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">独立につながる</span>
+          <span class="score-stars">☆☆☆☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">受注可能性</span>
+          <span class="score-stars">★★★★☆</span>
+        </div>
+      </div>
+
+      <div class="detail-section reason">
+        <div class="detail-label">✅ 応募すべき理由</div>
+        <div class="detail-text">初心者歓迎で受注しやすい</div>
+      </div>
+
+      <div class="detail-section strength">
+        <div class="detail-label">💡 提案文の軸</div>
+        <div class="detail-text">22年の実務経験を持つ現場出身者として、使える成果物を納品します</div>
+      </div>
+
+      <div class="detail-section caution">
+        <div class="detail-label">⚠️ 注意点</div>
+        <div class="detail-text">案件詳細で業務範囲と納期を必ず確認</div>
+      </div>
+
+      <span class="applied-overlay">✅ 応募済み</span>
+      <div class="card-actions">
+        <a href="https://crowdworks.jp/public/jobs/13266866" target="_blank" class="btn-view">案件を見る →</a>
+        <button class="btn-save" onclick="toggleSave('13266866', '【これから動画編集で食べていきたいと考えている方！】ゲーム好きな方！初心者ok！VtuberのYouTube編集 学生大歓迎', 'https://crowdworks.jp/public/jobs/13266866', 'B')">
+          <span class="save-icon">🔖</span> <span class="save-text">候補に追加</span>
+        </button>
+        <button class="btn-applied" onclick="toggleApplied('13266866', '【これから動画編集で食べていきたいと考えている方！】ゲーム好きな方！初心者ok！VtuberのYouTube編集 学生大歓迎', 'https://crowdworks.jp/public/jobs/13266866')">
+          <span class="applied-text">✅ 応募済み</span>
+        </button>
+      </div>
+    </div>
+  
+    <div class="job-card rank-b"
+         data-id="13271693"
+         style="border-left-color:#27ae60; background:#f0fff4">
+
+      <div class="job-header">
+        <span class="job-number" style="background:#27ae60">11</span>
+        <span class="rank-badge" style="background:#27ae60">Bランク</span>
+        
+        <span class="genre-tag">マニュアル作成</span>
+      </div>
+
+      <h2 class="job-title">
+        <a href="https://crowdworks.jp/public/jobs/13271693" target="_blank" rel="noopener">【主婦さん・初心者ユーザー大歓迎！ 】無料スマホゲームを《1日３つプレイ》するだけ♫ ［実績になる][マニュアル付き]</a>
+      </h2>
+
+      <div class="job-meta">
+        <span class="meta-item">💰 50,000円</span>
+        
+        
+        <span class="meta-item keyword-tag">🔑 業務効率化</span>
+      </div>
+
+      <div class="scores">
+        <div class="score-row">
+          <span class="score-label">AI実績</span>
+          <span class="score-stars">☆☆☆☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">独立につながる</span>
+          <span class="score-stars">☆☆☆☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">受注可能性</span>
+          <span class="score-stars">★★★★☆</span>
+        </div>
+      </div>
+
+      <div class="detail-section reason">
+        <div class="detail-label">✅ 応募すべき理由</div>
+        <div class="detail-text">初心者歓迎で受注しやすい</div>
+      </div>
+
+      <div class="detail-section strength">
+        <div class="detail-label">💡 提案文の軸</div>
+        <div class="detail-text">10年以上の業務改善・事務管理経験で、再現性のあるマニュアルや仕組みを作れます</div>
+      </div>
+
+      <div class="detail-section caution">
+        <div class="detail-label">⚠️ 注意点</div>
+        <div class="detail-text">案件詳細で業務範囲と納期を必ず確認</div>
+      </div>
+
+      <span class="applied-overlay">✅ 応募済み</span>
+      <div class="card-actions">
+        <a href="https://crowdworks.jp/public/jobs/13271693" target="_blank" class="btn-view">案件を見る →</a>
+        <button class="btn-save" onclick="toggleSave('13271693', '【主婦さん・初心者ユーザー大歓迎！ 】無料スマホゲームを《1日３つプレイ》するだけ♫ ［実績になる][マニュアル付き]', 'https://crowdworks.jp/public/jobs/13271693', 'B')">
+          <span class="save-icon">🔖</span> <span class="save-text">候補に追加</span>
+        </button>
+        <button class="btn-applied" onclick="toggleApplied('13271693', '【主婦さん・初心者ユーザー大歓迎！ 】無料スマホゲームを《1日３つプレイ》するだけ♫ ［実績になる][マニュアル付き]', 'https://crowdworks.jp/public/jobs/13271693')">
+          <span class="applied-text">✅ 応募済み</span>
+        </button>
+      </div>
+    </div>
+  
+    <div class="job-card rank-b"
+         data-id="13280352"
+         style="border-left-color:#27ae60; background:#f0fff4">
+
+      <div class="job-header">
+        <span class="job-number" style="background:#27ae60">12</span>
+        <span class="rank-badge" style="background:#27ae60">Bランク</span>
+        
+        <span class="genre-tag">マニュアル作成</span>
+      </div>
+
+      <h2 class="job-title">
+        <a href="https://crowdworks.jp/public/jobs/13280352" target="_blank" rel="noopener">【在宅・未経験OK】簡単リサーチ入力作業　マニュアルあり・単純作業</a>
+      </h2>
+
+      <div class="job-meta">
+        <span class="meta-item">💰 5,000円</span>
+        
+        
+        <span class="meta-item keyword-tag">🔑 自動化</span>
+      </div>
+
+      <div class="scores">
+        <div class="score-row">
+          <span class="score-label">AI実績</span>
+          <span class="score-stars">☆☆☆☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">独立につながる</span>
+          <span class="score-stars">☆☆☆☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">受注可能性</span>
+          <span class="score-stars">★★★★☆</span>
+        </div>
+      </div>
+
+      <div class="detail-section reason">
+        <div class="detail-label">✅ 応募すべき理由</div>
+        <div class="detail-text">初心者歓迎で受注しやすい</div>
+      </div>
+
+      <div class="detail-section strength">
+        <div class="detail-label">💡 提案文の軸</div>
+        <div class="detail-text">10年以上の業務改善・事務管理経験で、再現性のあるマニュアルや仕組みを作れます</div>
+      </div>
+
+      <div class="detail-section caution">
+        <div class="detail-label">⚠️ 注意点</div>
+        <div class="detail-text">案件詳細で業務範囲と納期を必ず確認</div>
+      </div>
+
+      <span class="applied-overlay">✅ 応募済み</span>
+      <div class="card-actions">
+        <a href="https://crowdworks.jp/public/jobs/13280352" target="_blank" class="btn-view">案件を見る →</a>
+        <button class="btn-save" onclick="toggleSave('13280352', '【在宅・未経験OK】簡単リサーチ入力作業　マニュアルあり・単純作業', 'https://crowdworks.jp/public/jobs/13280352', 'B')">
+          <span class="save-icon">🔖</span> <span class="save-text">候補に追加</span>
+        </button>
+        <button class="btn-applied" onclick="toggleApplied('13280352', '【在宅・未経験OK】簡単リサーチ入力作業　マニュアルあり・単純作業', 'https://crowdworks.jp/public/jobs/13280352')">
+          <span class="applied-text">✅ 応募済み</span>
+        </button>
+      </div>
+    </div>
+  
+    <div class="job-card rank-b"
+         data-id="13261837"
+         style="border-left-color:#27ae60; background:#f0fff4">
+
+      <div class="job-header">
+        <span class="job-number" style="background:#27ae60">13</span>
+        <span class="rank-badge" style="background:#27ae60">Bランク</span>
+        
+        <span class="genre-tag">その他</span>
+      </div>
+
+      <h2 class="job-title">
+        <a href="https://crowdworks.jp/public/jobs/13261837" target="_blank" rel="noopener">【在宅｜未経験可】Instagram投稿用リール動画・ストーリーズ制作していただける方募集！</a>
+      </h2>
+
+      <div class="job-meta">
+        <span class="meta-item">💰 50,000円</span>
+        
+        
+        <span class="meta-item keyword-tag">🔑 Notion構築</span>
+      </div>
+
+      <div class="scores">
+        <div class="score-row">
+          <span class="score-label">AI実績</span>
+          <span class="score-stars">☆☆☆☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">独立につながる</span>
+          <span class="score-stars">☆☆☆☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">受注可能性</span>
+          <span class="score-stars">★★★★☆</span>
+        </div>
+      </div>
+
+      <div class="detail-section reason">
+        <div class="detail-label">✅ 応募すべき理由</div>
+        <div class="detail-text">初心者歓迎で受注しやすい</div>
+      </div>
+
+      <div class="detail-section strength">
+        <div class="detail-label">💡 提案文の軸</div>
+        <div class="detail-text">22年の実務経験を持つ現場出身者として、使える成果物を納品します</div>
+      </div>
+
+      <div class="detail-section caution">
+        <div class="detail-label">⚠️ 注意点</div>
+        <div class="detail-text">案件詳細で業務範囲と納期を必ず確認</div>
+      </div>
+
+      <span class="applied-overlay">✅ 応募済み</span>
+      <div class="card-actions">
+        <a href="https://crowdworks.jp/public/jobs/13261837" target="_blank" class="btn-view">案件を見る →</a>
+        <button class="btn-save" onclick="toggleSave('13261837', '【在宅｜未経験可】Instagram投稿用リール動画・ストーリーズ制作していただける方募集！', 'https://crowdworks.jp/public/jobs/13261837', 'B')">
+          <span class="save-icon">🔖</span> <span class="save-text">候補に追加</span>
+        </button>
+        <button class="btn-applied" onclick="toggleApplied('13261837', '【在宅｜未経験可】Instagram投稿用リール動画・ストーリーズ制作していただける方募集！', 'https://crowdworks.jp/public/jobs/13261837')">
+          <span class="applied-text">✅ 応募済み</span>
+        </button>
+      </div>
+    </div>
+  
+    <div class="job-card rank-b"
+         data-id="13276343"
+         style="border-left-color:#27ae60; background:#f0fff4">
+
+      <div class="job-header">
+        <span class="job-number" style="background:#27ae60">14</span>
+        <span class="rank-badge" style="background:#27ae60">Bランク</span>
+        
+        <span class="genre-tag">その他</span>
+      </div>
+
+      <h2 class="job-title">
+        <a href="https://crowdworks.jp/public/jobs/13276343" target="_blank" rel="noopener">【未経験歓迎】Instagramのフィード・リール「編集・制作」スタッフ募集</a>
+      </h2>
+
+      <div class="job-meta">
+        <span class="meta-item">💰 50,000円</span>
+        
+        
+        <span class="meta-item keyword-tag">🔑 チャットボット構築</span>
+      </div>
+
+      <div class="scores">
+        <div class="score-row">
+          <span class="score-label">AI実績</span>
+          <span class="score-stars">☆☆☆☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">独立につながる</span>
+          <span class="score-stars">☆☆☆☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">受注可能性</span>
+          <span class="score-stars">★★★★☆</span>
+        </div>
+      </div>
+
+      <div class="detail-section reason">
+        <div class="detail-label">✅ 応募すべき理由</div>
+        <div class="detail-text">初心者歓迎で受注しやすい</div>
+      </div>
+
+      <div class="detail-section strength">
+        <div class="detail-label">💡 提案文の軸</div>
+        <div class="detail-text">22年の実務経験を持つ現場出身者として、使える成果物を納品します</div>
+      </div>
+
+      <div class="detail-section caution">
+        <div class="detail-label">⚠️ 注意点</div>
+        <div class="detail-text">案件詳細で業務範囲と納期を必ず確認</div>
+      </div>
+
+      <span class="applied-overlay">✅ 応募済み</span>
+      <div class="card-actions">
+        <a href="https://crowdworks.jp/public/jobs/13276343" target="_blank" class="btn-view">案件を見る →</a>
+        <button class="btn-save" onclick="toggleSave('13276343', '【未経験歓迎】Instagramのフィード・リール「編集・制作」スタッフ募集', 'https://crowdworks.jp/public/jobs/13276343', 'B')">
+          <span class="save-icon">🔖</span> <span class="save-text">候補に追加</span>
+        </button>
+        <button class="btn-applied" onclick="toggleApplied('13276343', '【未経験歓迎】Instagramのフィード・リール「編集・制作」スタッフ募集', 'https://crowdworks.jp/public/jobs/13276343')">
+          <span class="applied-text">✅ 応募済み</span>
+        </button>
+      </div>
+    </div>
+  
+    <div class="job-card rank-b"
+         data-id="13279511"
+         style="border-left-color:#27ae60; background:#f0fff4">
+
+      <div class="job-header">
+        <span class="job-number" style="background:#27ae60">15</span>
+        <span class="rank-badge" style="background:#27ae60">Bランク</span>
+        
+        <span class="genre-tag">その他</span>
+      </div>
+
+      <h2 class="job-title">
+        <a href="https://crowdworks.jp/public/jobs/13279511" target="_blank" rel="noopener">【未経験・主婦歓迎】Instagram投稿制作パートナー募集！！</a>
+      </h2>
+
+      <div class="job-meta">
+        <span class="meta-item">💰 50,000円</span>
+        
+        
+        <span class="meta-item keyword-tag">🔑 チャットボット構築</span>
+      </div>
+
+      <div class="scores">
+        <div class="score-row">
+          <span class="score-label">AI実績</span>
+          <span class="score-stars">☆☆☆☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">独立につながる</span>
+          <span class="score-stars">☆☆☆☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">受注可能性</span>
+          <span class="score-stars">★★★★☆</span>
+        </div>
+      </div>
+
+      <div class="detail-section reason">
+        <div class="detail-label">✅ 応募すべき理由</div>
+        <div class="detail-text">初心者歓迎で受注しやすい</div>
+      </div>
+
+      <div class="detail-section strength">
+        <div class="detail-label">💡 提案文の軸</div>
+        <div class="detail-text">22年の実務経験を持つ現場出身者として、使える成果物を納品します</div>
+      </div>
+
+      <div class="detail-section caution">
+        <div class="detail-label">⚠️ 注意点</div>
+        <div class="detail-text">案件詳細で業務範囲と納期を必ず確認</div>
+      </div>
+
+      <span class="applied-overlay">✅ 応募済み</span>
+      <div class="card-actions">
+        <a href="https://crowdworks.jp/public/jobs/13279511" target="_blank" class="btn-view">案件を見る →</a>
+        <button class="btn-save" onclick="toggleSave('13279511', '【未経験・主婦歓迎】Instagram投稿制作パートナー募集！！', 'https://crowdworks.jp/public/jobs/13279511', 'B')">
+          <span class="save-icon">🔖</span> <span class="save-text">候補に追加</span>
+        </button>
+        <button class="btn-applied" onclick="toggleApplied('13279511', '【未経験・主婦歓迎】Instagram投稿制作パートナー募集！！', 'https://crowdworks.jp/public/jobs/13279511')">
+          <span class="applied-text">✅ 応募済み</span>
+        </button>
+      </div>
+    </div>
+  
+  </div>
+
+  <!-- 除外タブ -->
+  <div id="tab-excluded" class="tab-content">
+    <div class="update-info">応募済み・既出・単価が低い・条件不一致・リスクありの案件（理由付き）</div>
+    <div class="rank-section-header" style="border-left:4px solid #27ae60">
+      <span style="color:#27ae60">応募済み</span>
+      <span class="count-badge" style="background:#27ae60">1件</span>
+    </div>
+    <div class="excluded-card">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#27ae60">応募済み</span>
+        <span class="genre-tag">Notion</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13267575" target="_blank" rel="noopener">広告のビジュアル制作にチャレンジ｜AI活用・がんばり次第で単価UP</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 5,000円</span>
+      </div>
+    </div>
+  <div class="rank-section-header" style="border-left:4px solid #e67e22">
+      <span style="color:#e67e22">単価が低すぎる</span>
+      <span class="count-badge" style="background:#e67e22">46件</span>
+    </div>
+    <div class="excluded-card">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#e67e22">単価が低すぎる</span>
+        <span class="genre-tag">ChatGPT</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13284489" target="_blank" rel="noopener">【10～15分】チームワークに関するアンケート（学術研究・直近6か月以内にチーム活動経験のある方）</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 110円</span>
+      </div>
+    </div>
+  
+
+    <div class="excluded-card">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#e67e22">単価が低すぎる</span>
+        <span class="genre-tag">ChatGPT</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13241920" target="_blank" rel="noopener">【投稿制作】カフェInstagram投稿｜シンプル・ナチュラル系</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 2,200円</span>
+      </div>
+    </div>
+  
+
+    <div class="excluded-card">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#e67e22">単価が低すぎる</span>
+        <span class="genre-tag">ChatGPT</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13271808" target="_blank" rel="noopener">【初心者OK🌷AI活用OK】仕事終わりの小さなご褒美をテーマにした500字記事作成｜1記事1,500円</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 1,500円</span>
+      </div>
+    </div>
+  
+
+    <div class="excluded-card">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#e67e22">単価が低すぎる</span>
+        <span class="genre-tag">ChatGPT</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13284473" target="_blank" rel="noopener">対話ロボットの操作に関するオンライン調査3-e</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 165円</span>
+      </div>
+    </div>
+  
+
+    <div class="excluded-card">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#e67e22">単価が低すぎる</span>
+        <span class="genre-tag">ChatGPT</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13284458" target="_blank" rel="noopener">日頃の悩みはありますか？？アンケート協力お願いします！</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 10円</span>
+      </div>
+    </div>
+  
+
+    <div class="excluded-card">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#e67e22">単価が低すぎる</span>
+        <span class="genre-tag">ChatGPT</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13253703" target="_blank" rel="noopener">初心者OK！Instagram投稿用コンテンツ制作のサポート業務</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 0円</span>
+      </div>
+    </div>
+  
+
+    <div class="excluded-card">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#e67e22">単価が低すぎる</span>
+        <span class="genre-tag">ChatGPT</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13262148" target="_blank" rel="noopener">（初回800文字 / 継続あり）AIツールを活用した業務効率化に関する記事作成</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 0円</span>
+      </div>
+    </div>
+  
+
+    <div class="excluded-card">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#e67e22">単価が低すぎる</span>
+        <span class="genre-tag">ChatGPT</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13284451" target="_blank" rel="noopener">【即日採用！継続案件】縦型ショート動画編集者・クリエイター大募集！１本〜2,500円本！単価アップ目指せます♪</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 2,500円</span>
+      </div>
+    </div>
+  
+
+    <div class="excluded-card">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#e67e22">単価が低すぎる</span>
+        <span class="genre-tag">ChatGPT</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13284448" target="_blank" rel="noopener">【簡単300円！】お車の写真を4枚お願いします！</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 300円</span>
+      </div>
+    </div>
+  
+
+    <div class="excluded-card">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#e67e22">単価が低すぎる</span>
+        <span class="genre-tag">ChatGPT</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13284421" target="_blank" rel="noopener">【20代歓迎◎】キャリアに関する記事を書いてくださるライターさんを募集！✨</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 0円</span>
+      </div>
+    </div>
+  
+
+    <div class="excluded-card">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#e67e22">単価が低すぎる</span>
+        <span class="genre-tag">ChatGPT</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13284384" target="_blank" rel="noopener">旅行・観光の魅力について書いてみませんか？</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 5円</span>
+      </div>
+    </div>
+  
+
+    <div class="excluded-card">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#e67e22">単価が低すぎる</span>
+        <span class="genre-tag">ChatGPT</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13284420" target="_blank" rel="noopener">20代社会人向け「仕事を辞めたい」と感じた経験を記事にしてくださるライター募集！</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 2円</span>
+      </div>
+    </div>
+  
+
+    <div class="excluded-card">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#e67e22">単価が低すぎる</span>
+        <span class="genre-tag">ChatGPT</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13284414" target="_blank" rel="noopener">問い合わせフォームへの入力ジム</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 10円</span>
+      </div>
+    </div>
+  
+
+    <div class="excluded-card">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#e67e22">単価が低すぎる</span>
+        <span class="genre-tag">ChatGPT</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13284407" target="_blank" rel="noopener">【継続依頼あり】美味しいご飯・ディナー時間が好きな方へ｜在宅ライティングのお仕事です。</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 3円</span>
+      </div>
+    </div>
+  
+
+    <div class="excluded-card">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#e67e22">単価が低すぎる</span>
+        <span class="genre-tag">ChatGPT</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13284396" target="_blank" rel="noopener">【20代歓迎🐶】一人暮らしでペットと暮らしている方歓迎｜ライティングスタッフ募集</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 4円</span>
+      </div>
+    </div>
+  
+
+    <div class="excluded-card">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#e67e22">単価が低すぎる</span>
+        <span class="genre-tag">ChatGPT</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13284394" target="_blank" rel="noopener">ショート動画</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 1,100円</span>
+      </div>
+    </div>
+  
+
+    <div class="excluded-card">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#e67e22">単価が低すぎる</span>
+        <span class="genre-tag">ChatGPT</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13284371" target="_blank" rel="noopener">【アニメ好き限定】アニメ「BLACK TORCH」に関するアンケート依頼</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 11円</span>
+      </div>
+    </div>
+  
+
+    <div class="excluded-card">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#e67e22">単価が低すぎる</span>
+        <span class="genre-tag">ChatGPT</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13284379" target="_blank" rel="noopener">【3分で完了】横浜市神奈川区（東神奈川・反町・白楽・大口・新子安）に住んだことがある方へ｜街の住み心地アンケート</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 5円</span>
+      </div>
+    </div>
+  
+
+    <div class="excluded-card">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#e67e22">単価が低すぎる</span>
+        <span class="genre-tag">ChatGPT</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13284377" target="_blank" rel="noopener">【20代歓迎✈️】旅行好きな方歓迎｜ライティングスタッフ募集</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 4円</span>
+      </div>
+    </div>
+  
+
+    <div class="excluded-card">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#e67e22">単価が低すぎる</span>
+        <span class="genre-tag">ChatGPT</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13284368" target="_blank" rel="noopener">YouTube動画の撮影パートナー募集（ROBLOX）ROBLOX撮影業務　継続案件　時給換算1500円</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 1500円</span>
+      </div>
+    </div>
+  
+
+    <div class="excluded-card">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#e67e22">単価が低すぎる</span>
+        <span class="genre-tag">ChatGPT</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13272053" target="_blank" rel="noopener">【女性歓迎】恋愛に関する簡単アンケートにご協力ください🌷（5分程度）</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 11円</span>
+      </div>
+    </div>
+  
+
+    <div class="excluded-card">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#e67e22">単価が低すぎる</span>
+        <span class="genre-tag">ChatGPT</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13284339" target="_blank" rel="noopener">🌸美容・スキンケアに関する記事作成🌸</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 5円</span>
+      </div>
+    </div>
+  
+
+    <div class="excluded-card">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#e67e22">単価が低すぎる</span>
+        <span class="genre-tag">ChatGPT</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13284334" target="_blank" rel="noopener">📝 在宅ワーク体験談の記事作成📝</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 5円</span>
+      </div>
+    </div>
+  
+
+    <div class="excluded-card">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#e67e22">単価が低すぎる</span>
+        <span class="genre-tag">ChatGPT</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13284337" target="_blank" rel="noopener">九九で遊ぶゲームのテストプレイ（端末が2つ必要）</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 330円</span>
+      </div>
+    </div>
+  
+
+    <div class="excluded-card">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#e67e22">単価が低すぎる</span>
+        <span class="genre-tag">Claude</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13218722" target="_blank" rel="noopener">つきまとい行為を受けた経験についてのアンケート</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 110円</span>
+      </div>
+    </div>
+  
+
+    <div class="excluded-card">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#e67e22">単価が低すぎる</span>
+        <span class="genre-tag">Claude</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13272601" target="_blank" rel="noopener">【13分前後の動画】サクッと文字起こし◎ YouTube編集サポートメンバー大募集！</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 550円</span>
+      </div>
+    </div>
+  
+
+    <div class="excluded-card">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#e67e22">単価が低すぎる</span>
+        <span class="genre-tag">Claude</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13270073" target="_blank" rel="noopener">《不動産経験者のみ/完全在宅》不動産賃貸業に関わる営業事務のお仕事です！</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 1,000円</span>
+      </div>
+    </div>
+  
+
+    <div class="excluded-card">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#e67e22">単価が低すぎる</span>
+        <span class="genre-tag">Claude</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13264649" target="_blank" rel="noopener">【完全在宅】平日週5日（11:00~17:00コアタイム）　カスタマーサポートのお仕事♪</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 1,000円</span>
+      </div>
+    </div>
+  
+
+    <div class="excluded-card">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#e67e22">単価が低すぎる</span>
+        <span class="genre-tag">Claude Code</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13274918" target="_blank" rel="noopener">【初心者歓迎】ライティング案件</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 0円</span>
+      </div>
+    </div>
+  
+
+    <div class="excluded-card">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#e67e22">単価が低すぎる</span>
+        <span class="genre-tag">Claude Code</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13268920" target="_blank" rel="noopener">【トイカツ/ファイトフィットユーザー限定・約10分で400円】キックボクシングジムの現会員/元会員アンケート</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 400円</span>
+      </div>
+    </div>
+  
+
+    <div class="excluded-card">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#e67e22">単価が低すぎる</span>
+        <span class="genre-tag">生成AI</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13259461" target="_blank" rel="noopener">1分ショート編集、1本1500円。</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 1500円</span>
+      </div>
+    </div>
+  
+
+    <div class="excluded-card">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#e67e22">単価が低すぎる</span>
+        <span class="genre-tag">生成AI</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13259650" target="_blank" rel="noopener">一人暮らし・独身のライフスタイルに関する記事作成（本契約あり）</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 2円</span>
+      </div>
+    </div>
+  
+
+    <div class="excluded-card">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#e67e22">単価が低すぎる</span>
+        <span class="genre-tag">AI活用</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13260982" target="_blank" rel="noopener">【謝礼あり／オンライン45分】動画編集についてのアンケートに答えてください！！！</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 500円</span>
+      </div>
+    </div>
+  
+
+    <div class="excluded-card">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#e67e22">単価が低すぎる</span>
+        <span class="genre-tag">AI活用</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13277945" target="_blank" rel="noopener">【100均・ライフ系】大手メディアでレポートライター募集！【商品提供・フルリモート・署名OK・長期継続案件】</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 5円</span>
+      </div>
+    </div>
+  
+
+    <div class="excluded-card">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#e67e22">単価が低すぎる</span>
+        <span class="genre-tag">AI導入支援</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13266757" target="_blank" rel="noopener">【継続あり】テーマ付きスタート！／完全在宅Webライター募集！／1記事500文字／1100円</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 1100円</span>
+      </div>
+    </div>
+  
+
+    <div class="excluded-card">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#e67e22">単価が低すぎる</span>
+        <span class="genre-tag">AI導入支援</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13262265" target="_blank" rel="noopener">【フルリモート】社宅代行に関わるカスタマーサポート★裁量ある職場で事務処理能力を活かしませんか？</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 1,000円</span>
+      </div>
+    </div>
+  
+
+    <div class="excluded-card">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#e67e22">単価が低すぎる</span>
+        <span class="genre-tag">AIコンサル</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13272377" target="_blank" rel="noopener">【初心者歓迎！/継続依頼あり】フィード/リール投稿作成依頼</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 500円</span>
+      </div>
+    </div>
+  
+
+    <div class="excluded-card">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#e67e22">単価が低すぎる</span>
+        <span class="genre-tag">AI研修</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13253170" target="_blank" rel="noopener">【未経験OK】動画編集メンバー募集｜実績作りにも！</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 110円</span>
+      </div>
+    </div>
+  
+
+    <div class="excluded-card">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#e67e22">単価が低すぎる</span>
+        <span class="genre-tag">業務効率化</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13276637" target="_blank" rel="noopener">【高単価150円！】電力会社の利用満足度に関する口コミ投稿</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 150円</span>
+      </div>
+    </div>
+  
+
+    <div class="excluded-card">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#e67e22">単価が低すぎる</span>
+        <span class="genre-tag">自動化</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13259386" target="_blank" rel="noopener">【法人向けSNS運用】経営者発信動画の編集アシスタント募集｜ディレクター指示あり｜未経験可・マニュアル完備</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 1,001円</span>
+      </div>
+    </div>
+  
+
+    <div class="excluded-card">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#e67e22">単価が低すぎる</span>
+        <span class="genre-tag">自動化</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13284495" target="_blank" rel="noopener">【長期案件】YouTube動画の記事作成【1文字単価0.7円】</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 7円</span>
+      </div>
+    </div>
+  
+
+    <div class="excluded-card">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#e67e22">単価が低すぎる</span>
+        <span class="genre-tag">業務改善</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13267820" target="_blank" rel="noopener">【週1〜/フルリモート勤務/時給2000円〜】子ども向けオンライン運動コーチ向けの「フォロー＆育成担当」募集</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 2000円</span>
+      </div>
+    </div>
+  
+
+    <div class="excluded-card">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#e67e22">単価が低すぎる</span>
+        <span class="genre-tag">Notion</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13282036" target="_blank" rel="noopener">【継続あり】テーマ付きスタート！／完全在宅Webライター募集！／1記事500文字／1100円</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 1100円</span>
+      </div>
+    </div>
+  
+
+    <div class="excluded-card">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#e67e22">単価が低すぎる</span>
+        <span class="genre-tag">Dify</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13268855" target="_blank" rel="noopener">【法人向けSNS運用】経営者発信動画の編集アシスタント募集｜ディレクター指示あり｜未経験可・マニュアル完備</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 1,001円</span>
+      </div>
+    </div>
+  
+
+    <div class="excluded-card">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#e67e22">単価が低すぎる</span>
+        <span class="genre-tag">AI漫画</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13269710" target="_blank" rel="noopener">動画編集メンバーの募集｜実績を作りたい方にも！【未経験可】</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 110円</span>
+      </div>
+    </div>
+  
+
+    <div class="excluded-card">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#e67e22">単価が低すぎる</span>
+        <span class="genre-tag">採用代行</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13259849" target="_blank" rel="noopener">YouTube動画の文字起こしからスタート！サポート業務スタッフ募集中！</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 550円</span>
       </div>
     </div>
   
@@ -1014,6 +2458,7 @@
 
   <!-- 候補リストタブ -->
   <div id="tab-saved" class="tab-content">
+    <div id="applied-export-container"></div>
     <div id="saved-list-container">
       <div class="saved-empty">
         🔖 「候補に追加」を押した案件がここに表示されます<br><br>
@@ -1030,14 +2475,16 @@
 
   <script>
     // ===== タブ切り替え =====
+    const TAB_NAMES = ['candidates', 'holds', 'excluded', 'saved'];
     function switchTab(name, el) {
       document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
       document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
       document.getElementById('tab-' + name).classList.add('active');
       if (el) el.classList.add('active');
       else {
+        const idx = TAB_NAMES.indexOf(name);
         const tabs = document.querySelectorAll('.tab');
-        if (name === 'saved') tabs[1].classList.add('active');
+        if (tabs[idx]) tabs[idx].classList.add('active');
       }
       if (name === 'saved') renderSavedList();
     }
@@ -1089,18 +2536,19 @@
     function renderSavedList() {
       const saved = getSaved();
       const container = document.getElementById('saved-list-container');
+      renderAppliedExport();
       if (saved.length === 0) {
         container.innerHTML = '<div class="saved-empty">🔖 「候補に追加」を押した案件がここに表示されます<br><br>気になる案件を3件選んで、ChatGPTへ共有しましょう</div>';
         return;
       }
       const rankColors = { S: '#e74c3c', A: '#e67e22', B: '#27ae60', C: '#7f8c8d' };
-      let html = '<div style="padding:12px">';
+      let html = '<div style="padding:12px 0">';
       html += '<div style="font-size:0.82rem; color:#666; margin-bottom:10px">候補リスト（' + saved.length + '件） — ChatGPTへコピーして応募文を作成しましょう</div>';
       saved.forEach(j => {
         html += '<div class="saved-item">';
         html += '<span class="saved-rank" style="color:' + (rankColors[j.rank]||'#333') + '">' + j.rank + '</span>';
         html += '<span class="saved-title"><a href="' + j.url + '" target="_blank">' + escHtml(j.title) + '</a></span>';
-        html += '<button class="btn-remove" onclick="removeSaved('' + j.id + '')" title="削除">✕</button>';
+        html += '<button class="btn-remove" onclick="removeSaved(\'' + j.id + '\')" title="削除">✕</button>';
         html += '</div>';
       });
 
@@ -1149,8 +2597,100 @@
       return String(str||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     }
 
+    // ===== 応募済み管理 =====
+    // ここでの「応募済み」はブラウザ内の一時的な表示切替のみ。
+    // 次回検索で永久に除外するには、ターミナルで mark-applied.js を実行して data/applied_jobs.json に登録する。
+    const APPLIED_KEY = 'ai_jobs_applied_v1';
+
+    function getApplied() {
+      try { return JSON.parse(localStorage.getItem(APPLIED_KEY) || '[]'); }
+      catch { return []; }
+    }
+    function setApplied(list) {
+      localStorage.setItem(APPLIED_KEY, JSON.stringify(list));
+    }
+
+    function toggleApplied(id, title, url) {
+      let applied = getApplied();
+      const exists = applied.find(j => j.id === id);
+      if (exists) {
+        applied = applied.filter(j => j.id !== id);
+      } else {
+        applied.push({ id, title, url, appliedAt: new Date().toISOString() });
+      }
+      setApplied(applied);
+      updateAppliedButtons();
+      applyAppliedFilter();
+      renderAppliedExport();
+    }
+
+    function updateAppliedButtons() {
+      const applied = getApplied();
+      const ids = new Set(applied.map(j => j.id));
+      document.querySelectorAll('.job-card').forEach(card => {
+        const id = card.dataset.id;
+        const btn = card.querySelector('.btn-applied');
+        const text = card.querySelector('.applied-text');
+        if (!btn) return;
+        if (ids.has(id)) {
+          btn.classList.add('applied');
+          card.classList.add('applied-card');
+          if (text) text.textContent = '↩ 応募済み解除';
+        } else {
+          btn.classList.remove('applied');
+          card.classList.remove('applied-card');
+          if (text) text.textContent = '✅ 応募済み';
+        }
+      });
+    }
+
+    function applyAppliedFilter() {
+      const hide = document.getElementById('hide-applied') && document.getElementById('hide-applied').checked;
+      const applied = getApplied();
+      const ids = new Set(applied.map(j => j.id));
+      document.querySelectorAll('.job-card').forEach(card => {
+        if (ids.has(card.dataset.id)) {
+          card.style.display = hide ? 'none' : '';
+        }
+      });
+    }
+
+    function renderAppliedExport() {
+      const container = document.getElementById('applied-export-container');
+      if (!container) return;
+      const applied = getApplied();
+      if (applied.length === 0) {
+        container.innerHTML = '';
+        return;
+      }
+      const ids = applied.map(j => j.id).join(' ');
+      const cmd = 'node mark-applied.js ' + ids;
+      container.innerHTML =
+        '<div class="applied-export-box">' +
+        '<div style="font-weight:700; margin-bottom:4px">✅ 応募済み登録コマンド（PCのターミナルで実行）</div>' +
+        '<div>このコマンドを実行すると、次回以降の検索でこれらの案件を表示しなくなります。</div>' +
+        '<textarea id="applied-export-textarea" rows="2" readonly>' + escHtml(cmd) + '</textarea>' +
+        '<button class="btn-copy" onclick="copyAppliedExport()">📋 コマンドをコピー</button>' +
+        '</div>';
+    }
+
+    function copyAppliedExport() {
+      const ta = document.getElementById('applied-export-textarea');
+      navigator.clipboard.writeText(ta.value).then(() => {
+        const btn = event.target;
+        const original = btn.textContent;
+        btn.textContent = '✅ コピーしました';
+        setTimeout(() => { btn.textContent = original; }, 2000);
+      }).catch(() => {
+        ta.select();
+        document.execCommand('copy');
+      });
+    }
+
     // 初期化
     updateSaveButtons();
+    updateAppliedButtons();
+    applyAppliedFilter();
   </script>
 </body>
 </html>
