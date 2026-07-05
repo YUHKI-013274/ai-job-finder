@@ -82,7 +82,7 @@ const MIN_PRICE_YEN = 3000;
 
 // 1回の検索で最低限確保したい生データ件数・応募候補の最低件数
 const MIN_RAW_JOBS = 20;
-const MIN_CANDIDATES = 5;
+const MIN_CANDIDATES = 10;
 
 // Sランク評価キーワード（AI導入・業務改善直結）
 const S_RANK_KEYWORDS = [

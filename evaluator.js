@@ -212,8 +212,11 @@ function classifyJobs(jobs, appliedMap = {}, seenMap = {}) {
   holds.sort(byRankThenScore);
 
   // 応募候補が最低件数に満たない場合、保留から上位を昇格させる
+  // （本来はS/Aランクでないため、枠埋めであることが分かるようフラグを付ける）
   while (candidates.length < MIN_CANDIDATES && holds.length > 0) {
-    candidates.push(holds.shift());
+    const promoted = holds.shift();
+    promoted.promoted = true;
+    candidates.push(promoted);
   }
 
   return {

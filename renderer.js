@@ -40,6 +40,7 @@ function renderJobCard(job, i, isTop3 = false) {
         <span class="job-number" style="background:${rankColor}">${i + 1}</span>
         <span class="rank-badge" style="background:${rankColor}">${job.rank}ランク</span>
         ${isTop3 ? '<span class="top3-badge">🎯 TODAY TOP</span>' : ''}
+        ${job.promoted ? '<span class="promoted-badge">枠埋め（保留から昇格）</span>' : ''}
         <span class="genre-tag">${escapeHtml(job.genre)}</span>
       </div>
 
@@ -336,6 +337,14 @@ function renderHTML({ candidates, holds, excluded }, date, pageUrl) {
     .top3-badge {
       background: #fff3cd;
       color: #856404;
+      padding: 2px 8px;
+      border-radius: 20px;
+      font-size: 0.72rem;
+      font-weight: 700;
+    }
+    .promoted-badge {
+      background: #e0e0e0;
+      color: #555;
       padding: 2px 8px;
       border-radius: 20px;
       font-size: 0.72rem;
@@ -937,7 +946,8 @@ function renderMarkdown({ candidates, holds, excluded }, date) {
 
   md += `## 📋 応募候補（全${candidates.length}件）\n\n`;
   candidates.forEach((job, i) => {
-    md += `${i + 1}. [${job.rank}] ${job.title}\n   URL: ${job.url}\n   報酬: ${job.price || '要確認'}\n   応募理由: ${job.reason}\n\n`;
+    const promotedTag = job.promoted ? '（枠埋め・保留から昇格）' : '';
+    md += `${i + 1}. [${job.rank}]${promotedTag} ${job.title}\n   URL: ${job.url}\n   報酬: ${job.price || '要確認'}\n   応募理由: ${job.reason}\n\n`;
   });
 
   md += `## ⏸ 保留（全${holds.length}件）\n\n`;
