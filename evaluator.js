@@ -20,6 +20,9 @@ const {
   MAX_HOLDS,
 } = require('./config');
 
+// 営業資料（ポートフォリオページ）が存在する3カテゴリ
+const PORTFOLIO_BACKED_TIERS = ['writing', 'design', 'ai_business'];
+
 function toStars(score, max = 5) {
   const filled = Math.round(Math.min(max, Math.max(0, score)));
   return '★'.repeat(filled) + '☆'.repeat(max - filled);
@@ -78,7 +81,7 @@ function isPriceAmbiguous(priceStr) {
 // なければ「その他」とし、本文に単語が1回含まれるだけで代表ジャンルにしない。
 const MIN_CATEGORY_WEIGHT = 2;
 
-// ①ライティングとの一致度：ジャンルを判定する。
+// ②ライティング・画像・AI活用との一致度：ジャンルを判定する。
 // タイトルでの一致を本文より重く扱い（案件の中心業務はタイトルに表れることが多い）、
 // 単語が1回本文に含まれるだけで別ジャンルに誤判定されないよう、各ジャンルの一致数で
 // 重み付けした合計スコアが最も高いジャンルを採用する（同点時は優先順位の高いジャンルを採用）。
@@ -102,14 +105,26 @@ function detectCategoryTier(job) {
   return { ...top.tier, representative: top.representative };
 }
 
-// ②ゆうきとの適性：AI活用・ライティング関連の強みキーワードの一致量
+// ①ポートフォリオ活用度（最優先）：ライティング／画像制作／AI活用・業務改善の
+// いずれかの営業資料ページを、この案件への応募でそのまま使えるかを3段階で判定する。
+// 3カテゴリに該当しない案件（通常案件・動画/撮影/音声系・その他）は営業資料が無いため低スコア固定。
+function computePortfolioActivationScore(categoryInfo, text) {
+  const fitTiers = PORTFOLIO_FIT_TIERS[categoryInfo.tier];
+  if (!fitTiers) return 1;
+  for (const fit of fitTiers) {
+    if (containsAny(text, fit.patterns)) return fit.score;
+  }
+  return 3; // 3カテゴリには該当するが具体的な一致内容までは分類できない場合は中間点
+}
+
+// ③ゆうきとの適性：AI活用・ライティング関連の強みキーワードの一致量
 function computeAptitudeScore(aiFriendlyMatches, categoryInfo) {
   let score = 1 + Math.min(3, aiFriendlyMatches.length);
-  if (categoryInfo.tier === 'writing' || categoryInfo.tier === 'design') score += 1;
+  if (PORTFOLIO_BACKED_TIERS.includes(categoryInfo.tier)) score += 1;
   return Math.min(5, score);
 }
 
-// ③受注できる可能性：サポート体制・信頼性・応募者数・経験条件などから判定
+// ④受注できる可能性：サポート体制・信頼性・応募者数・経験条件などから判定
 // （未経験歓迎そのものは含めない＝⑦で別途評価。経験者歓迎は軽度減点）
 function computeWinScore(text, supportMatches, trustMatches, experiencePreferredMatches) {
   let score = 3;
@@ -123,20 +138,6 @@ function computeWinScore(text, supportMatches, trustMatches, experiencePreferred
   return Math.min(5, Math.max(1, score));
 }
 
-// ④実績作りになるか：ライティング案件は現在の制作実績との一致度（高/中/低）で判定し、
-// 「ライティングなら一律満点」にならないようにする。他ジャンルはこれまで通りの簡易判定。
-function computePortfolioScore(categoryInfo, aptitudeScore, text) {
-  if (categoryInfo.tier === 'writing') {
-    for (const fit of PORTFOLIO_FIT_TIERS) {
-      if (containsAny(text, fit.patterns)) return fit.score;
-    }
-    return 3; // 分類できない一般的なライティング案件は中程度の一致度とする
-  }
-  if (categoryInfo.tier === 'design') return aptitudeScore >= 3 ? 4 : 3;
-  if (categoryInfo.tier === 'normal') return 2;
-  return 1;
-}
-
 // ⑥単価：金額が高いほど加点（不明な場合は中間点。ただしTOP5候補には入れない＝classifyJobsで制御）
 function computePriceScore(priceYen) {
   if (priceYen === null) return 3;
@@ -147,9 +148,11 @@ function computePriceScore(priceYen) {
   return 1;
 }
 
-// Sランクは「ライティング案件かつ、受注しやすく実績になる」場合のみに限定する
-function meetsSRankConditions({ categoryInfo, beginnerMatches, continuityMatches, winScore, priceYen, text }) {
-  if (categoryInfo.tier !== 'writing') return false;
+// Sランクは「3つの営業資料カテゴリ（ライティング/画像制作/AI活用・業務改善）のいずれかで
+// ポートフォリオ活用度が高く、かつ受注しやすく実績になる」場合のみに限定する
+function meetsSRankConditions({ categoryInfo, portfolioActivationScore, beginnerMatches, continuityMatches, winScore, priceYen, text }) {
+  if (!PORTFOLIO_BACKED_TIERS.includes(categoryInfo.tier)) return false;
+  if (portfolioActivationScore < 4) return false;
   if (priceYen === null || priceYen < 1000) return false;
   if (beginnerMatches.length === 0) return false;
   const isOneOff = /単発|1回限り|一度のみ|一度きり/.test(text);
@@ -158,10 +161,11 @@ function meetsSRankConditions({ categoryInfo, beginnerMatches, continuityMatches
   return true;
 }
 
+// ①ポートフォリオ活用度の重みが最も重くなったため、スコア上限が広がった分に合わせて閾値を調整
 function totalScoreToRank(totalScore) {
-  if (totalScore >= 58) return 'S';
-  if (totalScore >= 44) return 'A';
-  if (totalScore >= 30) return 'B';
+  if (totalScore >= 72) return 'S';
+  if (totalScore >= 55) return 'A';
+  if (totalScore >= 37) return 'B';
   return 'C';
 }
 
@@ -185,22 +189,22 @@ function evaluateJob(job) {
   // 応募候補（TOP5）には入れず保留に回す（classifyJobsで制御するためのフラグ）
   const priceUnverified = priceYen === null || isPriceAmbiguous(job.price);
 
-  // ①ライティングとの一致度（最優先）。タイトル/本文の一致数で中心業務を判定する
+  // ②ライティング・画像・AI活用との一致度。タイトル/本文の一致数で中心業務を判定する
   const categoryInfo = detectCategoryTier(job);
 
-  // ②ゆうきとの適性
+  // ①ポートフォリオ活用度（最優先）：3つの営業資料ページとの一致度合い
+  const portfolioActivationScore = computePortfolioActivationScore(categoryInfo, text);
+
+  // ③ゆうきとの適性
   const aiFriendlyMatches = matchPatterns(text, AI_FRIENDLY_KEYWORDS);
   const technicalMatches = matchPatterns(text, AI_TECHNICAL_KEYWORDS);
   const aptitudeScore = computeAptitudeScore(aiFriendlyMatches, categoryInfo);
 
-  // ③受注できる可能性（経験者歓迎は軽度減点、未経験歓迎とは区別する）
+  // ④受注できる可能性（経験者歓迎は軽度減点、未経験歓迎とは区別する）
   const supportMatches = matchPatterns(text, SUPPORT_PATTERNS);
   const trustMatches = matchPatterns(text, CLIENT_TRUST_PATTERNS);
   const experiencePreferredMatches = matchPatterns(text, EXPERIENCE_PREFERRED_PATTERNS);
   const winScore = computeWinScore(text, supportMatches, trustMatches, experiencePreferredMatches);
-
-  // ④実績作りになるか（案件ごとの制作実績一致度で判定）
-  const portfolioScore = computePortfolioScore(categoryInfo, aptitudeScore, text);
 
   // ⑤継続性
   const continuityMatches = matchPatterns(text, CONTINUITY_PATTERNS);
@@ -215,18 +219,18 @@ function evaluateJob(job) {
 
   // 総合スコア（①〜⑦の優先順位をそのまま重みに反映）
   const totalScore =
+    portfolioActivationScore * WEIGHTS.portfolioActivation +
     categoryInfo.score * WEIGHTS.category +
     aptitudeScore * WEIGHTS.aptitude +
     winScore * WEIGHTS.win +
-    portfolioScore * WEIGHTS.portfolio +
     continuityScore * WEIGHTS.continuity +
     priceScore * WEIGHTS.price +
     beginnerScore * WEIGHTS.beginner;
 
   let rank = totalScoreToRank(totalScore);
 
-  // Sランクはライティング案件かつ受注しやすく実績になる場合のみ（他ジャンルはA以下に降格）
-  if (rank === 'S' && !meetsSRankConditions({ categoryInfo, beginnerMatches, continuityMatches, winScore, priceYen, text })) {
+  // Sランクは3つの営業資料カテゴリで高いポートフォリオ活用度があり、受注しやすく実績になる場合のみ
+  if (rank === 'S' && !meetsSRankConditions({ categoryInfo, portfolioActivationScore, beginnerMatches, continuityMatches, winScore, priceYen, text })) {
     rank = 'A';
   }
   // 動画編集・撮影・音声系は未経験歓迎でも高評価にしない（S/Aには乗せない）
@@ -238,7 +242,7 @@ function evaluateJob(job) {
 
   // 高評価の理由（★の数で重要度が分かる形式で可視化）
   const matchedSignals = buildWeightedSignals({
-    categoryInfo, portfolioScore, aptitudeScore, beginnerMatches, continuityMatches,
+    categoryInfo, portfolioActivationScore, aptitudeScore, beginnerMatches, continuityMatches,
     winScore, trustMatches, aiFriendlyMatches,
   });
   const reason = matchedSignals.length > 0
@@ -258,9 +262,9 @@ function evaluateJob(job) {
     genre,
     categoryTier: categoryInfo.tier,
     categoryScore: categoryInfo.score,
+    portfolioActivationScore,
     aptitudeScore,
     winScore,
-    portfolioScore,
     continuityScore,
     priceScore,
     beginnerScore,
@@ -277,13 +281,22 @@ function evaluateJob(job) {
   };
 }
 
+// 案件が該当する営業資料ページの案内文（①ポートフォリオ活用度の表示用）
+function portfolioPageLabel(tier) {
+  if (tier === 'writing') return 'ライティングページを営業資料にできる';
+  if (tier === 'design') return '画像制作ページを営業資料にできる';
+  if (tier === 'ai_business') return 'AI活用・業務改善ページを営業資料にできる';
+  return null;
+}
+
 // マッチした信号を★の数（重要度）付きでまとめる（表示用チェックリスト）
-function buildWeightedSignals({ categoryInfo, portfolioScore, aptitudeScore, beginnerMatches, continuityMatches, winScore, trustMatches, aiFriendlyMatches }) {
+function buildWeightedSignals({ categoryInfo, portfolioActivationScore, aptitudeScore, beginnerMatches, continuityMatches, winScore, trustMatches, aiFriendlyMatches }) {
   const signals = [];
   signals.push({ label: categoryInfo.label, stars: categoryInfo.score });
 
-  if (categoryInfo.tier === 'writing' || categoryInfo.tier === 'design') {
-    signals.push({ label: '現在のポートフォリオが活用できる', stars: portfolioScore });
+  const pageLabel = portfolioPageLabel(categoryInfo.tier);
+  if (pageLabel) {
+    signals.push({ label: pageLabel, stars: portfolioActivationScore });
   }
   if (aiFriendlyMatches.length > 0) {
     signals.push({ label: 'AI活用経験をアピールできる', stars: aptitudeScore });
@@ -314,6 +327,9 @@ function buildCaution(text, technicalMatches, aiFriendlyMatches, categoryInfo, p
   }
   if (categoryInfo.tier === 'low') {
     cautions.push('優先度の低いジャンル（動画編集・撮影・音声系）の案件です。他に良い案件がない場合のみ検討してください');
+  }
+  if (!PORTFOLIO_BACKED_TIERS.includes(categoryInfo.tier) && categoryInfo.tier !== 'low') {
+    cautions.push('ライティング・画像制作・AI活用の営業資料ページと直接一致しない案件です');
   }
   if (technicalMatches.length > 0 && aiFriendlyMatches.length === 0) {
     cautions.push('本格的なエンジニアリング経験を求められる可能性があります（優先度低）');
@@ -346,6 +362,12 @@ function buildStrengthHint(text, categoryInfo) {
     }
     if (aiUsageAllowed) hint = `${hint}${STRENGTH_HINTS.aiAddendum}`;
     return hint;
+  }
+
+  if (categoryInfo.tier === 'ai_business') {
+    if (hospitalityRelevant) return STRENGTH_HINTS.ai;
+    if (/Notion/.test(text)) return STRENGTH_HINTS.notion;
+    return STRENGTH_HINTS.operations;
   }
 
   if (hospitalityRelevant) return STRENGTH_HINTS.management;

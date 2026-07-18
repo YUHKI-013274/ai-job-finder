@@ -59,15 +59,19 @@ function renderJobCard(job, i, isTop3 = false) {
 
       <div class="scores">
         <div class="score-row">
-          <span class="score-label">①ライティング一致度</span>
+          <span class="score-label">①ポートフォリオ活用度</span>
+          <span class="score-stars">${toStars(job.portfolioActivationScore)}</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">②ライティング・画像・AI活用一致度</span>
           <span class="score-stars">${toStars(job.categoryScore)}</span>
         </div>
         <div class="score-row">
-          <span class="score-label">②ゆうきとの適性</span>
+          <span class="score-label">③ゆうきとの適性</span>
           <span class="score-stars">${toStars(job.aptitudeScore)}</span>
         </div>
         <div class="score-row">
-          <span class="score-label">③受注できる可能性</span>
+          <span class="score-label">④受注できる可能性</span>
           <span class="score-stars">${toStars(job.winScore)}</span>
         </div>
       </div>
