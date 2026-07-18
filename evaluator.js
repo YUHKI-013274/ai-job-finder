@@ -111,9 +111,15 @@ function detectCategoryTier(job) {
 function computePortfolioActivationScore(categoryInfo, text) {
   const fitTiers = PORTFOLIO_FIT_TIERS[categoryInfo.tier];
   if (!fitTiers) return 1;
-  for (const fit of fitTiers) {
-    if (containsAny(text, fit.patterns)) return fit.score;
-  }
+  // 低一致（専門知識が必要な分野等）を最優先でチェックする。
+  // 「体験談」等の一般的な語と専門分野の語（医療・美容等）が同じ文章に混在する場合、
+  // 配列の並び順だけで判定すると中一致に誤判定されるため、低一致を先に確定させる。
+  const low = fitTiers.find(f => f.level === 'low');
+  const high = fitTiers.find(f => f.level === 'high');
+  const mid = fitTiers.find(f => f.level === 'mid');
+  if (low && containsAny(text, low.patterns)) return low.score;
+  if (high && containsAny(text, high.patterns)) return high.score;
+  if (mid && containsAny(text, mid.patterns)) return mid.score;
   return 3; // 3カテゴリには該当するが具体的な一致内容までは分類できない場合は中間点
 }
 
