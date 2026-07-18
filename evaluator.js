@@ -1,8 +1,12 @@
 const {
   EXCLUDE_PATTERNS,
   CATEGORY_TIERS,
+  PORTFOLIO_FIT_TIERS,
   BEGINNER_PATTERNS,
+  EXPERIENCE_PREFERRED_PATTERNS,
   SUPPORT_PATTERNS,
+  AI_USAGE_ALLOWED_PATTERNS,
+  AMBIGUOUS_PRICE_PATTERNS,
   CONTINUITY_PATTERNS,
   CLIENT_TRUST_PATTERNS,
   RISK_PATTERNS,
@@ -64,12 +68,38 @@ function parsePriceToYen(priceStr) {
   return values.length > 0 ? Math.min(...values) : null;
 }
 
-// ①ライティングとの一致度：ジャンルを判定する（配列の並び順＝優先順位が高い順）
-function detectCategoryTier(text) {
-  for (const tier of CATEGORY_TIERS) {
-    if (containsAny(text, tier.patterns)) return tier;
+// 報酬が「要確認」「成果報酬のみ」等ではないが、応相談などで金額を確定できない表記かどうか
+function isPriceAmbiguous(priceStr) {
+  if (!priceStr) return true;
+  return containsAny(priceStr, AMBIGUOUS_PRICE_PATTERNS);
+}
+
+// ジャンル判定の最低スコア。タイトル一致1件（weight 3）か、本文一致2件以上（weight 2）が
+// なければ「その他」とし、本文に単語が1回含まれるだけで代表ジャンルにしない。
+const MIN_CATEGORY_WEIGHT = 2;
+
+// ①ライティングとの一致度：ジャンルを判定する。
+// タイトルでの一致を本文より重く扱い（案件の中心業務はタイトルに表れることが多い）、
+// 単語が1回本文に含まれるだけで別ジャンルに誤判定されないよう、各ジャンルの一致数で
+// 重み付けした合計スコアが最も高いジャンルを採用する（同点時は優先順位の高いジャンルを採用）。
+function detectCategoryTier(job) {
+  const title = job.title || '';
+  const desc = job.description || '';
+
+  const scored = CATEGORY_TIERS.map(tier => {
+    const titleMatches = matchPatterns(title, tier.patterns);
+    const descMatches = matchPatterns(desc, tier.patterns);
+    const weighted = titleMatches.length * 3 + descMatches.length;
+    const representative = titleMatches[0] || descMatches[0] || null;
+    return { tier, weighted, representative };
+  });
+
+  scored.sort((a, b) => b.weighted - a.weighted);
+  const top = scored[0];
+  if (!top || top.weighted < MIN_CATEGORY_WEIGHT) {
+    return { tier: 'other', label: 'その他', score: 2, patterns: [], representative: null };
   }
-  return { tier: 'other', label: 'その他', score: 2, patterns: [] };
+  return { ...top.tier, representative: top.representative };
 }
 
 // ②ゆうきとの適性：AI活用・ライティング関連の強みキーワードの一致量
@@ -79,27 +109,35 @@ function computeAptitudeScore(aiFriendlyMatches, categoryInfo) {
   return Math.min(5, score);
 }
 
-// ③受注できる可能性：サポート体制・信頼性・応募者数などから判定（未経験歓迎は含めない＝⑦で別途評価）
-function computeWinScore(text, supportMatches, trustMatches) {
+// ③受注できる可能性：サポート体制・信頼性・応募者数・経験条件などから判定
+// （未経験歓迎そのものは含めない＝⑦で別途評価。経験者歓迎は軽度減点）
+function computeWinScore(text, supportMatches, trustMatches, experiencePreferredMatches) {
   let score = 3;
   if (supportMatches.length > 0) score += 1;
   if (trustMatches.length > 0) score += 1;
   if (/小規模|少量|お試し|トライアル/.test(text)) score += 1;
   if (/実績\s*\d+\s*件以上/.test(text)) score -= 1;
+  if (experiencePreferredMatches.length > 0) score -= 1;
   const appMatch = text.match(/(\d+)\s*人が応募/);
   if (appMatch && parseInt(appMatch[1], 10) > 20) score -= 1;
   return Math.min(5, Math.max(1, score));
 }
 
-// ④実績作りになるか：現在のポートフォリオ（ライティング・AI活用）との相性
-function computePortfolioScore(categoryInfo, aptitudeScore) {
-  if (categoryInfo.tier === 'writing') return 5;
+// ④実績作りになるか：ライティング案件は現在の制作実績との一致度（高/中/低）で判定し、
+// 「ライティングなら一律満点」にならないようにする。他ジャンルはこれまで通りの簡易判定。
+function computePortfolioScore(categoryInfo, aptitudeScore, text) {
+  if (categoryInfo.tier === 'writing') {
+    for (const fit of PORTFOLIO_FIT_TIERS) {
+      if (containsAny(text, fit.patterns)) return fit.score;
+    }
+    return 3; // 分類できない一般的なライティング案件は中程度の一致度とする
+  }
   if (categoryInfo.tier === 'design') return aptitudeScore >= 3 ? 4 : 3;
   if (categoryInfo.tier === 'normal') return 2;
   return 1;
 }
 
-// ⑥単価：金額が高いほど加点（不明な場合は中間点）
+// ⑥単価：金額が高いほど加点（不明な場合は中間点。ただしTOP5候補には入れない＝classifyJobsで制御）
 function computePriceScore(priceYen) {
   if (priceYen === null) return 3;
   if (priceYen >= 10000) return 5;
@@ -112,8 +150,8 @@ function computePriceScore(priceYen) {
 // Sランクは「ライティング案件かつ、受注しやすく実績になる」場合のみに限定する
 function meetsSRankConditions({ categoryInfo, beginnerMatches, continuityMatches, winScore, priceYen, text }) {
   if (categoryInfo.tier !== 'writing') return false;
+  if (priceYen === null || priceYen < 1000) return false;
   if (beginnerMatches.length === 0) return false;
-  if (priceYen !== null && priceYen < 1000) return false;
   const isOneOff = /単発|1回限り|一度のみ|一度きり/.test(text);
   if (continuityMatches.length === 0 && isOneOff) return false;
   if (winScore < 4) return false;
@@ -143,21 +181,26 @@ function evaluateJob(job) {
     return { ...job, excluded: true, excludeReason: '条件不一致', priceYen };
   }
 
-  // ①ライティングとの一致度（最優先）
-  const categoryInfo = detectCategoryTier(text);
+  // 報酬が「要確認」／パース不能／応相談等で金額を確認できない場合は、
+  // 応募候補（TOP5）には入れず保留に回す（classifyJobsで制御するためのフラグ）
+  const priceUnverified = priceYen === null || isPriceAmbiguous(job.price);
+
+  // ①ライティングとの一致度（最優先）。タイトル/本文の一致数で中心業務を判定する
+  const categoryInfo = detectCategoryTier(job);
 
   // ②ゆうきとの適性
   const aiFriendlyMatches = matchPatterns(text, AI_FRIENDLY_KEYWORDS);
   const technicalMatches = matchPatterns(text, AI_TECHNICAL_KEYWORDS);
   const aptitudeScore = computeAptitudeScore(aiFriendlyMatches, categoryInfo);
 
-  // ③受注できる可能性
+  // ③受注できる可能性（経験者歓迎は軽度減点、未経験歓迎とは区別する）
   const supportMatches = matchPatterns(text, SUPPORT_PATTERNS);
   const trustMatches = matchPatterns(text, CLIENT_TRUST_PATTERNS);
-  const winScore = computeWinScore(text, supportMatches, trustMatches);
+  const experiencePreferredMatches = matchPatterns(text, EXPERIENCE_PREFERRED_PATTERNS);
+  const winScore = computeWinScore(text, supportMatches, trustMatches, experiencePreferredMatches);
 
-  // ④実績作りになるか
-  const portfolioScore = computePortfolioScore(categoryInfo, aptitudeScore);
+  // ④実績作りになるか（案件ごとの制作実績一致度で判定）
+  const portfolioScore = computePortfolioScore(categoryInfo, aptitudeScore, text);
 
   // ⑤継続性
   const continuityMatches = matchPatterns(text, CONTINUITY_PATTERNS);
@@ -203,13 +246,15 @@ function evaluateJob(job) {
     : '安全に完了できそうな案件（実績作りとして検討可）';
 
   // 注意点
-  const caution = buildCaution(text, technicalMatches, aiFriendlyMatches, categoryInfo);
+  const caution = buildCaution(text, technicalMatches, aiFriendlyMatches, categoryInfo, priceUnverified, experiencePreferredMatches);
 
-  // 提案文の強み
+  // 提案文の強み（案件内容に応じて使い分ける）
   const strengthHint = buildStrengthHint(text, categoryInfo);
 
   return {
     ...job,
+    // 検索キーワード（scraper.jsが検索に使った語）ではなく、実際の中心業務と一致するキーワードを表示する
+    matchedKeyword: categoryInfo.representative || job.matchedKeyword,
     genre,
     categoryTier: categoryInfo.tier,
     categoryScore: categoryInfo.score,
@@ -221,6 +266,7 @@ function evaluateJob(job) {
     beginnerScore,
     totalScore,
     rank,
+    priceUnverified,
     matchedSignals,
     reason,
     caution,
@@ -258,8 +304,14 @@ function buildWeightedSignals({ categoryInfo, portfolioScore, aptitudeScore, beg
   return signals.sort((a, b) => b.stars - a.stars);
 }
 
-function buildCaution(text, technicalMatches, aiFriendlyMatches, categoryInfo) {
+function buildCaution(text, technicalMatches, aiFriendlyMatches, categoryInfo, priceUnverified, experiencePreferredMatches) {
   const cautions = [];
+  if (priceUnverified) {
+    cautions.push('報酬額が確認できないため応募候補（TOP5）には入れていません。案件詳細で金額を確認してから判断してください');
+  }
+  if (experiencePreferredMatches.length > 0) {
+    cautions.push('「経験者歓迎」の記載があり、未経験だと採用されにくい可能性があります');
+  }
   if (categoryInfo.tier === 'low') {
     cautions.push('優先度の低いジャンル（動画編集・撮影・音声系）の案件です。他に良い案件がない場合のみ検討してください');
   }
@@ -275,14 +327,33 @@ function buildCaution(text, technicalMatches, aiFriendlyMatches, categoryInfo) {
   return cautions.join('、');
 }
 
+// 提案文の軸を案件内容に合わせて選ぶ（飲食業界の実務経験は関連案件のみに使用し、
+// AI活用の訴求はAI利用が許可・歓迎されている案件のみに含める）
 function buildStrengthHint(text, categoryInfo) {
-  if (categoryInfo.tier === 'writing') return STRENGTH_HINTS.writing;
-  if (/採用|面接|人事/.test(text)) return STRENGTH_HINTS.management;
+  const hospitalityRelevant = /飲食|接客|店舗運営|店舗管理|店舗マネジメント|人材育成|採用面接|業務改善|マネジメント|マネージャー|店長/.test(text);
+  const aiUsageAllowed = containsAny(text, AI_USAGE_ALLOWED_PATTERNS);
+
+  if (categoryInfo.tier === 'writing') {
+    let hint;
+    if (hospitalityRelevant) {
+      hint = STRENGTH_HINTS.hospitalityWriting;
+    } else if (/SEO記事|比較記事|商品レビュー|レビュー記事/.test(text)) {
+      hint = STRENGTH_HINTS.seoCompare;
+    } else if (/リサーチ|調査/.test(text)) {
+      hint = STRENGTH_HINTS.research;
+    } else {
+      hint = STRENGTH_HINTS.readerFocus;
+    }
+    if (aiUsageAllowed) hint = `${hint}${STRENGTH_HINTS.aiAddendum}`;
+    return hint;
+  }
+
+  if (hospitalityRelevant) return STRENGTH_HINTS.management;
   if (/マニュアル|業務改善|仕組み|自動化/.test(text)) return STRENGTH_HINTS.operations;
   if (/Notion/.test(text)) return STRENGTH_HINTS.notion;
-  if (/ChatGPT|Claude|生成AI|AI活用|AI導入/.test(text)) return STRENGTH_HINTS.ai;
+  if (aiUsageAllowed) return STRENGTH_HINTS.ai;
   if (/未経験|初心者/.test(text)) return STRENGTH_HINTS.beginner;
-  return STRENGTH_HINTS.general;
+  return STRENGTH_HINTS.communication;
 }
 
 const RANK_ORDER = { S: 0, A: 1, B: 2, C: 3 };
@@ -325,7 +396,8 @@ function classifyJobs(jobs, appliedMap = {}, seenMap = {}, rejectedMap = {}) {
       continue;
     }
 
-    if (job.rank === 'S' || job.rank === 'A') {
+    // 金額が確認できない案件は、ランクにかかわらず応募候補には入れず保留に回す
+    if (!job.priceUnverified && (job.rank === 'S' || job.rank === 'A')) {
       candidates.push(job);
     } else {
       holds.push(job);
@@ -336,9 +408,12 @@ function classifyJobs(jobs, appliedMap = {}, seenMap = {}, rejectedMap = {}) {
   holds.sort(byRankThenScore);
 
   // 応募候補が最低件数に満たない場合、保留から上位を昇格させる
-  // （本来はS/Aランクでないため、枠埋めであることが分かるようフラグを付ける）
-  while (candidates.length < MIN_CANDIDATES && holds.length > 0) {
-    const promoted = holds.shift();
+  // （本来はS/Aランクでないため、枠埋めであることが分かるようフラグを付ける。
+  //  金額未確認の案件は枠埋めの対象にもしない）
+  while (candidates.length < MIN_CANDIDATES) {
+    const idx = holds.findIndex(h => !h.priceUnverified);
+    if (idx === -1) break;
+    const promoted = holds.splice(idx, 1)[0];
     promoted.promoted = true;
     candidates.push(promoted);
   }

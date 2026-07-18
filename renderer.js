@@ -42,6 +42,7 @@ function renderJobCard(job, i, isTop3 = false) {
         <span class="rank-badge" style="background:${rankColor}">${job.rank}ランク</span>
         ${isTop3 ? '<span class="top3-badge">🎯 今日応募すべき案件</span>' : ''}
         ${job.promoted ? '<span class="promoted-badge">枠埋め（保留から昇格）</span>' : ''}
+        ${job.priceUnverified ? '<span class="promoted-badge">💰 金額確認待ち</span>' : ''}
         <span class="genre-tag">${escapeHtml(job.genre)}</span>
       </div>
 
