@@ -1,6 +1,8 @@
 const {
   EXCLUDE_PATTERNS,
-  PHASE0_PRIORITY_PATTERNS,
+  CATEGORY_TIERS,
+  BEGINNER_PATTERNS,
+  SUPPORT_PATTERNS,
   CONTINUITY_PATTERNS,
   CLIENT_TRUST_PATTERNS,
   RISK_PATTERNS,
@@ -9,7 +11,7 @@ const {
   AI_FRIENDLY_KEYWORDS,
   AI_TECHNICAL_KEYWORDS,
   STRENGTH_HINTS,
-  CURRENT_PHASE,
+  WEIGHTS,
   MAX_JOBS,
   MAX_HOLDS,
 } = require('./config');
@@ -36,10 +38,21 @@ function containsAny(text, patterns) {
 // 最低金額（円）を推定する。読み取れない場合は null を返す。
 function parsePriceToYen(priceStr) {
   if (!priceStr || /要確認/.test(priceStr)) return null;
-  const re = /([\d,]+)\s*(万)?\s*円?/g;
   const values = [];
+
+  // ¥3,000〜5,000 のような¥記号付き表記
+  const yenSymbolRe = /[¥￥]\s*([\d,]+)/g;
   let match;
-  while ((match = re.exec(priceStr)) !== null) {
+  while ((match = yenSymbolRe.exec(priceStr)) !== null) {
+    const num = parseInt(match[1].replace(/,/g, ''), 10);
+    if (!Number.isNaN(num)) values.push(num);
+  }
+
+  // 3,000円・5万円 のような「円」を伴う表記のみを金額として扱う
+  // （「1本1500円」「1記事2700円」の先頭の"1"のような個数表記を誤って金額と解釈しないため、
+  //  「円」の直前の数字のみにマッチさせる）
+  const enSuffixRe = /([\d,]+)\s*(万)?\s*円/g;
+  while ((match = enSuffixRe.exec(priceStr)) !== null) {
     const numStr = match[1].replace(/,/g, '');
     if (!numStr) continue;
     let num = parseInt(numStr, 10);
@@ -47,7 +60,71 @@ function parsePriceToYen(priceStr) {
     if (match[2] === '万') num *= 10000;
     values.push(num);
   }
+
   return values.length > 0 ? Math.min(...values) : null;
+}
+
+// ①ライティングとの一致度：ジャンルを判定する（配列の並び順＝優先順位が高い順）
+function detectCategoryTier(text) {
+  for (const tier of CATEGORY_TIERS) {
+    if (containsAny(text, tier.patterns)) return tier;
+  }
+  return { tier: 'other', label: 'その他', score: 2, patterns: [] };
+}
+
+// ②ゆうきとの適性：AI活用・ライティング関連の強みキーワードの一致量
+function computeAptitudeScore(aiFriendlyMatches, categoryInfo) {
+  let score = 1 + Math.min(3, aiFriendlyMatches.length);
+  if (categoryInfo.tier === 'writing' || categoryInfo.tier === 'design') score += 1;
+  return Math.min(5, score);
+}
+
+// ③受注できる可能性：サポート体制・信頼性・応募者数などから判定（未経験歓迎は含めない＝⑦で別途評価）
+function computeWinScore(text, supportMatches, trustMatches) {
+  let score = 3;
+  if (supportMatches.length > 0) score += 1;
+  if (trustMatches.length > 0) score += 1;
+  if (/小規模|少量|お試し|トライアル/.test(text)) score += 1;
+  if (/実績\s*\d+\s*件以上/.test(text)) score -= 1;
+  const appMatch = text.match(/(\d+)\s*人が応募/);
+  if (appMatch && parseInt(appMatch[1], 10) > 20) score -= 1;
+  return Math.min(5, Math.max(1, score));
+}
+
+// ④実績作りになるか：現在のポートフォリオ（ライティング・AI活用）との相性
+function computePortfolioScore(categoryInfo, aptitudeScore) {
+  if (categoryInfo.tier === 'writing') return 5;
+  if (categoryInfo.tier === 'design') return aptitudeScore >= 3 ? 4 : 3;
+  if (categoryInfo.tier === 'normal') return 2;
+  return 1;
+}
+
+// ⑥単価：金額が高いほど加点（不明な場合は中間点）
+function computePriceScore(priceYen) {
+  if (priceYen === null) return 3;
+  if (priceYen >= 10000) return 5;
+  if (priceYen >= 5000) return 4;
+  if (priceYen >= 3000) return 3;
+  if (priceYen >= 1000) return 2;
+  return 1;
+}
+
+// Sランクは「ライティング案件かつ、受注しやすく実績になる」場合のみに限定する
+function meetsSRankConditions({ categoryInfo, beginnerMatches, continuityMatches, winScore, priceYen, text }) {
+  if (categoryInfo.tier !== 'writing') return false;
+  if (beginnerMatches.length === 0) return false;
+  if (priceYen !== null && priceYen < 1000) return false;
+  const isOneOff = /単発|1回限り|一度のみ|一度きり/.test(text);
+  if (continuityMatches.length === 0 && isOneOff) return false;
+  if (winScore < 4) return false;
+  return true;
+}
+
+function totalScoreToRank(totalScore) {
+  if (totalScore >= 58) return 'S';
+  if (totalScore >= 44) return 'A';
+  if (totalScore >= 30) return 'B';
+  return 'C';
 }
 
 function evaluateJob(job) {
@@ -66,64 +143,82 @@ function evaluateJob(job) {
     return { ...job, excluded: true, excludeReason: '条件不一致', priceYen };
   }
 
-  // AI関連スコア（今の強みを活かせるものだけ加点。技術系は加点せず注意喚起のみ）
+  // ①ライティングとの一致度（最優先）
+  const categoryInfo = detectCategoryTier(text);
+
+  // ②ゆうきとの適性
   const aiFriendlyMatches = matchPatterns(text, AI_FRIENDLY_KEYWORDS);
   const technicalMatches = matchPatterns(text, AI_TECHNICAL_KEYWORDS);
-  const aiScore = Math.min(5, aiFriendlyMatches.length) * CURRENT_PHASE.aiWeight;
+  const aptitudeScore = computeAptitudeScore(aiFriendlyMatches, categoryInfo);
 
-  // 受注しやすさ・安全性スコア（未経験OK・マニュアル完備・クライアント信頼性の目印の数）
-  const priorityMatches = matchPatterns(text, PHASE0_PRIORITY_PATTERNS);
+  // ③受注できる可能性
+  const supportMatches = matchPatterns(text, SUPPORT_PATTERNS);
   const trustMatches = matchPatterns(text, CLIENT_TRUST_PATTERNS);
-  const priorityScore = Math.min(5, priorityMatches.length + trustMatches.length) * CURRENT_PHASE.priorityWeight;
+  const winScore = computeWinScore(text, supportMatches, trustMatches);
 
-  // 継続案件ボーナス（一度受注できれば実績を積み上げやすい）
+  // ④実績作りになるか
+  const portfolioScore = computePortfolioScore(categoryInfo, aptitudeScore);
+
+  // ⑤継続性
   const continuityMatches = matchPatterns(text, CONTINUITY_PATTERNS);
-  const continuityScore = (continuityMatches.length > 0 ? 1 : 0) * CURRENT_PHASE.continuityWeight;
+  const continuityScore = continuityMatches.length > 0 ? 5 : 2;
 
-  // 受注可能性スコア（未経験歓迎・マニュアル完備ほど高く、経験要件があるほど低い）
-  let winScore = 3;
-  if (/実績\s*\d+\s*件以上/.test(text)) winScore -= 1;
-  if (/初心者|未経験|初めて/.test(text)) winScore += 2;
-  if (/マニュアル(あり|完備|整備)/.test(text)) winScore += 1;
-  if (/小規模|少量|お試し/.test(text)) winScore += 1;
-  winScore = Math.min(5, Math.max(1, winScore));
+  // ⑥単価
+  const priceScore = computePriceScore(priceYen);
 
-  // 総合スコア（フェーズの重み付けを反映）
-  const totalScore = priorityScore + continuityScore + aiScore + winScore;
+  // ⑦未経験歓迎（最も軽い重み。単独では高評価にしない）
+  const beginnerMatches = matchPatterns(text, BEGINNER_PATTERNS);
+  const beginnerScore = beginnerMatches.length > 0 ? 5 : 2;
 
-  let rank;
-  if (totalScore >= 15) {
-    rank = 'S';
-  } else if (totalScore >= 10) {
+  // 総合スコア（①〜⑦の優先順位をそのまま重みに反映）
+  const totalScore =
+    categoryInfo.score * WEIGHTS.category +
+    aptitudeScore * WEIGHTS.aptitude +
+    winScore * WEIGHTS.win +
+    portfolioScore * WEIGHTS.portfolio +
+    continuityScore * WEIGHTS.continuity +
+    priceScore * WEIGHTS.price +
+    beginnerScore * WEIGHTS.beginner;
+
+  let rank = totalScoreToRank(totalScore);
+
+  // Sランクはライティング案件かつ受注しやすく実績になる場合のみ（他ジャンルはA以下に降格）
+  if (rank === 'S' && !meetsSRankConditions({ categoryInfo, beginnerMatches, continuityMatches, winScore, priceYen, text })) {
     rank = 'A';
-  } else if (totalScore >= 6) {
+  }
+  // 動画編集・撮影・音声系は未経験歓迎でも高評価にしない（S/Aには乗せない）
+  if (categoryInfo.tier === 'low' && (rank === 'S' || rank === 'A')) {
     rank = 'B';
-  } else {
-    rank = 'C';
   }
 
-  // 案件ジャンル判定
-  const genre = detectGenre(text);
+  const genre = categoryInfo.label;
 
-  // 高評価の理由（✓チェックリスト形式で可視化）
-  const matchedSignals = buildMatchedSignals(priorityMatches, continuityMatches, aiFriendlyMatches, trustMatches);
+  // 高評価の理由（★の数で重要度が分かる形式で可視化）
+  const matchedSignals = buildWeightedSignals({
+    categoryInfo, portfolioScore, aptitudeScore, beginnerMatches, continuityMatches,
+    winScore, trustMatches, aiFriendlyMatches,
+  });
   const reason = matchedSignals.length > 0
-    ? matchedSignals.map(s => `✓ ${s}`).join('\n')
+    ? matchedSignals.map(s => `${toStars(s.stars)} ${s.label}`).join('\n')
     : '安全に完了できそうな案件（実績作りとして検討可）';
 
   // 注意点
-  const caution = buildCaution(text, technicalMatches, aiFriendlyMatches);
+  const caution = buildCaution(text, technicalMatches, aiFriendlyMatches, categoryInfo);
 
   // 提案文の強み
-  const strengthHint = buildStrengthHint(text);
+  const strengthHint = buildStrengthHint(text, categoryInfo);
 
   return {
     ...job,
     genre,
-    aiScore,
-    priorityScore,
-    continuityScore,
+    categoryTier: categoryInfo.tier,
+    categoryScore: categoryInfo.score,
+    aptitudeScore,
     winScore,
+    portfolioScore,
+    continuityScore,
+    priceScore,
+    beginnerScore,
     totalScore,
     rank,
     matchedSignals,
@@ -136,43 +231,38 @@ function evaluateJob(job) {
   };
 }
 
-function detectGenre(text) {
-  if (/ChatGPT|Claude|GPTs?|生成AI|AI活用|AI導入|AI業務/.test(text)) return 'AI活用・生成AI';
-  if (/AI画像|画像生成|Midjourney|Stable Diffusion/.test(text)) return 'AI画像生成';
-  if (/AI漫画|漫画生成/.test(text)) return 'AI漫画';
-  if (/Notion/.test(text)) return 'Notion構築';
-  if (/採用|面接|人事/.test(text)) return '採用支援';
-  if (/マニュアル|手順書|業務フロー/.test(text)) return 'マニュアル作成';
-  if (/業務改善|業務効率|仕組み化|自動化/.test(text)) return '業務改善・自動化';
-  if (/Canva|SNS運用|SNS投稿/.test(text)) return 'SNS・画像制作';
-  if (/データ入力/.test(text)) return 'データ入力';
-  if (/ライター|記事|コンテンツ/.test(text)) return 'ライティング';
-  if (/リサーチ|調査/.test(text)) return 'リサーチ';
-  return 'その他';
-}
-
-// マッチした信号をラベルの重複を除いて1つの配列にまとめる（表示用チェックリスト）
-function buildMatchedSignals(priorityMatches, continuityMatches, aiFriendlyMatches, trustMatches) {
-  const seen = new Set();
+// マッチした信号を★の数（重要度）付きでまとめる（表示用チェックリスト）
+function buildWeightedSignals({ categoryInfo, portfolioScore, aptitudeScore, beginnerMatches, continuityMatches, winScore, trustMatches, aiFriendlyMatches }) {
   const signals = [];
-  for (const list of [priorityMatches, continuityMatches, aiFriendlyMatches, trustMatches]) {
-    for (const p of list) {
-      const label = String(p);
-      if (!seen.has(label)) {
-        seen.add(label);
-        signals.push(label);
-      }
-    }
+  signals.push({ label: categoryInfo.label, stars: categoryInfo.score });
+
+  if (categoryInfo.tier === 'writing' || categoryInfo.tier === 'design') {
+    signals.push({ label: '現在のポートフォリオが活用できる', stars: portfolioScore });
   }
-  // 短い語が別の長い語に完全に含まれる場合は、短い方を除いて表示を簡潔にする
-  // （例: "ChatGPT"と"GPT"が両方マッチした場合は"ChatGPT"だけ表示）
-  return signals.filter(label =>
-    !signals.some(other => other !== label && other.length > label.length && other.includes(label))
-  );
+  if (aiFriendlyMatches.length > 0) {
+    signals.push({ label: 'AI活用経験をアピールできる', stars: aptitudeScore });
+  }
+  if (continuityMatches.length > 0) {
+    signals.push({ label: '継続案件の可能性', stars: 4 });
+  }
+  if (winScore >= 4) {
+    signals.push({ label: '受注できる可能性が高い', stars: winScore });
+  }
+  if (trustMatches.length > 0) {
+    signals.push({ label: 'クライアントの信頼性が高い', stars: 3 });
+  }
+  if (beginnerMatches.length > 0) {
+    signals.push({ label: '未経験・初心者歓迎', stars: 3 });
+  }
+
+  return signals.sort((a, b) => b.stars - a.stars);
 }
 
-function buildCaution(text, technicalMatches, aiFriendlyMatches) {
+function buildCaution(text, technicalMatches, aiFriendlyMatches, categoryInfo) {
   const cautions = [];
+  if (categoryInfo.tier === 'low') {
+    cautions.push('優先度の低いジャンル（動画編集・撮影・音声系）の案件です。他に良い案件がない場合のみ検討してください');
+  }
   if (technicalMatches.length > 0 && aiFriendlyMatches.length === 0) {
     cautions.push('本格的なエンジニアリング経験を求められる可能性があります（優先度低）');
   }
@@ -185,11 +275,12 @@ function buildCaution(text, technicalMatches, aiFriendlyMatches) {
   return cautions.join('、');
 }
 
-function buildStrengthHint(text) {
-  if (/ChatGPT|Claude|生成AI|AI活用|AI導入/.test(text)) return STRENGTH_HINTS.ai;
+function buildStrengthHint(text, categoryInfo) {
+  if (categoryInfo.tier === 'writing') return STRENGTH_HINTS.writing;
   if (/採用|面接|人事/.test(text)) return STRENGTH_HINTS.management;
   if (/マニュアル|業務改善|仕組み|自動化/.test(text)) return STRENGTH_HINTS.operations;
   if (/Notion/.test(text)) return STRENGTH_HINTS.notion;
+  if (/ChatGPT|Claude|生成AI|AI活用|AI導入/.test(text)) return STRENGTH_HINTS.ai;
   if (/未経験|初心者/.test(text)) return STRENGTH_HINTS.beginner;
   return STRENGTH_HINTS.general;
 }

@@ -40,7 +40,7 @@ function renderJobCard(job, i, isTop3 = false) {
       <div class="job-header">
         <span class="job-number" style="background:${rankColor}">${i + 1}</span>
         <span class="rank-badge" style="background:${rankColor}">${job.rank}ランク</span>
-        ${isTop3 ? '<span class="top3-badge">🎯 TODAY TOP</span>' : ''}
+        ${isTop3 ? '<span class="top3-badge">🎯 今日応募すべき案件</span>' : ''}
         ${job.promoted ? '<span class="promoted-badge">枠埋め（保留から昇格）</span>' : ''}
         <span class="genre-tag">${escapeHtml(job.genre)}</span>
       </div>
@@ -58,24 +58,24 @@ function renderJobCard(job, i, isTop3 = false) {
 
       <div class="scores">
         <div class="score-row">
-          <span class="score-label">受注しやすさ</span>
-          <span class="score-stars">${toStars(job.priorityScore)}</span>
+          <span class="score-label">①ライティング一致度</span>
+          <span class="score-stars">${toStars(job.categoryScore)}</span>
         </div>
         <div class="score-row">
-          <span class="score-label">継続期待度</span>
-          <span class="score-stars">${toStars(job.continuityScore)}</span>
+          <span class="score-label">②ゆうきとの適性</span>
+          <span class="score-stars">${toStars(job.aptitudeScore)}</span>
         </div>
         <div class="score-row">
-          <span class="score-label">受注可能性</span>
+          <span class="score-label">③受注できる可能性</span>
           <span class="score-stars">${toStars(job.winScore)}</span>
         </div>
       </div>
 
       <div class="detail-section reason">
-        <div class="detail-label">✅ 高評価の理由</div>
+        <div class="detail-label">✅ ゆうきに向いている理由</div>
         <div class="signal-chips">
           ${(job.matchedSignals && job.matchedSignals.length > 0)
-            ? job.matchedSignals.map(s => `<span class="signal-chip">✓ ${escapeHtml(s)}</span>`).join('')
+            ? job.matchedSignals.map(s => `<span class="signal-chip">${toStars(s.stars)} ${escapeHtml(s.label)}</span>`).join('')
             : `<span class="detail-text">${escapeHtml(job.reason)}</span>`}
         </div>
       </div>
@@ -154,11 +154,11 @@ function renderHTML({ candidates, holds, excluded }, date, pageUrl) {
   const sJobs = candidates.filter(j => j.rank === 'S');
   const aJobs = candidates.filter(j => j.rank === 'A');
 
-  const top3 = candidates.slice(0, 3);
-  const rest = candidates.slice(3);
+  const todayTop = candidates.slice(0, 5);
+  const rest = candidates.slice(5);
 
-  const top3Cards = top3.map((job, i) => renderJobCard(job, i, true)).join('\n');
-  const candidateRestCards = renderRankSections(rest, top3.length);
+  const todayTopCards = todayTop.map((job, i) => renderJobCard(job, i, true)).join('\n');
+  const candidateRestCards = renderRankSections(rest, todayTop.length);
   const holdCards = renderRankSections(holds, 0);
 
   const reasonCounts = excluded.reduce((acc, j) => {
@@ -737,10 +737,10 @@ function renderHTML({ candidates, holds, excluded }, date, pageUrl) {
       <label for="hide-applied">応募済み案件を非表示にする</label>
     </div>
 
-    <!-- TOP3 -->
+    <!-- TODAY TOP（今日応募すべき案件） -->
     <div class="top3-section">
-      <div class="top3-header">🎯 今日応募するならこの3件</div>
-      ${top3Cards}
+      <div class="top3-header">🎯 今日応募すべき案件（毎日5件応募が目標）</div>
+      ${todayTopCards}
     </div>
 
     <!-- 残り応募候補 -->
@@ -1097,18 +1097,18 @@ function renderHTML({ candidates, holds, excluded }, date, pageUrl) {
 
 function renderMarkdown({ candidates, holds, excluded }, date) {
   const dateStr = date.toLocaleDateString('ja-JP');
-  const top3 = candidates.slice(0, 3);
+  const todayTop = candidates.slice(0, 5);
   let md = `# 今日の応募候補\n\n**日付**: ${dateStr}\n\n`;
   md += `応募候補 ${candidates.length}件 / 保留 ${holds.length}件 / 除外 ${excluded.length}件\n\n`;
 
-  md += `## 🎯 TODAY TOP3\n\n`;
-  top3.forEach((job, i) => {
+  md += `## 🎯 今日応募すべき案件（毎日5件応募が目標）\n\n`;
+  todayTop.forEach((job, i) => {
     md += `### ${i + 1}. ${job.title}\n\n`;
     md += `- URL: ${job.url}\n`;
     md += `- 報酬: ${job.price || '要確認'}\n`;
     md += `- ランク: **${job.rank}**\n`;
-    md += `- 受注しやすさ: ${toStars(job.priorityScore)}\n`;
-    md += `- 応募理由: ${job.reason}\n\n`;
+    md += `- ライティング一致度: ${toStars(job.categoryScore)}\n`;
+    md += `- 応募理由:\n${job.reason.split('\n').map(l => `  ${l}`).join('\n')}\n\n`;
     md += `---\n\n`;
   });
 

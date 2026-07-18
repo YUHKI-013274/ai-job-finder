@@ -13,9 +13,9 @@ async function sendGmailNotification({ jobs, pageUrl, date }) {
   const aCount = jobs.filter(j => j.rank === 'A').length;
   const bCount = jobs.filter(j => j.rank === 'B').length;
   const dateStr = date.toLocaleDateString('ja-JP', { month: 'long', day: 'numeric', weekday: 'short' });
-  const top3 = jobs.slice(0, 3);
+  const todayTop = jobs.slice(0, 5);
 
-  const top3Html = top3.map((job, i) => `
+  const todayTopHtml = todayTop.map((job, i) => `
     <tr>
       <td style="padding:10px; border-bottom:1px solid #eee;">
         <span style="background:${getRankColor(job.rank)};color:white;padding:2px 8px;border-radius:10px;font-size:12px;font-weight:bold">${job.rank}</span>
@@ -44,9 +44,9 @@ async function sendGmailNotification({ jobs, pageUrl, date }) {
         <span style="background:#f0fff4;color:#27ae60;border:1px solid #afa;padding:4px 12px;border-radius:20px;font-size:13px;font-weight:bold">🟢 B: ${bCount}件</span>
       </div>
 
-      <h2 style="font-size:15px;color:#1a1a2e;margin:0 0 10px">🎯 今日応募するならこの3件</h2>
+      <h2 style="font-size:15px;color:#1a1a2e;margin:0 0 10px">🎯 今日応募すべき案件（毎日5件応募が目標）</h2>
       <table style="width:100%;border-collapse:collapse;margin-bottom:16px">
-        ${top3Html}
+        ${todayTopHtml}
       </table>
 
       <a href="${pageUrl}"
