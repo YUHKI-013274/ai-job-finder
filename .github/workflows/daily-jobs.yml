@@ -10,7 +10,7 @@ on:
 jobs:
   fetch-and-publish:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
 
     permissions:
       contents: write  # gh-pagesへのpushに必要
