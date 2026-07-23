@@ -18,6 +18,14 @@ const {
   WEIGHTS,
   MAX_JOBS,
   MAX_HOLDS,
+  PROPOSAL_SIGNAL_PATTERNS,
+  HOSPITALITY_BRAND_PATTERNS,
+  OPERATIONAL_SIGNAL_PATTERNS,
+  SIMPLE_WORK_PATTERNS,
+  APPLICANT_ATTRIBUTE_EXCLUDE_PATTERNS,
+  APPLICANT_ATTRIBUTE_CAUTION_PATTERNS,
+  CLIENT_RISK_MINUS_PATTERNS,
+  CLIENT_RISK_PLUS_PATTERNS,
 } = require('./config');
 
 // 営業資料（ポートフォリオページ）が存在する3カテゴリ
@@ -41,10 +49,21 @@ function containsAny(text, patterns) {
   return matchPatterns(text, patterns).length > 0;
 }
 
+// 全角数字・全角カンマを半角へ正規化する（⑤ 全角数字の金額解析対応）。
+// クラウドワークスのタイトル等で「１件３円」のように全角数字が使われるケースがあり、
+// 正規化せずに解析すると金額・件数が読み取れず、低単価案件を見逃す原因になる。
+function normalizeFullWidthDigits(str) {
+  if (!str) return str;
+  return String(str)
+    .replace(/[０-９]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0))
+    .replace(/，/g, ',');
+}
+
 // 案件の報酬表記（例: "¥3,000〜5,000" "5万円" "3,000円〜5,000円"）から
 // 最低金額（円）を推定する。読み取れない場合は null を返す。
 function parsePriceToYen(priceStr) {
   if (!priceStr || /要確認/.test(priceStr)) return null;
+  priceStr = normalizeFullWidthDigits(priceStr);
   const values = [];
 
   // ¥3,000〜5,000 のような¥記号付き表記
@@ -69,6 +88,16 @@ function parsePriceToYen(priceStr) {
   }
 
   return values.length > 0 ? Math.min(...values) : null;
+}
+
+// タイトル等に埋め込まれた「1件3円」のような件数単価表記を検出する（⑤）。
+// job.priceフィールドが「要確認」でも、タイトル側に極端な低単価が明記されているケースを拾うため、
+// price文字列だけでなくtext全体（正規化済み）に対して実行する。
+function detectExtremeLowUnitPrice(text) {
+  const m = text.match(/(\d+)\s*(?:件|本|枚|文字)\s*(?:につき)?\s*(\d+)\s*円/);
+  if (!m) return null;
+  const yen = parseInt(m[2], 10);
+  return Number.isNaN(yen) ? null : yen;
 }
 
 // 報酬が「要確認」「成果報酬のみ」等ではないが、応相談などで金額を確定できない表記かどうか
@@ -130,17 +159,60 @@ function computeAptitudeScore(aiFriendlyMatches, categoryInfo) {
   return Math.min(5, score);
 }
 
-// ④受注できる可能性：サポート体制・信頼性・応募者数・経験条件などから判定
-// （未経験歓迎そのものは含めない＝⑦で別途評価。経験者歓迎は軽度減点）
-function computeWinScore(text, supportMatches, trustMatches, experiencePreferredMatches) {
+// ①Instagram・SNSデザイン案件を「提案型」か「作業型」かで評価する（ジャンル名だけで一律判定しない）。
+// design案件、またはジャンルが定まらない案件（other/normal）でInstagram/SNSに言及がある場合だけを対象とする。
+// writing/ai_business/low等、既に別の基準で評価済みのジャンルには適用しない
+// （例：「SNSライティング」のような複合語で意図せずライティング案件が加点されるのを防ぐ）。
+function computeSnsProposalAdjustment(categoryInfo, text) {
+  const eligibleTier = categoryInfo.tier === 'design' || categoryInfo.tier === 'normal' || categoryInfo.tier === 'other';
+  const isSnsDesignJob = eligibleTier && (categoryInfo.tier === 'design' || /Instagram|インスタ|SNS/i.test(text));
+  if (!isSnsDesignJob) {
+    return { delta: 0, proposalMatches: [], operationalMatches: [], hospitalityMatches: [] };
+  }
+
+  const proposalMatches = matchPatterns(text, PROPOSAL_SIGNAL_PATTERNS);
+  const operationalMatches = matchPatterns(text, OPERATIONAL_SIGNAL_PATTERNS);
+  const hospitalityMatches = matchPatterns(text, HOSPITALITY_BRAND_PATTERNS);
+
+  let delta = 0;
+  if (proposalMatches.length > 0) delta += Math.min(2, proposalMatches.length);
+  if (proposalMatches.length > 0 && hospitalityMatches.length > 0) delta += 1;
+  if (operationalMatches.length > 0) delta -= Math.min(2, operationalMatches.length);
+
+  return { delta, proposalMatches, operationalMatches, hospitalityMatches };
+}
+
+// ②クライアントの複合リスク評価：単独項目（本人確認未提出など）では判定せず、
+// マイナス要素とプラス要素を合算したスコアとして受注可能性に反映する。
+function computeClientRiskDelta(text) {
+  const minusMatches = matchPatterns(text, CLIENT_RISK_MINUS_PATTERNS);
+  const plusMatches = matchPatterns(text, CLIENT_RISK_PLUS_PATTERNS);
+  const rawDelta = plusMatches.length - minusMatches.length;
+  return { delta: Math.max(-2, Math.min(2, rawDelta)), minusMatches, plusMatches };
+}
+
+// ⑥経験者優遇は単独で減点確定せず、未経験可否・ポートフォリオ必須の有無・案件適合度と組み合わせて評価する。
+function computeExperienceAdjustment(text, experiencePreferredMatches, beginnerMatches, categoryInfo, aptitudeScore) {
+  if (experiencePreferredMatches.length === 0) return 0;
+  let adjustment = -1;
+  if (beginnerMatches.length > 0) adjustment += 1; // 未経験OKも併記されている場合はハードルが実質低いとみなす
+  if (/ポートフォリオ必須|実績提出必須|ポートフォリオ提出必須/.test(text)) adjustment -= 1; // 提出必須は実質的な参入障壁
+  if (PORTFOLIO_BACKED_TIERS.includes(categoryInfo.tier) && aptitudeScore >= 4) adjustment += 1; // 案件との適合度が高ければ相殺
+  return Math.max(-2, Math.min(1, adjustment));
+}
+
+// ④受注できる可能性：サポート体制・信頼性・応募者数・経験条件・クライアントリスクから判定
+// （未経験歓迎そのものは含めない＝⑦で別途評価。経験者歓迎は⑥の複合評価を使う）
+function computeWinScore(text, supportMatches, trustMatches, experienceAdjustment, clientRiskDelta) {
   let score = 3;
   if (supportMatches.length > 0) score += 1;
   if (trustMatches.length > 0) score += 1;
   if (/小規模|少量|お試し|トライアル/.test(text)) score += 1;
   if (/実績\s*\d+\s*件以上/.test(text)) score -= 1;
-  if (experiencePreferredMatches.length > 0) score -= 1;
+  score += experienceAdjustment;
   const appMatch = text.match(/(\d+)\s*人が応募/);
   if (appMatch && parseInt(appMatch[1], 10) > 20) score -= 1;
+  score += clientRiskDelta;
   return Math.min(5, Math.max(1, score));
 }
 
@@ -176,13 +248,18 @@ function totalScoreToRank(totalScore) {
 }
 
 function evaluateJob(job) {
-  const text = `${job.title} ${job.description || ''}`;
+  // ⑤全角数字（１件３円 等）も正しく解析できるよう、判定に使う本文は先に正規化しておく
+  const text = normalizeFullWidthDigits(`${job.title} ${job.description || ''}`);
 
   if (containsAny(text, RISK_PATTERNS)) {
     return { ...job, excluded: true, excludeReason: 'リスクあり' };
   }
 
-  const priceYen = parsePriceToYen(job.price);
+  // job.price（要確認等）だけでなく、タイトル等に埋め込まれた「1件3円」のような
+  // 件数単価表記も極端な低単価として検出する
+  const parsedPriceYen = parsePriceToYen(job.price);
+  const unitPriceYen = detectExtremeLowUnitPrice(text);
+  const priceYen = parsedPriceYen !== null ? parsedPriceYen : unitPriceYen;
   if (priceYen !== null && priceYen < MIN_PRICE_YEN) {
     return { ...job, excluded: true, excludeReason: '単価が低すぎる', priceYen };
   }
@@ -191,26 +268,51 @@ function evaluateJob(job) {
     return { ...job, excluded: true, excludeReason: '条件不一致', priceYen };
   }
 
+  // ④応募者自身の性別・年代等を暗黙に求める表現（ナレーター・モデル等、役割自体が属性を要求するもの）。
+  // 「女性向け商品の画像制作」等、読者・商品ターゲットを表すだけの表現はここに含めない。
+  if (containsAny(text, APPLICANT_ATTRIBUTE_EXCLUDE_PATTERNS)) {
+    return { ...job, excluded: true, excludeReason: '条件不一致（属性）', priceYen };
+  }
+
   // 報酬が「要確認」／パース不能／応相談等で金額を確認できない場合は、
   // 応募候補（TOP5）には入れず保留に回す（classifyJobsで制御するためのフラグ）
-  const priceUnverified = priceYen === null || isPriceAmbiguous(job.price);
+  const priceUnverified = parsedPriceYen === null || isPriceAmbiguous(job.price);
 
   // ②ライティング・画像・AI活用との一致度。タイトル/本文の一致数で中心業務を判定する
   const categoryInfo = detectCategoryTier(job);
 
+  // ③データ入力・リスト作成等の単純作業は、営業資料ページを持つ3ジャンル（writing/design/ai_business）
+  // に該当しない限り、ジャンルスコアを下げて低優先として扱う
+  const simpleWorkMatches = matchPatterns(text, SIMPLE_WORK_PATTERNS);
+  if (simpleWorkMatches.length > 0 && !PORTFOLIO_BACKED_TIERS.includes(categoryInfo.tier)) {
+    categoryInfo.score = Math.max(1, categoryInfo.score - 2);
+  }
+
   // ①ポートフォリオ活用度（最優先）：3つの営業資料ページとの一致度合い
-  const portfolioActivationScore = computePortfolioActivationScore(categoryInfo, text);
+  // Instagram・SNSデザイン案件は、ジャンル名だけで一律判定せず、
+  // 提案・企画型のシグナルがあれば加点、テンプレ流し込み等の作業型シグナルがあれば減点する
+  const snsAdjustment = computeSnsProposalAdjustment(categoryInfo, text);
+  let portfolioActivationScore = computePortfolioActivationScore(categoryInfo, text);
+  if (snsAdjustment.delta !== 0) {
+    portfolioActivationScore = Math.max(1, Math.min(5, portfolioActivationScore + snsAdjustment.delta));
+  }
 
   // ③ゆうきとの適性
   const aiFriendlyMatches = matchPatterns(text, AI_FRIENDLY_KEYWORDS);
   const technicalMatches = matchPatterns(text, AI_TECHNICAL_KEYWORDS);
   const aptitudeScore = computeAptitudeScore(aiFriendlyMatches, categoryInfo);
 
-  // ④受注できる可能性（経験者歓迎は軽度減点、未経験歓迎とは区別する）
+  // ⑦未経験歓迎（最も軽い重み。単独では高評価にしない）。⑥の経験者優遇の複合評価でも使うため先に計算する
+  const beginnerMatches = matchPatterns(text, BEGINNER_PATTERNS);
+  const beginnerScore = beginnerMatches.length > 0 ? 5 : 2;
+
+  // ④受注できる可能性（経験者歓迎は⑥の複合評価、クライアントリスクは②の複合評価を使う）
   const supportMatches = matchPatterns(text, SUPPORT_PATTERNS);
   const trustMatches = matchPatterns(text, CLIENT_TRUST_PATTERNS);
   const experiencePreferredMatches = matchPatterns(text, EXPERIENCE_PREFERRED_PATTERNS);
-  const winScore = computeWinScore(text, supportMatches, trustMatches, experiencePreferredMatches);
+  const experienceAdjustment = computeExperienceAdjustment(text, experiencePreferredMatches, beginnerMatches, categoryInfo, aptitudeScore);
+  const clientRisk = computeClientRiskDelta(text);
+  const winScore = computeWinScore(text, supportMatches, trustMatches, experienceAdjustment, clientRisk.delta);
 
   // ⑤継続性
   const continuityMatches = matchPatterns(text, CONTINUITY_PATTERNS);
@@ -218,10 +320,6 @@ function evaluateJob(job) {
 
   // ⑥単価
   const priceScore = computePriceScore(priceYen);
-
-  // ⑦未経験歓迎（最も軽い重み。単独では高評価にしない）
-  const beginnerMatches = matchPatterns(text, BEGINNER_PATTERNS);
-  const beginnerScore = beginnerMatches.length > 0 ? 5 : 2;
 
   // 総合スコア（①〜⑦の優先順位をそのまま重みに反映）
   const totalScore =
@@ -243,20 +341,26 @@ function evaluateJob(job) {
   if (categoryInfo.tier === 'low' && (rank === 'S' || rank === 'A')) {
     rank = 'B';
   }
+  // ③データ入力・リスト作成等の単純作業中心の案件も、営業資料ページを持つ3ジャンルに該当しない限りS/Aには乗せない
+  if (simpleWorkMatches.length > 0 && !PORTFOLIO_BACKED_TIERS.includes(categoryInfo.tier) && (rank === 'S' || rank === 'A')) {
+    rank = 'B';
+  }
 
   const genre = categoryInfo.label;
 
   // 高評価の理由（★の数で重要度が分かる形式で可視化）
   const matchedSignals = buildWeightedSignals({
     categoryInfo, portfolioActivationScore, aptitudeScore, beginnerMatches, continuityMatches,
-    winScore, trustMatches, aiFriendlyMatches,
+    winScore, trustMatches, aiFriendlyMatches, snsAdjustment,
   });
   const reason = matchedSignals.length > 0
     ? matchedSignals.map(s => `${toStars(s.stars)} ${s.label}`).join('\n')
     : '安全に完了できそうな案件（実績作りとして検討可）';
 
   // 注意点
-  const caution = buildCaution(text, technicalMatches, aiFriendlyMatches, categoryInfo, priceUnverified, experiencePreferredMatches);
+  const caution = buildCaution(text, technicalMatches, aiFriendlyMatches, categoryInfo, priceUnverified, experiencePreferredMatches, {
+    snsAdjustment, simpleWorkMatches, clientRisk,
+  });
 
   // 提案文の強み（案件内容に応じて使い分ける）
   const strengthHint = buildStrengthHint(text, categoryInfo);
@@ -284,6 +388,9 @@ function evaluateJob(job) {
     priceYen,
     excluded: false,
     excludeReason: null,
+    snsAdjustmentDelta: snsAdjustment.delta,
+    clientRiskDelta: clientRisk.delta,
+    simpleWork: simpleWorkMatches.length > 0,
   };
 }
 
@@ -296,13 +403,16 @@ function portfolioPageLabel(tier) {
 }
 
 // マッチした信号を★の数（重要度）付きでまとめる（表示用チェックリスト）
-function buildWeightedSignals({ categoryInfo, portfolioActivationScore, aptitudeScore, beginnerMatches, continuityMatches, winScore, trustMatches, aiFriendlyMatches }) {
+function buildWeightedSignals({ categoryInfo, portfolioActivationScore, aptitudeScore, beginnerMatches, continuityMatches, winScore, trustMatches, aiFriendlyMatches, snsAdjustment }) {
   const signals = [];
   signals.push({ label: categoryInfo.label, stars: categoryInfo.score });
 
   const pageLabel = portfolioPageLabel(categoryInfo.tier);
   if (pageLabel) {
     signals.push({ label: pageLabel, stars: portfolioActivationScore });
+  }
+  if (snsAdjustment && snsAdjustment.proposalMatches.length > 0) {
+    signals.push({ label: `提案・企画の余地がある（${snsAdjustment.proposalMatches[0]}）`, stars: portfolioActivationScore });
   }
   if (aiFriendlyMatches.length > 0) {
     signals.push({ label: 'AI活用経験をアピールできる', stars: aptitudeScore });
@@ -323,22 +433,35 @@ function buildWeightedSignals({ categoryInfo, portfolioActivationScore, aptitude
   return signals.sort((a, b) => b.stars - a.stars);
 }
 
-function buildCaution(text, technicalMatches, aiFriendlyMatches, categoryInfo, priceUnverified, experiencePreferredMatches) {
+function buildCaution(text, technicalMatches, aiFriendlyMatches, categoryInfo, priceUnverified, experiencePreferredMatches, extra = {}) {
+  const { snsAdjustment, simpleWorkMatches, clientRisk } = extra;
   const cautions = [];
   if (priceUnverified) {
     cautions.push('報酬額が確認できないため応募候補（TOP5）には入れていません。案件詳細で金額を確認してから判断してください');
   }
   if (experiencePreferredMatches.length > 0) {
-    cautions.push('「経験者歓迎」の記載があり、未経験だと採用されにくい可能性があります');
+    cautions.push('「経験者歓迎」の記載があります。未経験可否や案件との適合度と合わせて判断してください');
   }
   if (categoryInfo.tier === 'low') {
     cautions.push('優先度の低いジャンル（動画編集・撮影・音声系）の案件です。他に良い案件がない場合のみ検討してください');
+  }
+  if (simpleWorkMatches && simpleWorkMatches.length > 0) {
+    cautions.push('単純作業（データ入力・リスト作成・情報転記等）の比重が高い案件です');
+  }
+  if (snsAdjustment && snsAdjustment.operationalMatches.length > 0 && snsAdjustment.proposalMatches.length === 0) {
+    cautions.push(`テンプレート・素材支給への流し込み中心の作業型案件の可能性があります（${snsAdjustment.operationalMatches[0]}）`);
   }
   if (!PORTFOLIO_BACKED_TIERS.includes(categoryInfo.tier) && categoryInfo.tier !== 'low') {
     cautions.push('ライティング・画像制作・AI活用の営業資料ページと直接一致しない案件です');
   }
   if (technicalMatches.length > 0 && aiFriendlyMatches.length === 0) {
     cautions.push('本格的なエンジニアリング経験を求められる可能性があります（優先度低）');
+  }
+  if (containsAny(text, APPLICANT_ATTRIBUTE_CAUTION_PATTERNS)) {
+    cautions.push('「女性向け」等の表現があります。読者・商品ターゲットの説明か、応募者自身の属性条件かを案件詳細で確認してください');
+  }
+  if (clientRisk && clientRisk.minusMatches.length > 0) {
+    cautions.push(`クライアントのリスク要因（${clientRisk.minusMatches[0]}）が見られます。他の条件と合わせて総合的に判断してください`);
   }
   if (/実績\s*\d+\s*件以上/.test(text)) cautions.push('実績件数の要件（必須ではなく尚可の可能性）を確認して応募を判断');
   if (/週\s*\d+\s*時間/.test(text)) cautions.push('稼働時間の条件を確認');
@@ -453,4 +576,14 @@ function classifyJobs(jobs, appliedMap = {}, seenMap = {}, rejectedMap = {}) {
   };
 }
 
-module.exports = { evaluateJob, classifyJobs, toStars, parsePriceToYen };
+module.exports = {
+  evaluateJob,
+  classifyJobs,
+  toStars,
+  parsePriceToYen,
+  normalizeFullWidthDigits,
+  detectExtremeLowUnitPrice,
+  computeSnsProposalAdjustment,
+  computeClientRiskDelta,
+  computeExperienceAdjustment,
+};
