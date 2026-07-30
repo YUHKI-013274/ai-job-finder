@@ -1,6 +1,6 @@
 const nodemailer = require('nodemailer');
 
-async function sendGmailNotification({ jobs, pageUrl, date }) {
+async function sendGmailNotification({ jobs, growthCount = 0, pageUrl, date }) {
   const email = process.env.GMAIL_USER;
   const appPassword = process.env.GMAIL_APP_PASSWORD;
 
@@ -11,7 +11,6 @@ async function sendGmailNotification({ jobs, pageUrl, date }) {
 
   const sCount = jobs.filter(j => j.rank === 'S').length;
   const aCount = jobs.filter(j => j.rank === 'A').length;
-  const bCount = jobs.filter(j => j.rank === 'B').length;
   const dateStr = date.toLocaleDateString('ja-JP', { month: 'long', day: 'numeric', weekday: 'short' });
   const todayTop = jobs.slice(0, 5);
 
@@ -41,12 +40,12 @@ async function sendGmailNotification({ jobs, pageUrl, date }) {
       <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
         <span style="background:#fef5f5;color:#e74c3c;border:1px solid #f9a;padding:4px 12px;border-radius:20px;font-size:13px;font-weight:bold">🔴 S: ${sCount}件</span>
         <span style="background:#fff8f0;color:#e67e22;border:1px solid #fda;padding:4px 12px;border-radius:20px;font-size:13px;font-weight:bold">🟠 A: ${aCount}件</span>
-        <span style="background:#f0fff4;color:#27ae60;border:1px solid #afa;padding:4px 12px;border-radius:20px;font-size:13px;font-weight:bold">🟢 B: ${bCount}件</span>
+        <span style="background:#f0fff4;color:#27ae60;border:1px solid #afa;padding:4px 12px;border-radius:20px;font-size:13px;font-weight:bold">🌱 成長候補: ${growthCount}件</span>
       </div>
 
-      <h2 style="font-size:15px;color:#1a1a2e;margin:0 0 10px">🎯 今日応募すべき案件（毎日5件応募が目標）</h2>
+      <h2 style="font-size:15px;color:#1a1a2e;margin:0 0 10px">🎯 今日応募すべき案件（S・A、最大5件）</h2>
       <table style="width:100%;border-collapse:collapse;margin-bottom:16px">
-        ${todayTopHtml}
+        ${todayTopHtml || '<tr><td style="padding:10px;color:#888">本日はS・Aランクの応募候補がありません</td></tr>'}
       </table>
 
       <a href="${pageUrl}"

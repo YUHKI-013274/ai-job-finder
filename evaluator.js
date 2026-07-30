@@ -11,13 +11,13 @@ const {
   CLIENT_TRUST_PATTERNS,
   RISK_PATTERNS,
   MIN_PRICE_YEN,
-  MIN_CANDIDATES,
   AI_FRIENDLY_KEYWORDS,
   AI_TECHNICAL_KEYWORDS,
-  STRENGTH_HINTS,
+  SKILL_PHRASES,
   WEIGHTS,
   MAX_JOBS,
   MAX_HOLDS,
+  MAX_GROWTH,
   PROPOSAL_SIGNAL_PATTERNS,
   HOSPITALITY_BRAND_PATTERNS,
   OPERATIONAL_SIGNAL_PATTERNS,
@@ -26,6 +26,8 @@ const {
   APPLICANT_ATTRIBUTE_CAUTION_PATTERNS,
   CLIENT_RISK_MINUS_PATTERNS,
   CLIENT_RISK_PLUS_PATTERNS,
+  SNS_OPERATION_EXCLUDE_PATTERNS,
+  ASSET_SIGNAL_PATTERNS,
 } = require('./config');
 
 // 営業資料（ポートフォリオページ）が存在する3カテゴリ
@@ -226,6 +228,61 @@ function computePriceScore(priceYen) {
   return 1;
 }
 
+// ⑧長期資産性：この案件を完了した場合に、継続・高単価化・営業資産（実績・評価・制作物）
+// として残る度合いを判定する。存在しない実績を補うのではなく、案件カテゴリ（営業資料と
+// 直結するか）・継続シグナル・単価・「実績公開可」等の明言のみから判定できる範囲に限定する。
+function computeLongTermAssetScore({ categoryInfo, continuityMatches, priceYen, assetSignalMatches }) {
+  let score = 1;
+  if (PORTFOLIO_BACKED_TIERS.includes(categoryInfo.tier)) score += 2;
+  if (continuityMatches.length > 0) score += 1;
+  if (priceYen !== null && priceYen >= 5000) score += 1;
+  if (assetSignalMatches.length > 0) score += 1;
+  return Math.min(5, score);
+}
+
+// 採用理由・証拠の強さを4段階で分類する（直接証明／強い代替証明／弱い代替証明／証明不足）。
+// 複雑な推測はせず、案件カテゴリとポートフォリオ活用度の対応関係のみから判定する。
+function computeEvidenceStrength({ categoryInfo, portfolioActivationScore, hospitalityRelevant }) {
+  const isBacked = PORTFOLIO_BACKED_TIERS.includes(categoryInfo.tier);
+  if (isBacked && portfolioActivationScore >= 4) return '直接証明';
+  if (isBacked && portfolioActivationScore === 3) return '強い代替証明';
+  if ((isBacked && portfolioActivationScore <= 2) || (!isBacked && hospitalityRelevant)) return '弱い代替証明';
+  return '証明不足';
+}
+
+// 不足している営業資産（実績・証拠）を、案件カテゴリと既存ポートフォリオの対応関係から
+// 判定できる範囲に限定して抽出する（存在しない実績の補完・複雑な推測は行わない）。
+function buildMissingAssets({ categoryInfo, evidenceStrength, portfolioActivationScore }) {
+  const missing = [];
+  if (evidenceStrength === '直接証明') return missing;
+
+  if (categoryInfo.tier === 'writing') {
+    missing.push('SEO記事・比較記事など外部公開できるライティング実績');
+  } else if (categoryInfo.tier === 'design') {
+    missing.push('バナー・SNS画像等の外部クライアント向け制作実績');
+  } else if (categoryInfo.tier === 'ai_business') {
+    missing.push('AI業務改善・仕組み化の外部導入実績');
+  } else {
+    missing.push('この職種に直接対応するポートフォリオページ');
+  }
+
+  if (portfolioActivationScore <= 2) {
+    missing.push('案件テーマに直結する制作物サンプル');
+  }
+  return missing;
+}
+
+// Aランクの最低条件（点数だけで判定しない）。すべて満たさない場合は、合計点が高くても
+// B以下へ下げる。
+function meetsARankConditions({ categoryInfo, evidenceStrength, priceScore, longTermAssetScore, winScore }) {
+  if (categoryInfo.tier === 'low') return false;
+  if (categoryInfo.score < 3) return false;
+  if (evidenceStrength === '証明不足') return false;
+  if (priceScore < 4 && longTermAssetScore < 4) return false;
+  if (winScore < 3) return false;
+  return true;
+}
+
 // Sランクは「3つの営業資料カテゴリ（ライティング/画像制作/AI活用・業務改善）のいずれかで
 // ポートフォリオ活用度が高く、かつ受注しやすく実績になる」場合のみに限定する
 function meetsSRankConditions({ categoryInfo, portfolioActivationScore, beginnerMatches, continuityMatches, winScore, priceYen, text }) {
@@ -239,11 +296,14 @@ function meetsSRankConditions({ categoryInfo, portfolioActivationScore, beginner
   return true;
 }
 
-// ①ポートフォリオ活用度の重みが最も重くなったため、スコア上限が広がった分に合わせて閾値を調整
+// スコア上限（各項目5点満点 × 重みの合計）に対する割合でランクを決める。
+// WEIGHTSを調整しても閾値がずれないよう、上限は動的に算出する。
+const MAX_TOTAL_SCORE = 5 * Object.values(WEIGHTS).reduce((sum, w) => sum + w, 0);
 function totalScoreToRank(totalScore) {
-  if (totalScore >= 72) return 'S';
-  if (totalScore >= 55) return 'A';
-  if (totalScore >= 37) return 'B';
+  const ratio = totalScore / MAX_TOTAL_SCORE;
+  if (ratio >= 0.70) return 'S';
+  if (ratio >= 0.54) return 'A';
+  if (ratio >= 0.36) return 'B';
   return 'C';
 }
 
@@ -253,6 +313,13 @@ function evaluateJob(job) {
 
   if (containsAny(text, RISK_PATTERNS)) {
     return { ...job, excluded: true, excludeReason: 'リスクあり' };
+  }
+
+  // SNS運用代行（継続的なアカウント運用・投稿管理・コメント/DM対応・フォロワー増加施策等）は
+  // 「SNS」という単語だけでなく案件内容から判定し、原則除外する。
+  // SNS用バナー・投稿画像等の単発制作はここには該当せず、通常どおり評価対象とする。
+  if (containsAny(text, SNS_OPERATION_EXCLUDE_PATTERNS)) {
+    return { ...job, excluded: true, excludeReason: 'SNS運用代行' };
   }
 
   // job.price（要確認等）だけでなく、タイトル等に埋め込まれた「1件3円」のような
@@ -321,14 +388,24 @@ function evaluateJob(job) {
   // ⑥単価
   const priceScore = computePriceScore(priceYen);
 
-  // 総合スコア（①〜⑦の優先順位をそのまま重みに反映）
+  // ⑧長期資産性：継続・単価・「実績公開可」等の明言から、営業資産として残る度合いを判定する
+  const assetSignalMatches = matchPatterns(text, ASSET_SIGNAL_PATTERNS);
+  const longTermAssetScore = computeLongTermAssetScore({ categoryInfo, continuityMatches, priceYen, assetSignalMatches });
+
+  // 採用理由・証拠の強さ（直接証明／強い代替証明／弱い代替証明／証明不足）
+  const hospitalityRelevant = /飲食|接客|店舗運営|店舗管理|店舗マネジメント|人材育成|採用面接|業務改善|マネジメント|マネージャー|店長/.test(text);
+  const evidenceStrength = computeEvidenceStrength({ categoryInfo, portfolioActivationScore, hospitalityRelevant });
+  const missingAssets = buildMissingAssets({ categoryInfo, evidenceStrength, portfolioActivationScore });
+
+  // 総合スコア（②職能一致・⑥単価・⑤継続性・⑧長期資産性を重視した重み付け）
   const totalScore =
-    portfolioActivationScore * WEIGHTS.portfolioActivation +
     categoryInfo.score * WEIGHTS.category +
-    aptitudeScore * WEIGHTS.aptitude +
-    winScore * WEIGHTS.win +
-    continuityScore * WEIGHTS.continuity +
+    portfolioActivationScore * WEIGHTS.portfolioActivation +
     priceScore * WEIGHTS.price +
+    continuityScore * WEIGHTS.continuity +
+    longTermAssetScore * WEIGHTS.longTermAsset +
+    winScore * WEIGHTS.win +
+    aptitudeScore * WEIGHTS.aptitude +
     beginnerScore * WEIGHTS.beginner;
 
   let rank = totalScoreToRank(totalScore);
@@ -345,13 +422,17 @@ function evaluateJob(job) {
   if (simpleWorkMatches.length > 0 && !PORTFOLIO_BACKED_TIERS.includes(categoryInfo.tier) && (rank === 'S' || rank === 'A')) {
     rank = 'B';
   }
+  // Aランクの最低条件（点数だけで判定しない）。満たさない場合は合計点が高くてもBへ下げる
+  if ((rank === 'S' || rank === 'A') && !meetsARankConditions({ categoryInfo, evidenceStrength, priceScore, longTermAssetScore, winScore })) {
+    rank = 'B';
+  }
 
   const genre = categoryInfo.label;
 
   // 高評価の理由（★の数で重要度が分かる形式で可視化）
   const matchedSignals = buildWeightedSignals({
     categoryInfo, portfolioActivationScore, aptitudeScore, beginnerMatches, continuityMatches,
-    winScore, trustMatches, aiFriendlyMatches, snsAdjustment,
+    winScore, trustMatches, aiFriendlyMatches, snsAdjustment, evidenceStrength, priceScore, longTermAssetScore,
   });
   const reason = matchedSignals.length > 0
     ? matchedSignals.map(s => `${toStars(s.stars)} ${s.label}`).join('\n')
@@ -362,8 +443,8 @@ function evaluateJob(job) {
     snsAdjustment, simpleWorkMatches, clientRisk,
   });
 
-  // 提案文の強み（案件内容に応じて使い分ける）
-  const strengthHint = buildStrengthHint(text, categoryInfo);
+  // 提案文の軸（職能の組み合わせ→今回できること→クライアントへの価値）
+  const strengthHint = buildStrengthHint({ text, categoryInfo, hospitalityRelevant, representative: categoryInfo.representative });
 
   return {
     ...job,
@@ -378,6 +459,9 @@ function evaluateJob(job) {
     continuityScore,
     priceScore,
     beginnerScore,
+    longTermAssetScore,
+    evidenceStrength,
+    missingAssets,
     totalScore,
     rank,
     priceUnverified,
@@ -403,16 +487,25 @@ function portfolioPageLabel(tier) {
 }
 
 // マッチした信号を★の数（重要度）付きでまとめる（表示用チェックリスト）
-function buildWeightedSignals({ categoryInfo, portfolioActivationScore, aptitudeScore, beginnerMatches, continuityMatches, winScore, trustMatches, aiFriendlyMatches, snsAdjustment }) {
+function buildWeightedSignals({ categoryInfo, portfolioActivationScore, aptitudeScore, beginnerMatches, continuityMatches, winScore, trustMatches, aiFriendlyMatches, snsAdjustment, evidenceStrength, priceScore, longTermAssetScore }) {
   const signals = [];
   signals.push({ label: categoryInfo.label, stars: categoryInfo.score });
 
+  if (evidenceStrength === '直接証明' || evidenceStrength === '強い代替証明') {
+    signals.push({ label: `採用理由の証拠が強い（${evidenceStrength}）`, stars: portfolioActivationScore });
+  }
   const pageLabel = portfolioPageLabel(categoryInfo.tier);
   if (pageLabel) {
     signals.push({ label: pageLabel, stars: portfolioActivationScore });
   }
   if (snsAdjustment && snsAdjustment.proposalMatches.length > 0) {
     signals.push({ label: `提案・企画の余地がある（${snsAdjustment.proposalMatches[0]}）`, stars: portfolioActivationScore });
+  }
+  if (priceScore >= 4) {
+    signals.push({ label: '高単価案件', stars: priceScore });
+  }
+  if (longTermAssetScore >= 4) {
+    signals.push({ label: '長期的な営業資産になりやすい', stars: longTermAssetScore });
   }
   if (aiFriendlyMatches.length > 0) {
     signals.push({ label: 'AI活用経験をアピールできる', stars: aptitudeScore });
@@ -472,39 +565,63 @@ function buildCaution(text, technicalMatches, aiFriendlyMatches, categoryInfo, p
   return cautions.join('、');
 }
 
-// 提案文の軸を案件内容に合わせて選ぶ（飲食業界の実務経験は関連案件のみに使用し、
-// AI活用の訴求はAI利用が許可・歓迎されている案件のみに含める）
-function buildStrengthHint(text, categoryInfo) {
-  const hospitalityRelevant = /飲食|接客|店舗運営|店舗管理|店舗マネジメント|人材育成|採用面接|業務改善|マネジメント|マネージャー|店長/.test(text);
-  const aiUsageAllowed = containsAny(text, AI_USAGE_ALLOWED_PATTERNS);
+// 案件のジャンル・マッチしたシグナルに応じて、訴求する職能の組み合わせを最大2つ選ぶ
+// （固定の1文をそのまま出すのではなく、案件ごとに組み合わせが変わるようにする）。
+function selectSkillCombo({ categoryInfo, hospitalityRelevant, aiUsageAllowed, text }) {
+  const combo = [];
+  if (categoryInfo.tier === 'writing') combo.push(SKILL_PHRASES.writing);
+  if (categoryInfo.tier === 'design') combo.push(SKILL_PHRASES.design);
+  if (categoryInfo.tier === 'ai_business') combo.push(SKILL_PHRASES.operations);
+  if (hospitalityRelevant) {
+    combo.push(/採用面接|人材育成|マネジメント|マネージャー|店長/.test(text) ? SKILL_PHRASES.management : SKILL_PHRASES.hospitality);
+  }
+  if (aiUsageAllowed && categoryInfo.tier !== 'design') combo.push(SKILL_PHRASES.aiTool);
+  if (combo.length === 0) combo.push(SKILL_PHRASES.research);
+  // 重複を除いて最大2つ
+  return [...new Set(combo)].slice(0, 2);
+}
 
+// 「今回できること」を、案件で実際にマッチしたキーワード（representative）に紐づけて具体化する
+function buildCanDoNow(categoryInfo, representative) {
+  const topic = representative ? `「${representative}」` : 'この案件のテーマ';
   if (categoryInfo.tier === 'writing') {
-    let hint;
-    if (hospitalityRelevant) {
-      hint = STRENGTH_HINTS.hospitalityWriting;
-    } else if (/SEO記事|比較記事|商品レビュー|レビュー記事/.test(text)) {
-      hint = STRENGTH_HINTS.seoCompare;
-    } else if (/リサーチ|調査/.test(text)) {
-      hint = STRENGTH_HINTS.research;
-    } else {
-      hint = STRENGTH_HINTS.readerFocus;
-    }
-    if (aiUsageAllowed) hint = `${hint}${STRENGTH_HINTS.aiAddendum}`;
-    return hint;
+    return `${topic}に沿って、検索意図と読者像を踏まえた記事構成・執筆を担当できます`;
   }
-
+  if (categoryInfo.tier === 'design') {
+    return `${topic}に必要な情報を整理し、伝わる構成のビジュアルを制作できます`;
+  }
   if (categoryInfo.tier === 'ai_business') {
-    if (hospitalityRelevant) return STRENGTH_HINTS.ai;
-    if (/Notion/.test(text)) return STRENGTH_HINTS.notion;
-    return STRENGTH_HINTS.operations;
+    return `${topic}を業務フローに落とし込み、現場で運用できる形に仕組み化できます`;
   }
+  return `${topic}の要件を整理し、目的に合った成果物として仕上げます`;
+}
 
-  if (hospitalityRelevant) return STRENGTH_HINTS.management;
-  if (/マニュアル|業務改善|仕組み|自動化/.test(text)) return STRENGTH_HINTS.operations;
-  if (/Notion/.test(text)) return STRENGTH_HINTS.notion;
-  if (aiUsageAllowed) return STRENGTH_HINTS.ai;
-  if (/未経験|初心者/.test(text)) return STRENGTH_HINTS.beginner;
-  return STRENGTH_HINTS.communication;
+// 「クライアントへの価値」を案件ジャンルに応じて具体化する
+function buildClientValue(categoryInfo, hospitalityRelevant) {
+  if (categoryInfo.tier === 'writing') {
+    return '検索・読者導線を意識した記事で、集客につながるコンテンツ資産を残せます';
+  }
+  if (categoryInfo.tier === 'design') {
+    return '情報設計に基づいたビジュアルで、伝わりやすさと再利用性の高い制作物を提供できます';
+  }
+  if (categoryInfo.tier === 'ai_business') {
+    return '属人化しない仕組みとして残るため、継続的な業務効率化につながります';
+  }
+  if (hospitalityRelevant) {
+    return '現場運用を前提とした実務目線で、実際に機能する成果物を提供できます';
+  }
+  return '要件と目的を明確にした上で、実務で使える成果物を提供できます';
+}
+
+// 提案文の軸：「職能の組み合わせ→今回できること→クライアントへの価値」を案件ごとに組み立てる。
+// 固定の定型文をそのまま出す（禁止例：丁寧に対応します・誠実に進めます 等）のではなく、
+// 案件のジャンル・マッチしたキーワード・飲食/AI適合の有無から毎回組み合わせる。
+function buildStrengthHint({ text, categoryInfo, hospitalityRelevant, representative }) {
+  const aiUsageAllowed = containsAny(text, AI_USAGE_ALLOWED_PATTERNS);
+  const combo = selectSkillCombo({ categoryInfo, hospitalityRelevant, aiUsageAllowed, text });
+  const canDoNow = buildCanDoNow(categoryInfo, representative);
+  const clientValue = buildClientValue(categoryInfo, hospitalityRelevant);
+  return `${combo.join(' × ')}\n→ ${canDoNow}\n→ ${clientValue}`;
 }
 
 const RANK_ORDER = { S: 0, A: 1, B: 2, C: 3 };
@@ -515,10 +632,15 @@ function byRankThenScore(a, b) {
   return b.totalScore - a.totalScore;
 }
 
-// 案件一覧を「応募候補」「保留」「除外」の3分類に振り分ける。
+// 案件一覧を「応募候補」「成長候補」「保留」「除外」の4分類に振り分ける。
 // appliedMap / seenMap / rejectedMap は { [jobId]: {...} } の形（値の有無だけを見る）。
+//
+// 応募数を埋めるための枠埋め（保留からの昇格）は廃止した。応募候補は必ずS/Aランクかつ
+// 単価確認済みの案件のみとし、5件に満たない日があっても低品質案件で埋めない。
+// Bランクは「今後の営業資産づくりにつながる成長候補」として別バケットに分離する。
 function classifyJobs(jobs, appliedMap = {}, seenMap = {}, rejectedMap = {}) {
   const candidates = [];
+  const growthCandidates = [];
   const holds = [];
   const excluded = [];
 
@@ -547,30 +669,24 @@ function classifyJobs(jobs, appliedMap = {}, seenMap = {}, rejectedMap = {}) {
       continue;
     }
 
-    // 金額が確認できない案件は、ランクにかかわらず応募候補には入れず保留に回す
-    if (!job.priceUnverified && (job.rank === 'S' || job.rank === 'A')) {
+    if (job.rank === 'B') {
+      // 成長候補（不足資産を補えば今後狙える案件）。単価未確認でも参考情報として残す
+      growthCandidates.push(job);
+    } else if (!job.priceUnverified && (job.rank === 'S' || job.rank === 'A')) {
       candidates.push(job);
     } else {
+      // 単価未確認のS/A、およびCランクは保留
       holds.push(job);
     }
   }
 
   candidates.sort(byRankThenScore);
+  growthCandidates.sort(byRankThenScore);
   holds.sort(byRankThenScore);
-
-  // 応募候補が最低件数に満たない場合、保留から上位を昇格させる
-  // （本来はS/Aランクでないため、枠埋めであることが分かるようフラグを付ける。
-  //  金額未確認の案件は枠埋めの対象にもしない）
-  while (candidates.length < MIN_CANDIDATES) {
-    const idx = holds.findIndex(h => !h.priceUnverified);
-    if (idx === -1) break;
-    const promoted = holds.splice(idx, 1)[0];
-    promoted.promoted = true;
-    candidates.push(promoted);
-  }
 
   return {
     candidates: candidates.slice(0, MAX_JOBS),
+    growthCandidates: growthCandidates.slice(0, MAX_GROWTH),
     holds: holds.slice(0, MAX_HOLDS),
     excluded,
   };

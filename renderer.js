@@ -15,6 +15,8 @@ function getReasonColor(reason) {
     '既出': '#7f8c8d',
     '単価が低すぎる': '#e67e22',
     '条件不一致': '#8e44ad',
+    '条件不一致（属性）': '#8e44ad',
+    'SNS運用代行': '#16a085',
     'リスクあり': '#e74c3c',
   }[reason] || '#555';
 }
@@ -41,7 +43,6 @@ function renderJobCard(job, i, isTop3 = false) {
         <span class="job-number" style="background:${rankColor}">${i + 1}</span>
         <span class="rank-badge" style="background:${rankColor}">${job.rank}ランク</span>
         ${isTop3 ? '<span class="top3-badge">🎯 今日応募すべき案件</span>' : ''}
-        ${job.promoted ? '<span class="promoted-badge">枠埋め（保留から昇格）</span>' : ''}
         ${job.priceUnverified ? '<span class="promoted-badge">💰 金額確認待ち</span>' : ''}
         <span class="genre-tag">${escapeHtml(job.genre)}</span>
       </div>
@@ -59,16 +60,24 @@ function renderJobCard(job, i, isTop3 = false) {
 
       <div class="scores">
         <div class="score-row">
-          <span class="score-label">①ポートフォリオ活用度</span>
-          <span class="score-stars">${toStars(job.portfolioActivationScore)}</span>
-        </div>
-        <div class="score-row">
-          <span class="score-label">②ライティング・画像・AI活用一致度</span>
+          <span class="score-label">②職能一致度</span>
           <span class="score-stars">${toStars(job.categoryScore)}</span>
         </div>
         <div class="score-row">
-          <span class="score-label">③ゆうきとの適性</span>
-          <span class="score-stars">${toStars(job.aptitudeScore)}</span>
+          <span class="score-label">①証拠の強さ（ポートフォリオ活用度）</span>
+          <span class="score-stars">${toStars(job.portfolioActivationScore)}</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">⑥単価</span>
+          <span class="score-stars">${toStars(job.priceScore)}</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">⑤継続性</span>
+          <span class="score-stars">${toStars(job.continuityScore)}</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">⑧長期資産性</span>
+          <span class="score-stars">${toStars(job.longTermAssetScore)}</span>
         </div>
         <div class="score-row">
           <span class="score-label">④受注できる可能性</span>
@@ -77,7 +86,7 @@ function renderJobCard(job, i, isTop3 = false) {
       </div>
 
       <div class="detail-section reason">
-        <div class="detail-label">✅ ゆうきに向いている理由</div>
+        <div class="detail-label">✅ この案件を選ぶ理由（証拠の強さ: ${escapeHtml(job.evidenceStrength || '-')}）</div>
         <div class="signal-chips">
           ${(job.matchedSignals && job.matchedSignals.length > 0)
             ? job.matchedSignals.map(s => `<span class="signal-chip">${toStars(s.stars)} ${escapeHtml(s.label)}</span>`).join('')
@@ -87,8 +96,14 @@ function renderJobCard(job, i, isTop3 = false) {
 
       <div class="detail-section strength">
         <div class="detail-label">💡 提案文の軸</div>
-        <div class="detail-text">${escapeHtml(job.strengthHint)}</div>
+        <div class="detail-text" style="white-space:pre-line">${escapeHtml(job.strengthHint)}</div>
       </div>
+
+      ${(job.missingAssets && job.missingAssets.length > 0) ? `
+      <div class="detail-section missing">
+        <div class="detail-label">🧩 不足しているもの</div>
+        <div class="detail-text">${job.missingAssets.map(escapeHtml).join('、')}</div>
+      </div>` : ''}
 
       <div class="detail-section caution">
         <div class="detail-label">⚠️ 注意点</div>
@@ -154,7 +169,7 @@ function renderRankSections(jobs, startIndex) {
   return html;
 }
 
-function renderHTML({ candidates, holds, excluded }, date, pageUrl) {
+function renderHTML({ candidates, growthCandidates = [], holds, excluded }, date, pageUrl) {
   const dateStr = date.toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
   const sJobs = candidates.filter(j => j.rank === 'S');
   const aJobs = candidates.filter(j => j.rank === 'A');
@@ -165,12 +180,23 @@ function renderHTML({ candidates, holds, excluded }, date, pageUrl) {
   const todayTopCards = todayTop.map((job, i) => renderJobCard(job, i, true)).join('\n');
   const candidateRestCards = renderRankSections(rest, todayTop.length);
   const holdCards = renderRankSections(holds, 0);
+  const growthCards = renderRankSections(growthCandidates, 0);
+
+  // 成長候補（Bランク）に共通する不足資産を集計（重複をまとめて一覧化）
+  const missingAssetCounts = growthCandidates.reduce((acc, j) => {
+    (j.missingAssets || []).forEach(m => { acc[m] = (acc[m] || 0) + 1; });
+    return acc;
+  }, {});
+  const missingAssetList = Object.entries(missingAssetCounts).sort((a, b) => b[1] - a[1]);
+
+  // 応募可能性ゲートで新規に見送りとなった件数（応募済み・見送り済み・既出は除く＝今回のゲート判定のみ）
+  const gateRejectedCount = excluded.filter(j => !['応募済み', '見送り', '既出'].includes(j.excludeReason)).length;
 
   const reasonCounts = excluded.reduce((acc, j) => {
     acc[j.excludeReason] = (acc[j.excludeReason] || 0) + 1;
     return acc;
   }, {});
-  const reasonOrder = ['応募済み', '見送り', '既出', '単価が低すぎる', '条件不一致', 'リスクあり'];
+  const reasonOrder = ['応募済み', '見送り', '既出', '単価が低すぎる', '条件不一致', '条件不一致（属性）', 'SNS運用代行', 'リスクあり'];
   let excludedHtml = '';
   for (const reason of reasonOrder) {
     const list = excluded.filter(j => j.excludeReason === reason);
@@ -420,6 +446,7 @@ function renderHTML({ candidates, holds, excluded }, date, pageUrl) {
     .detail-section.reason { background: #f0f8f0; }
     .detail-section.caution { background: #fff8f0; }
     .detail-section.strength { background: #f0f0ff; }
+    .detail-section.missing { background: #fdf0f0; }
     .detail-label { font-weight: 700; font-size: 0.73rem; margin-bottom: 3px; color: #555; }
     .detail-text { line-height: 1.5; color: #333; }
     .signal-chips { display: flex; flex-wrap: wrap; gap: 4px; }
@@ -718,9 +745,11 @@ function renderHTML({ candidates, holds, excluded }, date, pageUrl) {
       </div>
     </div>
     <div class="header-stats">
-      <span class="stat-chip s">🔴 S ${sJobs.length}件</span>
-      <span class="stat-chip a">🟠 A ${aJobs.length}件</span>
-      <span class="stat-chip">応募候補 ${candidates.length}件</span>
+      <span class="stat-chip s">🔴 今日の最優先(S) ${sJobs.length}件</span>
+      <span class="stat-chip a">🟠 優先応募(A) ${aJobs.length}件</span>
+      <span class="stat-chip">🌱 成長候補(B) ${growthCandidates.length}件</span>
+      <span class="stat-chip">🚫 見送り ${gateRejectedCount}件</span>
+      <span class="stat-chip">🧩 不足資産 ${missingAssetList.length}件</span>
       <span class="stat-chip">保留 ${holds.length}件</span>
       <span class="stat-chip">除外 ${excluded.length}件</span>
     </div>
@@ -729,6 +758,7 @@ function renderHTML({ candidates, holds, excluded }, date, pageUrl) {
   <!-- タブバー -->
   <div class="tab-bar">
     <div class="tab active" onclick="switchTab('candidates', this)">📋 応募候補</div>
+    <div class="tab" onclick="switchTab('growth', this)">🌱 成長候補</div>
     <div class="tab" onclick="switchTab('holds', this)">⏸ 保留</div>
     <div class="tab" onclick="switchTab('excluded', this)">🚫 除外</div>
     <div class="tab" onclick="switchTab('saved', this)">🔖 候補リスト</div>
@@ -744,12 +774,25 @@ function renderHTML({ candidates, holds, excluded }, date, pageUrl) {
 
     <!-- TODAY TOP（今日応募すべき案件） -->
     <div class="top3-section">
-      <div class="top3-header">🎯 今日応募すべき案件（毎日5件応募が目標）</div>
-      ${todayTopCards}
+      <div class="top3-header">🎯 今日応募すべき案件（S・A、最大5件。無理な枠埋めはしません）</div>
+      ${todayTopCards || '<div class="saved-empty" style="background:white">本日はS・Aランクの応募候補がありません。無理に低品質案件では埋めていません</div>'}
     </div>
 
     <!-- 残り応募候補 -->
     ${candidateRestCards}
+  </div>
+
+  <!-- 成長候補タブ -->
+  <div id="tab-growth" class="tab-content">
+    <div class="update-info">Bランク：不足している証拠・実績を補えば今後S/Aを狙える案件（今日は応募必須ではない）</div>
+    ${missingAssetList.length > 0 ? `
+    <div class="detail-section missing" style="margin-bottom:12px">
+      <div class="detail-label">🧩 今回見つかった営業資産の不足（重複をまとめて集計）</div>
+      <div class="detail-text">
+        ${missingAssetList.map(([name, count]) => `${escapeHtml(name)}（${count}件）`).join('<br>')}
+      </div>
+    </div>` : ''}
+    ${growthCards || '<div class="saved-empty">成長候補はありません</div>'}
   </div>
 
   <!-- 保留タブ -->
@@ -760,7 +803,7 @@ function renderHTML({ candidates, holds, excluded }, date, pageUrl) {
 
   <!-- 除外タブ -->
   <div id="tab-excluded" class="tab-content">
-    <div class="update-info">応募済み・見送り・既出・単価が低い・条件不一致・リスクありの案件（理由付き）</div>
+    <div class="update-info">応募済み・見送り・既出・単価が低い・条件不一致・SNS運用代行・リスクありの案件（理由付き）</div>
     <div id="skip-filter-bar">
       <input type="checkbox" id="show-skipped" onchange="applySkippedFilter()">
       <label for="show-skipped">見送り案件も表示する</label>
@@ -788,7 +831,7 @@ function renderHTML({ candidates, holds, excluded }, date, pageUrl) {
 
   <script>
     // ===== タブ切り替え =====
-    const TAB_NAMES = ['candidates', 'holds', 'excluded', 'saved'];
+    const TAB_NAMES = ['candidates', 'growth', 'holds', 'excluded', 'saved'];
     function switchTab(name, el) {
       document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
       document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -1100,27 +1143,49 @@ function renderHTML({ candidates, holds, excluded }, date, pageUrl) {
 </html>`;
 }
 
-function renderMarkdown({ candidates, holds, excluded }, date) {
+function renderMarkdown({ candidates, growthCandidates = [], holds, excluded }, date) {
   const dateStr = date.toLocaleDateString('ja-JP');
   const todayTop = candidates.slice(0, 5);
-  let md = `# 今日の応募候補\n\n**日付**: ${dateStr}\n\n`;
-  md += `応募候補 ${candidates.length}件 / 保留 ${holds.length}件 / 除外 ${excluded.length}件\n\n`;
+  const gateRejectedCount = excluded.filter(j => !['応募済み', '見送り', '既出'].includes(j.excludeReason)).length;
+  const missingAssetCounts = growthCandidates.reduce((acc, j) => {
+    (j.missingAssets || []).forEach(m => { acc[m] = (acc[m] || 0) + 1; });
+    return acc;
+  }, {});
+  const missingAssetList = Object.entries(missingAssetCounts).sort((a, b) => b[1] - a[1]);
 
-  md += `## 🎯 今日応募すべき案件（毎日5件応募が目標）\n\n`;
+  let md = `# 今日の応募候補\n\n**日付**: ${dateStr}\n\n`;
+  md += `今日の最優先応募(S) ${candidates.filter(j => j.rank === 'S').length}件 / `;
+  md += `優先応募(A) ${candidates.filter(j => j.rank === 'A').length}件 / `;
+  md += `成長候補(B) ${growthCandidates.length}件 / 見送り ${gateRejectedCount}件 / 不足資産 ${missingAssetList.length}件\n\n`;
+  md += `保留 ${holds.length}件 / 除外 ${excluded.length}件\n\n`;
+
+  md += `## 🎯 今日応募すべき案件（S・A、最大5件。無理な枠埋めはしません）\n\n`;
+  if (todayTop.length === 0) md += `本日はS・Aランクの応募候補がありません。\n\n`;
   todayTop.forEach((job, i) => {
     md += `### ${i + 1}. ${job.title}\n\n`;
     md += `- URL: ${job.url}\n`;
     md += `- 報酬: ${job.price || '要確認'}\n`;
-    md += `- ランク: **${job.rank}**\n`;
-    md += `- ライティング一致度: ${toStars(job.categoryScore)}\n`;
-    md += `- 応募理由:\n${job.reason.split('\n').map(l => `  ${l}`).join('\n')}\n\n`;
+    md += `- ランク: **${job.rank}**（証拠の強さ: ${job.evidenceStrength}）\n`;
+    md += `- 職能一致度: ${toStars(job.categoryScore)}\n`;
+    md += `- この案件を選ぶ理由:\n${job.reason.split('\n').map(l => `  ${l}`).join('\n')}\n`;
+    md += `- 提案文の軸:\n${job.strengthHint.split('\n').map(l => `  ${l}`).join('\n')}\n\n`;
     md += `---\n\n`;
   });
 
   md += `## 📋 応募候補（全${candidates.length}件）\n\n`;
   candidates.forEach((job, i) => {
-    const promotedTag = job.promoted ? '（枠埋め・保留から昇格）' : '';
-    md += `${i + 1}. [${job.rank}]${promotedTag} ${job.title}\n   URL: ${job.url}\n   報酬: ${job.price || '要確認'}\n   応募理由: ${job.reason}\n\n`;
+    md += `${i + 1}. [${job.rank}] ${job.title}\n   URL: ${job.url}\n   報酬: ${job.price || '要確認'}\n   証拠の強さ: ${job.evidenceStrength}\n   応募理由: ${job.reason}\n\n`;
+  });
+
+  md += `## 🌱 成長候補（Bランク・全${growthCandidates.length}件）\n\n`;
+  md += `不足している証拠・実績を補えば今後S/Aを狙える案件。\n\n`;
+  if (missingAssetList.length > 0) {
+    md += `### 今回見つかった営業資産の不足\n\n`;
+    missingAssetList.forEach(([name, count]) => { md += `- ${name}（${count}件）\n`; });
+    md += `\n`;
+  }
+  growthCandidates.forEach((job, i) => {
+    md += `${i + 1}. ${job.title}\n   URL: ${job.url}\n   報酬: ${job.price || '要確認'}\n   不足資産: ${(job.missingAssets || []).join('、') || 'なし'}\n\n`;
   });
 
   md += `## ⏸ 保留（全${holds.length}件）\n\n`;
@@ -1129,7 +1194,7 @@ function renderMarkdown({ candidates, holds, excluded }, date) {
   });
 
   md += `## 🚫 除外（全${excluded.length}件）\n\n`;
-  const reasonOrder = ['応募済み', '見送り', '既出', '単価が低すぎる', '条件不一致', 'リスクあり'];
+  const reasonOrder = ['応募済み', '見送り', '既出', '単価が低すぎる', '条件不一致', '条件不一致（属性）', 'SNS運用代行', 'リスクあり'];
   for (const reason of reasonOrder) {
     const list = excluded.filter(j => j.excludeReason === reason);
     if (list.length === 0) continue;

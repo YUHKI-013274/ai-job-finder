@@ -119,6 +119,31 @@ const EXCLUDE_PATTERNS = [
   'マルチ商法', 'MLM', '副業紹介', '営業代行',
 ];
 
+// ===== SNS案件の分離判定（運用代行 vs 単発制作） =====
+// 「SNS」という単語だけで一律除外・一律減点はしない。案件内容が継続的な
+// アカウント運用・投稿管理・コメント対応等を示す場合のみ「運用代行」として扱う。
+const SNS_OPERATION_EXCLUDE_PATTERNS = [
+  'SNS運用代行', '運用代行', 'アカウント運用', '投稿管理', '投稿代行',
+  'コメント対応', 'コメント返信', 'DM対応', 'フォロワー増加', 'フォロワー獲得',
+  'バズ', '毎日投稿', '定期投稿', '投稿スケジュール管理',
+  /(SNS|Instagram|X|Twitter|TikTok).{0,10}(運用|analytics|分析|改善).{0,10}(継続|月次|毎月)/,
+];
+
+// SNS単発制作（バナー・投稿画像等）：運用代行を含まず、情報設計・飲食経験・
+// 商品理解・ポートフォリオが直接活かせる場合のみ候補化する対象
+const SNS_SINGLE_CREATION_PATTERNS = [
+  'SNS用バナー', 'SNSバナー', 'Instagram投稿画像', 'SNS投稿画像', 'SNS画像制作',
+  '広告画像', '広告バナー', '単発の画像制作', '単発制作',
+];
+
+// ===== 長期資産性シグナル（⑧長期資産性） =====
+// 「実績として使える／公開できる」ことが明言されている案件は、
+// 単発でも営業資産（ポートフォリオ・事例）として残る価値が高いと判断する。
+const ASSET_SIGNAL_PATTERNS = [
+  '実績として掲載', 'ポートフォリオに掲載可', '事例として紹介可', '成果物を公開',
+  '公開可能な制作物', 'クレジット表記可', '制作実績として公開',
+];
+
 // ===== 案件ジャンルの優先度（②ライティング・画像・AI活用との一致度を判定する基準） =====
 // 上から順に判定し、最初にマッチしたジャンルを採用する
 // （ライティング関連キーワードを最優先で判定するため、配列の並び順が重要）。
@@ -163,7 +188,7 @@ const CATEGORY_TIERS = [
     label: '通常案件',
     score: 3,
     patterns: [
-      'SNS運用', 'リサーチ', '調査業務', 'データ入力', 'マニュアル作成', '業務マニュアル',
+      'リサーチ', '調査業務', 'データ入力', 'マニュアル作成', '業務マニュアル',
     ],
   },
   {
@@ -382,20 +407,20 @@ const RISK_PATTERNS = [
 // 最低報酬ライン（円）。フェーズごとの設定を使用（CURRENT_PHASE.minPriceYen）
 const MIN_PRICE_YEN = CURRENT_PHASE.minPriceYen;
 
-// 1回の検索で最低限確保したい生データ件数・応募候補の最低件数
+// 1回の検索で最低限確保したい生データ件数
 const MIN_RAW_JOBS = 20;
-const MIN_CANDIDATES = 10;
 
 // ②ゆうきとの適性スコアに使う、今の強み（ライティング・ノーコード・生成AI活用）を活かせるキーワード。
 const AI_FRIENDLY_KEYWORDS = [
   'ChatGPT', 'Claude', 'Claude Code', 'GPTs', 'GPT', '生成AI',
   'Canva', '画像生成', 'AI画像', 'AI漫画', '画像制作', 'AI画像生成', '画像生成AI',
-  'SNS運用', 'Instagram', 'SNS投稿',
   'リサーチ', '調査業務', '記事作成', 'ライティング', 'ライター',
   'AI活用', 'AI導入', 'AI業務改善', 'AI活用支援', '業務自動化', '自動化',
   '仕組み化', 'AI研修', 'AI構築', 'AIシステム', 'Notion', 'マニュアル作成', 'マニュアル整備',
   '業務改善', '業務効率化', '採用支援', 'フロー設計',
   // 「データ入力」は③の修正により適性加点の対象から除外（単純作業のため）
+  // 「SNS運用」「Instagram」「SNS投稿」は運用代行案件を誤って加点していたため除外
+  // （SNS単発制作の適性はカテゴリ・ポートフォリオ活用度側で評価する）
 ];
 
 // 難易度が高く今は優先しないAI・技術系キーワード（加点せず、注意喚起のみ）
@@ -404,41 +429,30 @@ const AI_TECHNICAL_KEYWORDS = [
   'バックエンド', 'フロントエンド', 'Webアプリ開発', 'エンジニア実務',
 ];
 
-// ゆうきの強み（提案文ヒント生成に使用）
-const YUKI_STRENGTHS = {
-  writing: ['ライティング', '記事作成', 'ブログ記事', 'SEO記事', 'コラム'],
-  management: ['店長', 'マネージャー', '売上管理', '数値分析', '人材育成', '採用'],
-  ai: ['ChatGPT', 'Claude', '生成AI', 'AI活用', 'Notion', 'AI画像生成'],
-  operations: ['業務改善', '仕組み化', '自動化', '業務効率化', 'マニュアル'],
-  hospitality: ['飲食', '店舗', '接客', 'サービス'],
+// 提案文の軸（「職能の組み合わせ→今回できること→クライアントへの価値」を組み立てる部品）。
+// 案件のジャンル・マッチしたシグナルに応じて組み合わせを変える（固定文をそのまま出さない）。
+const SKILL_PHRASES = {
+  writing: 'ライティング実績（SEO記事・比較記事・商品レビューの自主制作）',
+  design: 'Canva・AI画像生成を使った情報設計型のビジュアル制作',
+  operations: '業務改善・マニュアル化・仕組み化の実務経験',
+  hospitality: '飲食店舗運営・マネジメント22年の現場経験',
+  management: '300名以上の採用面接・店舗マネジメント経験',
+  aiTool: 'ChatGPT/Claude活用による効率的な情報整理・文章化',
+  research: 'リサーチに基づく構成力・情報整理力',
 };
 
-// 提案文の強み候補（案件内容に応じて使い分ける。飲食業界の実務経験は関連案件のみに使用）
-const STRENGTH_HINTS = {
-  hospitalityWriting: '飲食業界22年の実務経験を踏まえた、現場感のある説得力のある記事を書けます',
-  seoCompare: 'SEO記事・比較記事・商品レビューを自主制作してきた実績があり、検索意図を踏まえた構成が得意です',
-  research: '丁寧なリサーチと構成力で、正確で読みやすい記事を仕上げます',
-  readerFocus: '読者視点で情報を整理し、目的とターゲットに合わせた分かりやすい文章を作成できます',
-  communication: 'ご要望を丁寧にヒアリングし、認識をすり合わせながら誠実に対応します',
-  aiAddendum: '（ChatGPT/Claudeを活用した効率的な執筆・作業が可能です）',
-  ai: '飲食業界22年の実務経験×ChatGPT/Claude活用スキルで、現場視点のAI導入を提案できます',
-  management: '300名以上の採用面接経験と店舗マネジメント実績で、実用的な仕組みを構築できます',
-  operations: '10年以上の業務改善・事務管理経験で、再現性のあるマニュアルや仕組みを作れます',
-  notion: 'Notion活用×業務設計の実績で、使いやすいシステムを構築できます',
-  beginner: '素直な学習意欲と丁寧な対応力で、指示内容を正確にやり遂げます。まずは実績作りとして誠実に取り組みます',
-  general: '22年の実務経験を持つ現場出身者として、使える成果物を納品します',
-};
-
-// ===== 評価スコアの重み付け（優先順位①〜⑦をそのまま反映） =====
-// ①ポートフォリオ活用度(portfolioActivation)を最優先とし、⑦未経験歓迎(beginner)を最も軽くする。
+// ===== 評価スコアの重み付け（単価・職能一致・継続性・長期資産性を重視） =====
+// これまでの「①ポートフォリオ活用度を最優先」から、②職能との一致度・⑥単価・⑤継続性・⑧長期資産性を
+// 重視する配分へ変更。⑦未経験歓迎は応募数確保フェーズの名残として最小の重みまで下げる。
 const WEIGHTS = {
-  portfolioActivation: 6, // ①ポートフォリオ活用度（営業導線との一致・最優先）
-  category: 5,            // ②ライティング・画像・AI活用との一致度
-  aptitude: 3,             // ③ゆうきとの適性
-  win: 2.5,                // ④受注できる可能性
-  continuity: 1.5,         // ⑤継続性
-  price: 1.5,              // ⑥単価
-  beginner: 1,             // ⑦未経験歓迎
+  category: 6,          // ②職能（ライティング・画像・AI活用）との一致度
+  portfolioActivation: 5, // ①ポートフォリオ活用度（証拠の強さ）
+  price: 4,              // ⑥単価・収益性
+  continuity: 3,         // ⑤継続・高単価化の可能性
+  longTermAsset: 3,      // ⑧長期資産性（営業資産として残るか）
+  win: 2.5,              // ④受注できる可能性
+  aptitude: 2,           // ③ゆうきとの適性
+  beginner: 0.5,         // ⑦未経験歓迎（最も軽い重み。応募数確保フェーズの名残）
 };
 
 module.exports = {
@@ -459,11 +473,9 @@ module.exports = {
   RISK_PATTERNS,
   MIN_PRICE_YEN,
   MIN_RAW_JOBS,
-  MIN_CANDIDATES,
   AI_FRIENDLY_KEYWORDS,
   AI_TECHNICAL_KEYWORDS,
-  YUKI_STRENGTHS,
-  STRENGTH_HINTS,
+  SKILL_PHRASES,
   WEIGHTS,
   PROPOSAL_SIGNAL_PATTERNS,
   HOSPITALITY_BRAND_PATTERNS,
@@ -473,7 +485,11 @@ module.exports = {
   APPLICANT_ATTRIBUTE_CAUTION_PATTERNS,
   CLIENT_RISK_MINUS_PATTERNS,
   CLIENT_RISK_PLUS_PATTERNS,
+  SNS_OPERATION_EXCLUDE_PATTERNS,
+  SNS_SINGLE_CREATION_PATTERNS,
+  ASSET_SIGNAL_PATTERNS,
   MAX_JOBS: 10,
   MAX_HOLDS: 15,
+  MAX_GROWTH: 15,
   SEARCH_DELAY_MS: 2000,
 };
