@@ -284,15 +284,15 @@ function meetsARankConditions({ categoryInfo, evidenceStrength, priceScore, long
 }
 
 // Sランクは「3つの営業資料カテゴリ（ライティング/画像制作/AI活用・業務改善）のいずれかで
-// ポートフォリオ活用度が高く、かつ受注しやすく実績になる」場合のみに限定する
-function meetsSRankConditions({ categoryInfo, portfolioActivationScore, beginnerMatches, continuityMatches, winScore, priceYen, text }) {
-  if (!PORTFOLIO_BACKED_TIERS.includes(categoryInfo.tier)) return false;
-  if (portfolioActivationScore < 4) return false;
-  if (priceYen === null || priceYen < 1000) return false;
-  if (beginnerMatches.length === 0) return false;
-  const isOneOff = /単発|1回限り|一度のみ|一度きり/.test(text);
-  if (continuityMatches.length === 0 && isOneOff) return false;
-  if (winScore < 4) return false;
+// 証拠が強く、高単価または継続時の収益性が高く、長期資産性・受注可能性も高い」場合のみに限定する。
+// 「未経験歓迎」は必須条件にしない（⑦未経験歓迎の軽い加点にとどめ、S/Aの必須要件からは外す）。
+function meetsSRankConditions({ categoryInfo, evidenceStrength, priceScore, continuityMatches, longTermAssetScore, winScore, priceYen }) {
+  if (!PORTFOLIO_BACKED_TIERS.includes(categoryInfo.tier)) return false; // 非希望領域ではない・主戦場と一致
+  if (evidenceStrength !== '直接証明' && evidenceStrength !== '強い代替証明') return false; // 証拠の強さ
+  if (priceYen === null) return false; // 必須条件：単価が確認できること
+  if (priceScore < 4 && continuityMatches.length === 0) return false; // 高単価または継続時の収益性が高い
+  if (longTermAssetScore < 4) return false; // 長期資産性が高い
+  if (winScore < 4) return false; // 受注可能性が一定以上
   return true;
 }
 
@@ -410,8 +410,8 @@ function evaluateJob(job) {
 
   let rank = totalScoreToRank(totalScore);
 
-  // Sランクは3つの営業資料カテゴリで高いポートフォリオ活用度があり、受注しやすく実績になる場合のみ
-  if (rank === 'S' && !meetsSRankConditions({ categoryInfo, portfolioActivationScore, beginnerMatches, continuityMatches, winScore, priceYen, text })) {
+  // Sランクは3つの営業資料カテゴリで証拠が強く、高単価または継続時の収益性・長期資産性・受注可能性が高い場合のみ
+  if (rank === 'S' && !meetsSRankConditions({ categoryInfo, evidenceStrength, priceScore, continuityMatches, longTermAssetScore, winScore, priceYen })) {
     rank = 'A';
   }
   // 動画編集・撮影・音声系は未経験歓迎でも高評価にしない（S/Aには乗せない）
