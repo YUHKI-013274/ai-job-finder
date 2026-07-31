@@ -16,7 +16,8 @@ async function scrapeJobs() {
   });
 
   const allJobs = [];
-  const seenIds = new Set();
+  const seenIds = new Map(); // id -> job（同一案件に複数キーワードが一致した場合の追跡に使う）
+  const keywordStats = [];
 
   console.log('クラウドワークス案件を取得中...');
 
@@ -126,16 +127,26 @@ async function scrapeJobs() {
       }, BASE_URL);
 
       let newCount = 0;
+      let dupCount = 0;
       for (const job of jobs) {
-        if (!seenIds.has(job.id) && job.title) {
-          seenIds.add(job.id);
-          job.matchedKeyword = keyword;
+        if (!job.title) continue;
+        const existing = seenIds.get(job.id);
+        if (existing) {
+          // 既に別のキーワードで見つかっている案件。可能な範囲で一致した検索語を配列で保持する
+          dupCount++;
+          if (!existing.matchedKeywords.includes(keyword)) existing.matchedKeywords.push(keyword);
+        } else {
+          job.matchedKeyword = keyword; // 後方互換：単一キーワード表示用（renderer.js等）
+          job.matchedKeywords = [keyword];
+          seenIds.set(job.id, job);
           allJobs.push(job);
           newCount++;
         }
       }
-      console.log(`${newCount}件取得`);
+      keywordStats.push({ keyword, found: jobs.length, newCount, dupCount });
+      console.log(`${newCount}件取得${dupCount > 0 ? `（重複${dupCount}件除外）` : ''}`);
     } catch (err) {
+      keywordStats.push({ keyword, found: 0, newCount: 0, dupCount: 0, error: err.message.split('\n')[0] });
       console.log(`エラー: ${err.message.split('\n')[0]}`);
     } finally {
       await page.close();
@@ -146,7 +157,7 @@ async function scrapeJobs() {
 
   await browser.close();
   console.log(`\n合計 ${allJobs.length} 件取得`);
-  return allJobs;
+  return { jobs: allJobs, keywordStats };
 }
 
 module.exports = { scrapeJobs };

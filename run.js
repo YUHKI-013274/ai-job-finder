@@ -36,7 +36,7 @@ async function main() {
   console.log(`公開URL: ${PAGE_URL}\n`);
 
   // 1. スクレイピング
-  const rawJobs = await scrapeJobs();
+  const { jobs: rawJobs, keywordStats } = await scrapeJobs();
 
   if (rawJobs.length === 0) {
     console.log('\n⚠️  案件を取得できませんでした。ネット接続を確認してください。');
@@ -83,6 +83,29 @@ async function main() {
   console.log(`応募候補 ${candidates.length}件 / 成長候補 ${growthCandidates.length}件 / 保留 ${holds.length}件 / 除外 ${excluded.length}件`);
   console.log('除外内訳:', JSON.stringify(excludeReasonCounts));
   console.log(`(新規に既出登録: ${newlySeenCount}件)`);
+
+  // キーワード別内訳（取得件数・新規/重複・S/A/B/C/除外への振り分け結果）
+  // 注意：job.matchedKeyword はevaluator.js側で表示用に「実際に一致した業務内容の代表語」へ
+  // 上書きされるため、検索キーワード別の内訳には使えない。scraper.jsが保持する
+  // matchedKeywords（検索語の配列、上書きされない）を使って集計する。
+  const rankByKeyword = {};
+  for (const job of [...candidates, ...growthCandidates, ...holds, ...excluded]) {
+    const keywords = (job.matchedKeywords && job.matchedKeywords.length > 0) ? job.matchedKeywords : [job.matchedKeyword || '(不明)'];
+    for (const kw of keywords) {
+      if (!rankByKeyword[kw]) rankByKeyword[kw] = { S: 0, A: 0, B: 0, C: 0, 除外: 0 };
+      if (job.excluded) rankByKeyword[kw]['除外']++;
+      else if (job.rank) rankByKeyword[kw][job.rank]++;
+    }
+  }
+  console.log('\n=== キーワード別内訳 ===');
+  for (const stat of keywordStats) {
+    const r = rankByKeyword[stat.keyword] || { S: 0, A: 0, B: 0, C: 0, 除外: 0 };
+    if (stat.error) {
+      console.log(`  ${stat.keyword}: エラー（${stat.error}）`);
+      continue;
+    }
+    console.log(`  ${stat.keyword}: 取得${stat.found}件 新規${stat.newCount}件 重複${stat.dupCount}件 → S:${r.S} A:${r.A} B:${r.B} C:${r.C} 除外:${r['除外']}`);
+  }
 
   // 4. HTML / Markdown 出力
   const htmlContent = renderHTML({ candidates, growthCandidates, holds, excluded }, now, PAGE_URL);

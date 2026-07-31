@@ -28,6 +28,7 @@ const {
   CLIENT_RISK_PLUS_PATTERNS,
   SNS_OPERATION_EXCLUDE_PATTERNS,
   ASSET_SIGNAL_PATTERNS,
+  INDUSTRY_MISMATCH_PATTERNS,
 } = require('./config');
 
 // 営業資料（ポートフォリオページ）が存在する3カテゴリ
@@ -242,9 +243,16 @@ function computeLongTermAssetScore({ categoryInfo, continuityMatches, priceYen, 
 
 // 採用理由・証拠の強さを4段階で分類する（直接証明／強い代替証明／弱い代替証明／証明不足）。
 // 複雑な推測はせず、案件カテゴリとポートフォリオ活用度の対応関係のみから判定する。
-function computeEvidenceStrength({ categoryInfo, portfolioActivationScore, hospitalityRelevant }) {
+//
+// 「バナー制作」「SEO記事」「AI活用」等の形式・トピック一致だけでは「直接証明」にしない。
+// 建築・医療・金融・法律・製造業等、実績と明確に異なる専門業界（industryMismatch）が
+// 案件文に含まれる場合は、形式が一致していても1段階下げて「強い代替証明」までとする
+// （スキル自体は転用可能なため「証明不足」まで下げすぎない）。
+function computeEvidenceStrength({ categoryInfo, portfolioActivationScore, hospitalityRelevant, industryMismatch }) {
   const isBacked = PORTFOLIO_BACKED_TIERS.includes(categoryInfo.tier);
-  if (isBacked && portfolioActivationScore >= 4) return '直接証明';
+  if (isBacked && portfolioActivationScore >= 4) {
+    return industryMismatch ? '強い代替証明' : '直接証明';
+  }
   if (isBacked && portfolioActivationScore === 3) return '強い代替証明';
   if ((isBacked && portfolioActivationScore <= 2) || (!isBacked && hospitalityRelevant)) return '弱い代替証明';
   return '証明不足';
@@ -394,7 +402,8 @@ function evaluateJob(job) {
 
   // 採用理由・証拠の強さ（直接証明／強い代替証明／弱い代替証明／証明不足）
   const hospitalityRelevant = /飲食|接客|店舗運営|店舗管理|店舗マネジメント|人材育成|採用面接|業務改善|マネジメント|マネージャー|店長/.test(text);
-  const evidenceStrength = computeEvidenceStrength({ categoryInfo, portfolioActivationScore, hospitalityRelevant });
+  const industryMismatchMatches = matchPatterns(text, INDUSTRY_MISMATCH_PATTERNS);
+  const evidenceStrength = computeEvidenceStrength({ categoryInfo, portfolioActivationScore, hospitalityRelevant, industryMismatch: industryMismatchMatches.length > 0 });
   const missingAssets = buildMissingAssets({ categoryInfo, evidenceStrength, portfolioActivationScore });
 
   // 総合スコア（②職能一致・⑥単価・⑤継続性・⑧長期資産性を重視した重み付け）
@@ -440,7 +449,7 @@ function evaluateJob(job) {
 
   // 注意点
   const caution = buildCaution(text, technicalMatches, aiFriendlyMatches, categoryInfo, priceUnverified, experiencePreferredMatches, {
-    snsAdjustment, simpleWorkMatches, clientRisk,
+    snsAdjustment, simpleWorkMatches, clientRisk, industryMismatchMatches,
   });
 
   // 提案文の軸（職能の組み合わせ→今回できること→クライアントへの価値）
@@ -527,8 +536,11 @@ function buildWeightedSignals({ categoryInfo, portfolioActivationScore, aptitude
 }
 
 function buildCaution(text, technicalMatches, aiFriendlyMatches, categoryInfo, priceUnverified, experiencePreferredMatches, extra = {}) {
-  const { snsAdjustment, simpleWorkMatches, clientRisk } = extra;
+  const { snsAdjustment, simpleWorkMatches, clientRisk, industryMismatchMatches } = extra;
   const cautions = [];
+  if (industryMismatchMatches && industryMismatchMatches.length > 0) {
+    cautions.push(`成果物の形式は近いが、業界（${industryMismatchMatches[0]}）が実績と異なるため代替証明にとどまります`);
+  }
   if (priceUnverified) {
     cautions.push('報酬額が確認できないため応募候補（TOP5）には入れていません。案件詳細で金額を確認してから判断してください');
   }
