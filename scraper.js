@@ -1,11 +1,103 @@
 const { chromium } = require('playwright');
-const { SEARCH_KEYWORDS, SEARCH_DELAY_MS } = require('./config');
+const { SEARCH_KEYWORDS, CATEGORY_SOURCES, SEARCH_DELAY_MS } = require('./config');
 
 const BASE_URL = 'https://crowdworks.jp';
 const SEARCH_URL = `${BASE_URL}/public/jobs/search`;
 
 async function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// 案件一覧ページ（キーワード検索・カテゴリ一覧のどちらも同じカード形式）から案件情報を抽出する。
+// カテゴリページは主要セレクターに一致しないことが多いため、その場合はリンクベースの
+// フォールバック抽出を使う（動作確認済み）。
+function extractJobsFromPage(baseUrl) {
+  const results = [];
+
+  const selectors = [
+    '[data-testid="job-offer-card"]',
+    '.job_offer_detail',
+    'article[class*="job"]',
+    '.offer_detail',
+    '[class*="JobOfferCard"]',
+    '[class*="job-offer"]',
+  ];
+
+  let cards = [];
+  for (const sel of selectors) {
+    cards = document.querySelectorAll(sel);
+    if (cards.length > 0) break;
+  }
+
+  // セレクターで取得できない場合、リンクから案件URLを抽出
+  if (cards.length === 0) {
+    const links = document.querySelectorAll('a[href*="/public/jobs/"]');
+    const jobLinks = [...links].filter(a => /\/public\/jobs\/\d+/.test(a.href));
+
+    jobLinks.forEach(link => {
+      const idMatch = link.href.match(/\/public\/jobs\/(\d+)/);
+      if (!idMatch) return;
+
+      const title = link.textContent.trim() || link.querySelector('[class*="title"], h2, h3')?.textContent.trim() || '';
+      if (!title || title.length < 5) return;
+
+      const card = link.closest('li, article, div[class*="card"], div[class*="offer"]') || link;
+      const text = card.textContent;
+
+      const priceMatch = text.match(/([¥￥][\d,]+(?:〜[\d,]+)?(?:万円)?|[\d,]+円(?:〜[\d,]+円)?)/);
+      const price = priceMatch ? priceMatch[1] : '要確認';
+
+      const appMatch = text.match(/(\d+)\s*人が応募/);
+      const applicants = appMatch ? parseInt(appMatch[1]) : null;
+
+      results.push({
+        id: idMatch[1],
+        title,
+        url: `${baseUrl}/public/jobs/${idMatch[1]}`,
+        price,
+        applicants,
+        deadline: null,
+        description: text.substring(0, 500),
+      });
+    });
+
+    return results;
+  }
+
+  cards.forEach(card => {
+    const linkEl = card.querySelector('a[href*="/public/jobs/"]');
+    if (!linkEl) return;
+
+    const idMatch = linkEl.href.match(/\/public\/jobs\/(\d+)/);
+    if (!idMatch) return;
+
+    const titleEl = card.querySelector('h2, h3, [class*="title"], [class*="name"]');
+    const title = titleEl?.textContent.trim() || linkEl.textContent.trim() || '';
+    if (!title || title.length < 5) return;
+
+    const text = card.textContent;
+
+    const priceMatch = text.match(/([¥￥][\d,]+(?:〜[\d,]+)?(?:万円)?|[\d,]+円(?:〜[\d,]+円)?)/);
+    const price = priceMatch ? priceMatch[1] : '要確認';
+
+    const appMatch = text.match(/(\d+)\s*人が応募/);
+    const applicants = appMatch ? parseInt(appMatch[1]) : null;
+
+    const deadlineMatch = text.match(/(\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2}|\d{1,2}月\d{1,2}日)/);
+    const deadline = deadlineMatch ? deadlineMatch[1] : null;
+
+    results.push({
+      id: idMatch[1],
+      title,
+      url: `${baseUrl}/public/jobs/${idMatch[1]}`,
+      price,
+      applicants,
+      deadline,
+      description: text.substring(0, 600),
+    });
+  });
+
+  return results;
 }
 
 async function scrapeJobs() {
@@ -16,7 +108,8 @@ async function scrapeJobs() {
   });
 
   const allJobs = [];
-  const seenIds = new Map(); // id -> job（同一案件に複数キーワードが一致した場合の追跡に使う）
+  // id -> job（同一案件が複数キーワード／カテゴリに一致した場合の追跡に使う）
+  const seenIds = new Map();
   const keywordStats = [];
 
   console.log('クラウドワークス案件を取得中...');
@@ -34,97 +127,7 @@ async function scrapeJobs() {
         timeout: 15000
       }).catch(() => null);
 
-      const jobs = await page.evaluate((baseUrl) => {
-        const results = [];
-
-        // 複数のセレクターパターンを試す
-        const selectors = [
-          '[data-testid="job-offer-card"]',
-          '.job_offer_detail',
-          'article[class*="job"]',
-          '.offer_detail',
-          '[class*="JobOfferCard"]',
-          '[class*="job-offer"]',
-        ];
-
-        let cards = [];
-        for (const sel of selectors) {
-          cards = document.querySelectorAll(sel);
-          if (cards.length > 0) break;
-        }
-
-        // セレクターで取得できない場合、リンクから案件URLを抽出
-        if (cards.length === 0) {
-          const links = document.querySelectorAll('a[href*="/public/jobs/"]');
-          const jobLinks = [...links].filter(a => /\/public\/jobs\/\d+/.test(a.href));
-
-          jobLinks.forEach(link => {
-            const idMatch = link.href.match(/\/public\/jobs\/(\d+)/);
-            if (!idMatch) return;
-
-            const title = link.textContent.trim() || link.querySelector('[class*="title"], h2, h3')?.textContent.trim() || '';
-            if (!title || title.length < 5) return;
-
-            const card = link.closest('li, article, div[class*="card"], div[class*="offer"]') || link;
-            const text = card.textContent;
-
-            // 報酬を抽出
-            const priceMatch = text.match(/([¥￥][\d,]+(?:〜[\d,]+)?(?:万円)?|[\d,]+円(?:〜[\d,]+円)?)/);
-            const price = priceMatch ? priceMatch[1] : '要確認';
-
-            // 応募人数を抽出
-            const appMatch = text.match(/(\d+)\s*人が応募/);
-            const applicants = appMatch ? parseInt(appMatch[1]) : null;
-
-            results.push({
-              id: idMatch[1],
-              title,
-              url: `${baseUrl}/public/jobs/${idMatch[1]}`,
-              price,
-              applicants,
-              deadline: null,
-              description: text.substring(0, 500),
-            });
-          });
-
-          return results;
-        }
-
-        cards.forEach(card => {
-          const linkEl = card.querySelector('a[href*="/public/jobs/"]');
-          if (!linkEl) return;
-
-          const idMatch = linkEl.href.match(/\/public\/jobs\/(\d+)/);
-          if (!idMatch) return;
-
-          const titleEl = card.querySelector('h2, h3, [class*="title"], [class*="name"]');
-          const title = titleEl?.textContent.trim() || linkEl.textContent.trim() || '';
-          if (!title || title.length < 5) return;
-
-          const text = card.textContent;
-
-          const priceMatch = text.match(/([¥￥][\d,]+(?:〜[\d,]+)?(?:万円)?|[\d,]+円(?:〜[\d,]+円)?)/);
-          const price = priceMatch ? priceMatch[1] : '要確認';
-
-          const appMatch = text.match(/(\d+)\s*人が応募/);
-          const applicants = appMatch ? parseInt(appMatch[1]) : null;
-
-          const deadlineMatch = text.match(/(\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2}|\d{1,2}月\d{1,2}日)/);
-          const deadline = deadlineMatch ? deadlineMatch[1] : null;
-
-          results.push({
-            id: idMatch[1],
-            title,
-            url: `${baseUrl}/public/jobs/${idMatch[1]}`,
-            price,
-            applicants,
-            deadline,
-            description: text.substring(0, 600),
-          });
-        });
-
-        return results;
-      }, BASE_URL);
+      const jobs = await page.evaluate(extractJobsFromPage, BASE_URL);
 
       let newCount = 0;
       let dupCount = 0;
@@ -138,6 +141,7 @@ async function scrapeJobs() {
         } else {
           job.matchedKeyword = keyword; // 後方互換：単一キーワード表示用（renderer.js等）
           job.matchedKeywords = [keyword];
+          job.matchedCategories = [];
           seenIds.set(job.id, job);
           allJobs.push(job);
           newCount++;
@@ -147,6 +151,51 @@ async function scrapeJobs() {
       console.log(`${newCount}件取得${dupCount > 0 ? `（重複${dupCount}件除外）` : ''}`);
     } catch (err) {
       keywordStats.push({ keyword, found: 0, newCount: 0, dupCount: 0, error: err.message.split('\n')[0] });
+      console.log(`エラー: ${err.message.split('\n')[0]}`);
+    } finally {
+      await page.close();
+    }
+
+    await sleep(SEARCH_DELAY_MS);
+  }
+
+  // 公式カテゴリ経由の取得（第1弾：資料作成・マニュアル作成のみ）。
+  // キーワード検索では拾えない案件を補う目的。既存のカード抽出処理をそのまま使う。
+  for (const category of CATEGORY_SOURCES) {
+    process.stdout.write(`  カテゴリ: "${category.label}" ... `);
+    const page = await context.newPage();
+
+    try {
+      const url = `${BASE_URL}${category.path}?order=new`;
+      await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 });
+
+      await page.waitForSelector('[data-testid="job-offer-card"], .job_offer_detail, article', {
+        timeout: 15000
+      }).catch(() => null);
+
+      const jobs = await page.evaluate(extractJobsFromPage, BASE_URL);
+
+      let newCount = 0;
+      let dupCount = 0;
+      for (const job of jobs) {
+        if (!job.title) continue;
+        const existing = seenIds.get(job.id);
+        if (existing) {
+          dupCount++;
+          if (!existing.matchedCategories.includes(category.label)) existing.matchedCategories.push(category.label);
+        } else {
+          job.matchedKeyword = category.label; // 後方互換：単一キーワード表示欄にはカテゴリ名を使う
+          job.matchedKeywords = [];
+          job.matchedCategories = [category.label];
+          seenIds.set(job.id, job);
+          allJobs.push(job);
+          newCount++;
+        }
+      }
+      keywordStats.push({ keyword: `[カテゴリ] ${category.label}`, found: jobs.length, newCount, dupCount });
+      console.log(`${newCount}件取得${dupCount > 0 ? `（重複${dupCount}件除外）` : ''}`);
+    } catch (err) {
+      keywordStats.push({ keyword: `[カテゴリ] ${category.label}`, found: 0, newCount: 0, dupCount: 0, error: err.message.split('\n')[0] });
       console.log(`エラー: ${err.message.split('\n')[0]}`);
     } finally {
       await page.close();

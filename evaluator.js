@@ -29,6 +29,8 @@ const {
   SNS_OPERATION_EXCLUDE_PATTERNS,
   ASSET_SIGNAL_PATTERNS,
   INDUSTRY_MISMATCH_PATTERNS,
+  NEGATION_PATTERNS,
+  GROWTH_DISQUALIFYING_PATTERNS,
 } = require('./config');
 
 // 営業資料（ポートフォリオページ）が存在する3カテゴリ
@@ -60,6 +62,17 @@ function normalizeFullWidthDigits(str) {
   return String(str)
     .replace(/[０-９]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0))
     .replace(/，/g, ',');
+}
+
+// 「動画編集不要」「撮影不要」等の否定表現を、ジャンル・職能判定の前に取り除く。
+// 「経験不要」「未経験可」等（⑦未経験歓迎の判定に使う語）は対象に含めない。
+function stripNegatedPhrases(str) {
+  if (!str) return str;
+  let result = String(str);
+  for (const pattern of NEGATION_PATTERNS) {
+    result = result.replace(pattern, '');
+  }
+  return result;
 }
 
 // 案件の報酬表記（例: "¥3,000〜5,000" "5万円" "3,000円〜5,000円"）から
@@ -118,8 +131,10 @@ const MIN_CATEGORY_WEIGHT = 2;
 // 単語が1回本文に含まれるだけで別ジャンルに誤判定されないよう、各ジャンルの一致数で
 // 重み付けした合計スコアが最も高いジャンルを採用する（同点時は優先順位の高いジャンルを採用）。
 function detectCategoryTier(job) {
-  const title = job.title || '';
-  const desc = job.description || '';
+  // 「動画編集不要」等の否定表現が「動画編集」等のジャンル語に部分一致して
+  // 誤分類されないよう、判定前に否定表現を取り除く
+  const title = stripNegatedPhrases(job.title || '');
+  const desc = stripNegatedPhrases(job.description || '');
 
   const scored = CATEGORY_TIERS.map(tier => {
     const titleMatches = matchPatterns(title, tier.patterns);
@@ -291,6 +306,20 @@ function meetsARankConditions({ categoryInfo, evidenceStrength, priceScore, long
   return true;
 }
 
+// Bランク（成長候補）の最低条件。単にA未満というだけの案件を「成長候補」にはしない。
+// 「証拠・実績を補えば今後狙う価値がある」案件（主戦場・成長領域に近く、不足を具体的に
+// 特定でき、単純作業・視聴・アンケート・紹介のみの案件ではない）だけに限定する。
+// 満たさない場合は成長候補ではなく保留に回す（除外はしない＝参考情報としては残す）。
+function meetsGrowthCandidateConditions({ categoryInfo, evidenceStrength, missingAssets, simpleWork, growthDisqualifyingMatches }) {
+  if (categoryInfo.tier === 'low') return false; // 動画・撮影・音声系
+  if (categoryInfo.score < 3) return false; // 主戦場・成長領域に該当しない
+  if (evidenceStrength === '証明不足') return false;
+  if (missingAssets.length === 0) return false; // 「補うべき不足」を具体的に特定できない
+  if (simpleWork) return false; // データ入力等の単純作業
+  if (growthDisqualifyingMatches.length > 0) return false; // 視聴・アンケート・紹介のみ等
+  return true;
+}
+
 // Sランクは「3つの営業資料カテゴリ（ライティング/画像制作/AI活用・業務改善）のいずれかで
 // 証拠が強く、高単価または継続時の収益性が高く、長期資産性・受注可能性も高い」場合のみに限定する。
 // 「未経験歓迎」は必須条件にしない（⑦未経験歓迎の軽い加点にとどめ、S/Aの必須要件からは外す）。
@@ -316,8 +345,10 @@ function totalScoreToRank(totalScore) {
 }
 
 function evaluateJob(job) {
-  // ⑤全角数字（１件３円 等）も正しく解析できるよう、判定に使う本文は先に正規化しておく
-  const text = normalizeFullWidthDigits(`${job.title} ${job.description || ''}`);
+  // ⑤全角数字（１件３円 等）も正しく解析できるよう、判定に使う本文は先に正規化しておく。
+  // 「動画編集不要」等の否定表現も、ジャンル・職能判定を歪めないよう先に取り除く
+  // （「経験不要」「未経験可」等の判定語は対象外）。
+  const text = stripNegatedPhrases(normalizeFullWidthDigits(`${job.title} ${job.description || ''}`));
 
   if (containsAny(text, RISK_PATTERNS)) {
     return { ...job, excluded: true, excludeReason: 'リスクあり' };
@@ -406,6 +437,14 @@ function evaluateJob(job) {
   const evidenceStrength = computeEvidenceStrength({ categoryInfo, portfolioActivationScore, hospitalityRelevant, industryMismatch: industryMismatchMatches.length > 0 });
   const missingAssets = buildMissingAssets({ categoryInfo, evidenceStrength, portfolioActivationScore });
 
+  // 成長候補（Bランク）の最低条件判定に使う「単純作業・視聴・アンケート・紹介のみ」シグナル
+  const growthDisqualifyingMatches = matchPatterns(text, GROWTH_DISQUALIFYING_PATTERNS);
+  const meetsGrowthGate = meetsGrowthCandidateConditions({
+    categoryInfo, evidenceStrength, missingAssets,
+    simpleWork: simpleWorkMatches.length > 0,
+    growthDisqualifyingMatches,
+  });
+
   // 総合スコア（②職能一致・⑥単価・⑤継続性・⑧長期資産性を重視した重み付け）
   const totalScore =
     categoryInfo.score * WEIGHTS.category +
@@ -471,6 +510,7 @@ function evaluateJob(job) {
     longTermAssetScore,
     evidenceStrength,
     missingAssets,
+    meetsGrowthGate,
     totalScore,
     rank,
     priceUnverified,
@@ -484,6 +524,8 @@ function evaluateJob(job) {
     snsAdjustmentDelta: snsAdjustment.delta,
     clientRiskDelta: clientRisk.delta,
     simpleWork: simpleWorkMatches.length > 0,
+    matchedKeywords: job.matchedKeywords || [],
+    matchedCategories: job.matchedCategories || [],
   };
 }
 
@@ -682,8 +724,13 @@ function classifyJobs(jobs, appliedMap = {}, seenMap = {}, rejectedMap = {}) {
     }
 
     if (job.rank === 'B') {
-      // 成長候補（不足資産を補えば今後狙える案件）。単価未確認でも参考情報として残す
-      growthCandidates.push(job);
+      // 成長候補（不足資産を補えば今後狙える案件）は最低条件ゲートを満たす場合のみ。
+      // 満たさない場合（証明不足・単純作業・視聴/アンケート/紹介のみ等）は保留に回す
+      if (job.meetsGrowthGate) {
+        growthCandidates.push(job);
+      } else {
+        holds.push(job);
+      }
     } else if (!job.priceUnverified && (job.rank === 'S' || job.rank === 'A')) {
       candidates.push(job);
     } else {

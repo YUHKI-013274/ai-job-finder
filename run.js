@@ -84,16 +84,22 @@ async function main() {
   console.log('除外内訳:', JSON.stringify(excludeReasonCounts));
   console.log(`(新規に既出登録: ${newlySeenCount}件)`);
 
-  // キーワード別内訳（取得件数・新規/重複・S/A/B/C/除外への振り分け結果）
+  // キーワード・カテゴリ別内訳（取得件数・新規/重複・S/A/B/C/除外への振り分け結果）
   // 注意1：job.matchedKeyword はevaluator.js側で表示用に「実際に一致した業務内容の代表語」へ
   // 上書きされるため、検索キーワード別の内訳には使えない。scraper.jsが保持する
-  // matchedKeywords（検索語の配列、上書きされない）を使って集計する。
+  // matchedKeywords／matchedCategories（上書きされない配列）を使って集計する。
   // 注意2：candidates/growthCandidates/holdsは表示件数の上限で切り詰め済みのため、
   // 集計には切り詰め前の全件を保持するallEvaluatedを使う（表示は従来通りcapped版を使用）。
   const rankByKeyword = {};
   for (const job of allEvaluated) {
-    const keywords = (job.matchedKeywords && job.matchedKeywords.length > 0) ? job.matchedKeywords : [job.matchedKeyword || '(不明)'];
-    for (const kw of keywords) {
+    const sources = [];
+    if (job.matchedKeywords && job.matchedKeywords.length > 0) sources.push(...job.matchedKeywords);
+    if (job.matchedCategories && job.matchedCategories.length > 0) {
+      sources.push(...job.matchedCategories.map(c => `[カテゴリ] ${c}`));
+    }
+    if (sources.length === 0) sources.push(job.matchedKeyword || '(不明)');
+
+    for (const kw of sources) {
       if (!rankByKeyword[kw]) rankByKeyword[kw] = { S: 0, A: 0, B: 0, C: 0, 除外: 0 };
       if (job.excluded) rankByKeyword[kw]['除外']++;
       else if (job.rank) rankByKeyword[kw][job.rank]++;
