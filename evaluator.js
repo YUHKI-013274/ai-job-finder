@@ -696,11 +696,15 @@ function classifyJobs(jobs, appliedMap = {}, seenMap = {}, rejectedMap = {}) {
   growthCandidates.sort(byRankThenScore);
   holds.sort(byRankThenScore);
 
+  // 表示件数の上限で切り詰める前の全評価済み案件（キーワード別集計等の統計用）
+  const allEvaluated = [...candidates, ...growthCandidates, ...holds, ...excluded];
+
   return {
     candidates: candidates.slice(0, MAX_JOBS),
     growthCandidates: growthCandidates.slice(0, MAX_GROWTH),
     holds: holds.slice(0, MAX_HOLDS),
     excluded,
+    allEvaluated,
   };
 }
 

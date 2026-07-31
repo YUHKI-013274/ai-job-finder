@@ -59,7 +59,7 @@ async function main() {
 
   console.log(`\nフェーズ: ${CURRENT_PHASE_KEY}（${CURRENT_PHASE.label}）`);
   console.log('案件を評価・分類中...');
-  const { candidates, growthCandidates, holds, excluded } = classifyJobs(rawJobs, appliedMap, seenMap, rejectedMap);
+  const { candidates, growthCandidates, holds, excluded, allEvaluated } = classifyJobs(rawJobs, appliedMap, seenMap, rejectedMap);
 
   if (candidates.length < 5) {
     console.log(`ℹ️  今日の応募候補は${candidates.length}件です（S・Aランクのみ。無理な枠埋めはしていません）`);
@@ -85,11 +85,13 @@ async function main() {
   console.log(`(新規に既出登録: ${newlySeenCount}件)`);
 
   // キーワード別内訳（取得件数・新規/重複・S/A/B/C/除外への振り分け結果）
-  // 注意：job.matchedKeyword はevaluator.js側で表示用に「実際に一致した業務内容の代表語」へ
+  // 注意1：job.matchedKeyword はevaluator.js側で表示用に「実際に一致した業務内容の代表語」へ
   // 上書きされるため、検索キーワード別の内訳には使えない。scraper.jsが保持する
   // matchedKeywords（検索語の配列、上書きされない）を使って集計する。
+  // 注意2：candidates/growthCandidates/holdsは表示件数の上限で切り詰め済みのため、
+  // 集計には切り詰め前の全件を保持するallEvaluatedを使う（表示は従来通りcapped版を使用）。
   const rankByKeyword = {};
-  for (const job of [...candidates, ...growthCandidates, ...holds, ...excluded]) {
+  for (const job of allEvaluated) {
     const keywords = (job.matchedKeywords && job.matchedKeywords.length > 0) ? job.matchedKeywords : [job.matchedKeyword || '(不明)'];
     for (const kw of keywords) {
       if (!rankByKeyword[kw]) rankByKeyword[kw] = { S: 0, A: 0, B: 0, C: 0, 除外: 0 };
