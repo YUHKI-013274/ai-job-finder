@@ -31,6 +31,9 @@ const {
   INDUSTRY_MISMATCH_PATTERNS,
   NEGATION_PATTERNS,
   GROWTH_DISQUALIFYING_PATTERNS,
+  REQUIRED_QUALIFICATION_PATTERNS,
+  SPECIALIZED_SCOPE_PATTERNS,
+  REQUIRED_TOOL_DISALLOWED,
 } = require('./config');
 
 // 営業資料（ポートフォリオページ）が存在する3カテゴリ
@@ -73,6 +76,28 @@ function stripNegatedPhrases(str) {
     result = result.replace(pattern, '');
   }
   return result;
+}
+
+const TOOL_REQUIRED_MARKER = /(必須|限定|のみ)/;
+const TOOL_OPTIONAL_MARKER = /(歓迎|尚可|あれば|または|もしくは|どちらか|大歓迎|できれば|不問|なくても|使える方|使えれば)/;
+
+// 使用可能ツールにない指定ツール（Illustrator/Photoshop等）が「必須」の場合のみ条件不一致とする。
+// 「Illustrator歓迎」「IllustratorまたはPowerPoint」等、代替可能な表現がある場合は対象としない。
+// ツール名周辺の短い範囲だけを見て判定する（複雑な自然言語処理は行わない）。
+function hasUnmetToolRequirement(text) {
+  for (const tool of REQUIRED_TOOL_DISALLOWED) {
+    let idx = text.indexOf(tool);
+    while (idx !== -1) {
+      const windowStart = Math.max(0, idx - 15);
+      const windowEnd = Math.min(text.length, idx + tool.length + 15);
+      const window = text.slice(windowStart, windowEnd);
+      if (TOOL_REQUIRED_MARKER.test(window) && !TOOL_OPTIONAL_MARKER.test(window)) {
+        return true;
+      }
+      idx = text.indexOf(tool, idx + 1);
+    }
+  }
+  return false;
 }
 
 // 案件の報酬表記（例: "¥3,000〜5,000" "5万円" "3,000円〜5,000円"）から
@@ -361,6 +386,18 @@ function evaluateJob(job) {
     return { ...job, excluded: true, excludeReason: 'SNS運用代行' };
   }
 
+  // 必須条件ゲート：資格・専門実務経験が明確に必須、または案件の中心業務そのものが
+  // 専門資格・法的判断を要する場合は、スコア計算前に見送る（高単価でも加点で突破させない）。
+  // 「歓迎」「あると望ましい」は対象にしない。
+  if (containsAny(text, REQUIRED_QUALIFICATION_PATTERNS) || containsAny(text, SPECIALIZED_SCOPE_PATTERNS)) {
+    return { ...job, excluded: true, excludeReason: '必須条件不一致（資格・専門実務）' };
+  }
+
+  // 指定ツール判定：使用可能ツールにないIllustrator/Photoshop等が「必須」の場合のみ見送る
+  if (hasUnmetToolRequirement(text)) {
+    return { ...job, excluded: true, excludeReason: '必須条件不一致（指定ツール）' };
+  }
+
   // job.price（要確認等）だけでなく、タイトル等に埋め込まれた「1件3円」のような
   // 件数単価表記も極端な低単価として検出する
   const parsedPriceYen = parsePriceToYen(job.price);
@@ -470,9 +507,23 @@ function evaluateJob(job) {
   if (simpleWorkMatches.length > 0 && !PORTFOLIO_BACKED_TIERS.includes(categoryInfo.tier) && (rank === 'S' || rank === 'A')) {
     rank = 'B';
   }
-  // Aランクの最低条件（点数だけで判定しない）。満たさない場合は合計点が高くてもBへ下げる
+  // Aランクの最低条件（点数だけで判定しない）。満たさない場合は合計点が高くてもBへ下げる。
+  // ただし「直接証明」があり主戦場に一致する案件は、単価・受注可能性等の経済条件だけが
+  // 理由でAに届かない場合でも、証拠・専門性そのものは十分なため応募候補として残す
+  // （＝Bへは落とさずAのまま維持し、再判定であることを注意点に明示する）。
+  const isMainField = categoryInfo.tier !== 'low' && categoryInfo.score >= 3;
+  let reconsideredFromB = false;
   if ((rank === 'S' || rank === 'A') && !meetsARankConditions({ categoryInfo, evidenceStrength, priceScore, longTermAssetScore, winScore })) {
-    rank = 'B';
+    if (evidenceStrength === '直接証明' && isMainField) {
+      rank = 'A';
+      reconsideredFromB = true;
+    } else {
+      rank = 'B';
+    }
+  } else if (rank === 'B' && evidenceStrength === '直接証明' && isMainField) {
+    // 生スコアの時点でBだった案件も、直接証明・主戦場一致なら応募候補への再判定対象とする
+    rank = 'A';
+    reconsideredFromB = true;
   }
 
   const genre = categoryInfo.label;
@@ -487,9 +538,23 @@ function evaluateJob(job) {
     : '安全に完了できそうな案件（実績作りとして検討可）';
 
   // 注意点
-  const caution = buildCaution(text, technicalMatches, aiFriendlyMatches, categoryInfo, priceUnverified, experiencePreferredMatches, {
+  let caution = buildCaution(text, technicalMatches, aiFriendlyMatches, categoryInfo, priceUnverified, experiencePreferredMatches, {
     snsAdjustment, simpleWorkMatches, clientRisk, industryMismatchMatches,
   });
+  if (reconsideredFromB) {
+    const appMatch = text.match(/(\d+)\s*人が応募/);
+    let reconsiderNote;
+    if (priceUnverified) {
+      reconsiderNote = '報酬条件が不明なため応募前に確認してください';
+    } else if (appMatch && parseInt(appMatch[1], 10) > 20) {
+      reconsiderNote = '応募者数が多いため差別化が必要です';
+    } else if (winScore < 3) {
+      reconsiderNote = '稼働条件の確認が必要です';
+    } else {
+      reconsiderNote = '必須条件の読み取りを再確認してください';
+    }
+    caution = `Aランク基準の点数には届きませんが、証拠・職能一致度が十分なため応募候補に含めています（${reconsiderNote}）、${caution}`;
+  }
 
   // 提案文の軸（職能の組み合わせ→今回できること→クライアントへの価値）
   const strengthHint = buildStrengthHint({ text, categoryInfo, hospitalityRelevant, representative: categoryInfo.representative });
