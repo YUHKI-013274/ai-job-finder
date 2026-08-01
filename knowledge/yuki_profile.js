@@ -1,24 +1,55 @@
-// ゆうき職能プロフィール（構造化データ）
+// ゆうき職能プロフィール（構造化データ）— v2
 //
 // 生成元（このファイルはKnowledgeからの派生データであり、Knowledge本体は変更しない）:
 //   - knowledge/yuki_sales_knowledge_v1.md（Version 1.0, 2026-07-26）※営業判断・案件分類はこちらを優先
 //   - C:\Users\nagam\knowledge\06_common_knowledge\yuki_common_knowledge.md（最終更新 2026-07-11）
 //
-// 記載ルール:
-//   - Knowledgeに書かれていない経験・実績・能力は追加しない（推測・創作・誇張の禁止 = Sales Knowledge 1-3）
-//   - 「要確認」情報（Sales Knowledge 5-2）は evidence として使用しない（usableExperience/selfMadeWorks/clientWorkRecordsに含めない）
-//   - Knowledge更新時は、このファイルを手動で再コンパイルすること（Sales Knowledge 10章 更新ルールに準拠）
-//
-// decisionSource の表記は「Sales Knowledge <章番号>」の形式で統一し、案件評価時にどの根拠に基づく判定かを追跡できるようにする。
+// v2での変更点（監査結果への対応）:
+//   - 「飲食業22年」等のテーマ・業界経験を、案件の主タスク（何を作る仕事か）を判定する
+//     TASK_CATEGORIESから完全に分離し、DOMAIN_EXPERIENCESという独立した"追加根拠"にした。
+//     これにより、案件テーマが食・店舗関連であっても、実際に依頼される作業（執筆／資料作成／
+//     画像制作等）に対応する証拠（成果物・受注実績）だけが主根拠になり、テーマ経験は
+//     「テーマ理解の補足」としてのみ併記される。
+//   - TASK_CATEGORIESは「対応可能（主戦場）」「チャレンジ可能（成長領域）」を問わず
+//     1つの優先順位リストとして判定し、最初に一致したカテゴリーの階層（主戦場/成長領域）を
+//     そのままcapabilityStatusに使う。これにより「ライター募集」等の職種名が、
+//     テーマ一致（飲食）よりも先に正しく職種カテゴリー（ライティング＝成長領域）で判定される。
+//   - 各カテゴリーの証拠は deliverableEvidence（成果物）／paidExperience（受注・実務実績）／
+//     selfProducedEvidence（自主制作物）に分離し、存在しないものは null のままにする
+//     （存在しない証拠を埋めない＝Sales Knowledge 1-3 創作禁止の原則に従う）。
+//   - 動画編集をEXCLUDED_AREASに明示追加（Sales Knowledgeに対応可能・チャレンジ可能業務としての
+//     記載が一切ないため）。ただし動画シナリオ作成・台本作成等の文章タスクはSEO_ARTICLEの
+//     パターンに追加し、「動画」という語だけで一律除外しないようにした。
+//   - マニュアル関連カテゴリーは「マニュアル作成」等の動詞を伴う複合語のみに限定し、
+//     「マニュアル完備」「マニュアルあり」等（クライアントが用意する支援情報）を
+//     業務内容と誤読しないようにした。
 
 // ===== 使用可能ツール（Common Knowledge 3章 + Sales Knowledge CARD-08/CARD-13で確認済み） =====
 const AVAILABLE_TOOLS = ['ChatGPT', 'Claude', 'Claude Code', 'Dify', 'PowerPoint', 'Canva'];
 
-// ===== 対応可能業務（主戦場。Sales Knowledge 2-1 + 6-1,6-2,6-5,6-6,6-7,6-8） =====
-// 「勝てる可能性：高い」「主戦場」と明記されたカテゴリのみを対応可能業務とする。
-const AVAILABLE_CATEGORIES = [
+// ===== ドメイン（業界・テーマ）経験 =====
+// 案件の主タスクとは独立して判定する「テーマへの土地勘」の根拠。
+// triggersに挙げた語が案件文に実際に含まれる場合だけ、判定理由に追加情報として併記する。
+// 単独では評価対象カテゴリーを決定しない（＝これだけでcapabilityStatusは決まらない）。
+const DOMAIN_EXPERIENCES = [
+  {
+    id: 'hospitality_theme',
+    label: '飲食・店舗テーマ理解',
+    // ユーザー指定の範囲に限定（"店長"「人材育成」等の一般語は含めない＝過剰適用の原因だったため）
+    triggers: ['飲食', '食品', 'レシピ', 'カフェ', '店舗運営', '接客', '商品開発', '飲食事業改善'],
+    text: '飲食業22年、店長・店舗立ち上げ・売上改善・商品開発・撮影監修の経験',
+    decisionSource: 'Sales Knowledge CARD-01/CARD-02/CARD-10',
+  },
+];
+
+// ===== タスクカテゴリー（優先順位付き単一リスト） =====
+// 「案件文にどの動詞・成果物名が現れるか」で判定する。tier: 'available'=対応可能業務（主戦場）、
+// 'challenge'=チャレンジ可能業務（成長領域）。Sales Knowledge 2-1/2-2の区分をそのまま反映。
+// 配列の並び順が優先順位（最初に一致したものを採用）。
+const TASK_CATEGORIES = [
   {
     id: 'proposal_document',
+    tier: 'available',
     label: 'PowerPoint・提案資料・営業資料',
     decisionSource: 'Sales Knowledge 6-1（案件辞典）/ 2-1（主戦場）',
     patterns: [
@@ -26,22 +57,42 @@ const AVAILABLE_CATEGORIES = [
       '資料作成', '資料デザイン', '資料制作',
     ],
     requiredCapabilities: ['課題整理力', '情報整理力', '構成力', '相手目線', '改善提案力'],
-    evidenceCards: ['CARD-07', 'CARD-08'],
-    directEvidence: '経営層・取引先へのプレゼン・資料作成3年、PowerPointによる提案資料の作成経験、自主制作「飲食事業改善 提案資料」（8ページ）',
+    deliverableEvidence: '自主制作「飲食事業改善 提案資料」（8ページ）',
+    paidExperience: '経営層・取引先へのプレゼン・資料作成3年、PowerPointによる提案資料の作成経験（飲食事業）',
+    selfProducedEvidence: '自主制作「飲食事業改善 提案資料」（8ページ）',
+    toolsUsed: ['PowerPoint'],
   },
   {
-    id: 'btob_writing',
-    label: 'BtoBライティング・構成作成',
-    decisionSource: 'Sales Knowledge 6-2（案件辞典）/ 2-1（主戦場）',
+    id: 'manual_training',
+    tier: 'available',
+    label: 'マニュアル・業務フロー・研修資料',
+    decisionSource: 'Sales Knowledge 6-7（案件辞典）/ 2-1（主戦場）',
+    // 「マニュアル完備」「マニュアルあり」等の支援情報と区別するため、動詞を伴う複合語のみに限定
     patterns: [
-      'BtoBライティング', 'BtoB向け', 'BtoBコンテンツ', '企業向け記事', 'サービス紹介文', '導入事例',
+      'マニュアル作成', '業務マニュアル作成', 'マニュアルの作成', '研修資料作成', '研修資料の作成',
+      '研修コンテンツ作成', '教育コンテンツ作成', 'マニュアル制作', '手順書作成',
     ],
-    requiredCapabilities: ['情報整理力', '構成力', '相手目線', '現場理解力'],
-    evidenceCards: ['CARD-07', 'CARD-12'],
-    directEvidence: 'BtoB業務改善提案・進捗報告3年、経営層・取引先への資料作成3年、AIライティング5記事',
+    requiredCapabilities: ['情報整理力', '相手目線', '構成力', '人材育成力', '仕組み化力'],
+    deliverableEvidence: null, // 過去のマニュアル・研修資料の現存・公開可否はSales Knowledge上「要確認」のため使用しない
+    paidExperience: '複数拠点の数値管理・人材育成10年、店長20名以上の育成に関与、新規事業・店舗立ち上げ8年（飲食事業）',
+    selfProducedEvidence: null,
+    toolsUsed: null,
+  },
+  {
+    id: 'business_improvement',
+    tier: 'available',
+    label: '業務改善・業務フロー',
+    decisionSource: 'Sales Knowledge 6-6（案件辞典）/ 2-1（主戦場）',
+    patterns: ['業務改善', '業務フロー', '業務効率化', '仕組み化', '業務整理'],
+    requiredCapabilities: ['現場理解力', '課題発見力', '課題整理力', '改善提案力', '仕組み化力', '継続運用力'],
+    deliverableEvidence: '自主制作「飲食事業改善 提案資料」（8ページ）',
+    paidExperience: 'プロジェクトマネジメント6年、事業部統括マネージャー3年、BtoB業務改善提案・進捗報告3年（飲食事業）',
+    selfProducedEvidence: '自主制作「飲食事業改善 提案資料」（8ページ）',
+    toolsUsed: null,
   },
   {
     id: 'ai_business',
+    tier: 'available',
     label: 'AI活用・GPTs・Knowledge・仕組み化',
     decisionSource: 'Sales Knowledge 6-5（案件辞典）/ 2-1（主戦場）',
     patterns: [
@@ -49,50 +100,26 @@ const AVAILABLE_CATEGORIES = [
       'プロンプト設計', 'プロンプト作成', '業務自動化', '自動化', 'ナレッジ設計', 'Knowledge作成', 'AIコンサル', 'AI研修',
     ],
     requiredCapabilities: ['課題整理力', '業務改善力', '仕組み化力', 'AI活用力', '継続運用力'],
-    evidenceCards: ['CARD-11'],
-    directEvidence: '自主制作物（みちたびGPTs、適性診断GPTs、Claude Code Knowledge DB、朝礼自動化システム）、ChatGPT/Claude Code/Difyの使用経験',
+    deliverableEvidence: '自主制作物（みちたびGPTs、適性診断GPTs、Claude Code Knowledge DB、朝礼自動化システム）',
+    paidExperience: null, // 外部企業へのAI導入・改善成果はSales Knowledge 5-3で未証明
+    selfProducedEvidence: '自主制作物（みちたびGPTs、適性診断GPTs、Claude Code Knowledge DB、朝礼自動化システム）',
+    toolsUsed: ['ChatGPT', 'Claude Code', 'Dify'],
   },
   {
-    id: 'business_improvement',
-    label: '業務改善・業務フロー',
-    decisionSource: 'Sales Knowledge 6-6（案件辞典）/ 2-1（主戦場）',
-    patterns: [
-      '業務改善', '業務フロー', '業務効率化', '仕組み化', '業務整理',
-    ],
-    requiredCapabilities: ['現場理解力', '課題発見力', '課題整理力', '改善提案力', '仕組み化力', '継続運用力'],
-    evidenceCards: ['CARD-01', 'CARD-02', 'CARD-07', 'CARD-11'],
-    directEvidence: 'プロジェクトマネジメント6年、事業部統括マネージャー3年、BtoB業務改善提案・進捗報告3年、複数拠点の数値管理・人材育成10年',
+    id: 'btob_writing',
+    tier: 'available',
+    label: 'BtoBライティング・構成作成',
+    decisionSource: 'Sales Knowledge 6-2（案件辞典）/ 2-1（主戦場）',
+    patterns: ['BtoBライティング', 'BtoB向け', 'BtoBコンテンツ', '企業向け記事', 'サービス紹介文', '導入事例'],
+    requiredCapabilities: ['情報整理力', '構成力', '相手目線', '現場理解力'],
+    deliverableEvidence: 'AIライティング5記事（note系記事、SEO記事2本、比較記事、商品記事）',
+    paidExperience: 'BtoB業務改善提案・進捗報告3年（飲食事業）、テストライティング1件の契約・納品・検収・報酬支払い完了',
+    selfProducedEvidence: 'AIライティング5記事',
+    toolsUsed: ['ChatGPT', 'Claude'],
   },
-  {
-    id: 'manual_training',
-    label: 'マニュアル・業務フロー・研修資料',
-    decisionSource: 'Sales Knowledge 6-7（案件辞典）/ 2-1（主戦場）',
-    patterns: [
-      'マニュアル作成', '業務マニュアル', 'マニュアル', '研修資料', '研修コンテンツ', '教育コンテンツ',
-    ],
-    requiredCapabilities: ['情報整理力', '相手目線', '構成力', '人材育成力', '仕組み化力'],
-    evidenceCards: ['CARD-01', 'CARD-03', 'CARD-05'],
-    directEvidence: '複数拠点の数値管理・人材育成10年、店長20名以上の育成に関与、新規事業・店舗立ち上げ8年',
-  },
-  {
-    id: 'hospitality_content',
-    label: '飲食・店舗運営に関する企画・コンテンツ',
-    decisionSource: 'Sales Knowledge 6-8（案件辞典）/ 2-1（主戦場）',
-    patterns: [
-      '飲食', '店舗運営', '店舗管理', '店舗マネジメント', 'カフェ', 'レストラン', '料理', '商品開発',
-      '店舗企画', '店長', '人材育成', '採用面接',
-    ],
-    requiredCapabilities: ['現場理解力', '相手目線', '改善提案力'],
-    evidenceCards: ['CARD-01', 'CARD-02', 'CARD-03', 'CARD-10'],
-    directEvidence: '飲食業22年、店長・店舗立ち上げ・売上改善・商品開発・撮影監修の経験',
-  },
-];
-
-// ===== チャレンジ可能業務（成長領域。Sales Knowledge 2-2 + 6-3,6-4,6-9,6-10） =====
-// 直接の受注実績は限定的だが、既存能力・完成物から中核能力を論理的に証明できる領域。
-const CHALLENGE_CATEGORIES = [
   {
     id: 'seo_article',
+    tier: 'challenge',
     label: 'SEO・解説記事・体験ライティング',
     decisionSource: 'Sales Knowledge 6-3（案件辞典）/ 2-2（成長領域）',
     patterns: [
@@ -102,14 +129,18 @@ const CHALLENGE_CATEGORIES = [
       'SEO記事', 'SEO', '解説記事', '記事作成', '記事執筆', '記事制作', '記事の作成', '記事の執筆', '記事',
       'ブログ記事', 'ブログ', 'Webコンテンツ', 'Web記事', 'コラム', 'note記事', '比較記事',
       '商品レビュー', 'レビュー記事', '体験談', 'ライティング', 'ライター', '執筆',
+      // 動画「編集」ではなく文章構成タスクであることが明確な語（除外対象の動画編集とは区別する）
+      '動画シナリオ作成', 'YouTube台本作成', 'ナレーション原稿作成', '構成作成',
     ],
     requiredCapabilities: ['情報整理力', '相手目線', '構成力', 'AI活用力', '品質管理力'],
-    evidenceCards: ['CARD-12'],
-    substituteEvidence: 'AIライティング5記事（note系記事、SEO記事2本、比較記事、商品記事）、テストライティング1件の契約・納品・検収・報酬支払い完了',
-    allowedGap: '同一ジャンル・同一クライアントでの受注実績はまだ少ないが、完成済みの記事5本と納品・検収済みの受注1件で構成力・品質管理力を示せる（Sales Knowledge 1-4 対応可能条件）',
+    deliverableEvidence: 'AIライティング5記事（note系記事、SEO記事2本、比較記事、商品記事）',
+    paidExperience: 'テストライティング1件の契約・納品・検収・報酬支払い完了',
+    selfProducedEvidence: 'AIライティング5記事',
+    toolsUsed: ['ChatGPT', 'Claude'],
   },
   {
     id: 'canva_design',
+    tier: 'challenge',
     label: 'Canva・情報設計中心の画像制作',
     decisionSource: 'Sales Knowledge 6-4（案件辞典）/ 2-2（成長領域）',
     patterns: [
@@ -118,41 +149,65 @@ const CHALLENGE_CATEGORIES = [
       'SNS画像制作', 'SNS画像', 'SNS投稿画像', 'サムネイル', 'アイキャッチ',
     ],
     requiredCapabilities: ['相手目線', '構成力', '情報整理力', 'AI活用力', '品質管理力'],
-    evidenceCards: ['CARD-08', 'CARD-10', 'CARD-13'],
-    substituteEvidence: 'AI画像ポートフォリオ5作品、Canva Pro使用、経営層・取引先への資料作成3年',
-    allowedGap: '受注実績は契約成立1件（納品前）のみだが、用途の異なる完成作品5点で目的・ターゲットを踏まえた情報設計力を示せる',
+    deliverableEvidence: 'AI画像ポートフォリオ5作品',
+    paidExperience: 'AI画像作成サポート案件の契約成立（2026-07-26時点、納品前）',
+    selfProducedEvidence: 'AI画像5作品',
+    toolsUsed: ['Canva'],
   },
   {
     id: 'whitepaper_service',
+    tier: 'challenge',
     label: 'ホワイトペーパー・サービス紹介資料',
     decisionSource: 'Sales Knowledge 6-9（案件辞典）/ 2-2（成長領域）',
-    patterns: [
-      'ホワイトペーパー', 'サービス紹介資料', 'サービス紹介', '導入事例資料',
-    ],
+    patterns: ['ホワイトペーパー', 'サービス紹介資料', 'サービス紹介', '導入事例資料'],
     requiredCapabilities: ['課題整理力', '構成力', '情報整理力'],
-    evidenceCards: ['CARD-07', 'CARD-08'],
-    substituteEvidence: 'BtoB業務改善提案・進捗報告3年、経営層・取引先への資料作成3年、PowerPoint提案資料の作成経験',
-    allowedGap: '直接の受注実績はないが、BtoB提案・改善資料で培った課題整理力・構成力を転用できると具体的に説明できる（Sales Knowledge 6-9「適切な見せ方」）',
+    deliverableEvidence: null, // ホワイトペーパーの完成サンプルはSales Knowledge 8-4で未証明
+    paidExperience: 'BtoB業務改善提案・進捗報告3年、経営層・取引先への資料作成3年（飲食事業）',
+    selfProducedEvidence: null,
+    toolsUsed: ['PowerPoint'],
   },
   {
     id: 'sns_single_image',
+    tier: 'challenge',
     label: 'SNS用画像の単発制作',
     decisionSource: 'Sales Knowledge 6-10（案件辞典）/ 2-3（SNS用画像制作の例外）',
-    patterns: [
-      'SNS用バナー', 'SNSバナー', 'Instagram投稿画像', 'SNS投稿画像', 'SNS画像制作', '広告画像',
-    ],
+    patterns: ['SNS用バナー', 'SNSバナー', 'Instagram投稿画像', 'SNS投稿画像', 'SNS画像制作', '広告画像', 'フィード画像制作', '1投稿分のデザイン'],
     requiredCapabilities: ['相手目線', '構成力', '情報整理力'],
-    evidenceCards: ['CARD-10', 'CARD-13'],
-    substituteEvidence: 'AI画像5作品、商品開発・撮影監修経験、Canva Pro',
-    allowedGap: '運用代行を含まない単発制作に限り、構成・情報設計が重要でターゲット・目的が明確な場合はチャレンジ可能（運用代行の要素があれば非希望領域として対応不可）',
+    deliverableEvidence: 'AI画像5作品',
+    paidExperience: 'AI画像作成サポート案件の契約成立（2026-07-26時点、納品前）',
+    selfProducedEvidence: 'AI画像5作品',
+    toolsUsed: ['Canva'],
+  },
+  {
+    id: 'hospitality_content',
+    tier: 'available',
+    label: '飲食・店舗運営に関する企画・コンテンツ',
+    decisionSource: 'Sales Knowledge 6-8（案件辞典）/ 2-1（主戦場）',
+    // 上記のいずれのタスクカテゴリーにも一致しなかった場合の、飲食テーマ限定フォールバック。
+    // トリガーはDOMAIN_EXPERIENCESと同じ狭い範囲に限定する（過剰適用の原因だったため）。
+    patterns: ['飲食', '食品', 'レシピ', 'カフェ', '店舗運営', '接客', '商品開発', '飲食事業改善'],
+    requiredCapabilities: ['現場理解力', '相手目線', '改善提案力'],
+    deliverableEvidence: '自主制作「飲食事業改善 提案資料」（8ページ）',
+    paidExperience: null, // 飲食テーマそのものでの外部受注実績はまだない
+    selfProducedEvidence: '自主制作「飲食事業改善 提案資料」（8ページ）',
+    toolsUsed: null,
   },
 ];
 
 // ===== 対応不可業務・非希望領域（Sales Knowledge 2-3 + 5-4 使用禁止） =====
 // 「詐欺・勧誘・稼働条件・性別地域限定・資格必須・指定ツール必須」等の安全性/必須条件系は
 // evaluator.js側の既存ゲート（config.jsのRISK_PATTERNS等）で判定するためここには含めない。
-// ここに含めるのは、Sales Knowledgeが明示的に「対象外」「使用禁止」と定めた業務領域のみ。
+// ここに含めるのは、Sales Knowledgeが明示的に「対象外」「使用禁止」と定めた業務領域、
+// および対応可能・チャレンジ可能業務のいずれにも記載のない業務（動画編集）のみ。
 const EXCLUDED_AREAS = [
+  {
+    id: 'video_editing',
+    label: '動画編集（動画シナリオ・台本作成等の文章タスクを除く）',
+    decisionSource: 'Sales Knowledge 2-1/2-2（対応可能業務・チャレンジ可能業務のいずれにも動画編集の記載なし）',
+    // 「動画」という語だけでは判定せず、編集作業を明示する語のみを対象にする。
+    // 動画シナリオ作成・台本作成等はTASK_CATEGORIES（seo_article）側で別途ライティングとして判定する。
+    patterns: ['動画編集', 'YouTube編集', 'テロップ入れ', 'カット編集', 'Premiere Pro', 'CapCut'],
+  },
   {
     id: 'large_system_dev',
     label: '専門的・大規模なシステム開発',
@@ -176,84 +231,25 @@ const EXCLUDED_AREAS = [
 ];
 
 // ===== 能力辞典（Sales Knowledge 4章） =====
-// 各能力について「代替証明として使える案件」「証明不足になる案件」を保持する。
+// タスクカテゴリーのいずれにも一致しない場合の、能力レベルでの緩やかな一致判定に使う。
 const CAPABILITIES = {
-  課題発見力: {
-    evidenceCards: ['CARD-01', 'CARD-02', 'CARD-06', 'CARD-07'],
-    substituteFor: '他業界の業務改善、提案資料',
-    insufficientFor: '高度な専門診断・監査が必須の案件',
-  },
-  課題整理力: {
-    evidenceCards: ['CARD-02', 'CARD-07', 'CARD-08', 'CARD-11'],
-    substituteFor: '他業界の提案資料、営業資料、AI活用整理',
-    insufficientFor: '専門資格・高度な技術判断が中核の案件',
-  },
-  情報整理力: {
-    evidenceCards: ['CARD-04', 'CARD-08', 'CARD-11', 'CARD-12', 'CARD-13', 'CARD-14'],
-    substituteFor: 'マニュアル、ホワイトペーパー、他業界の資料',
-    insufficientFor: '高度な専門知識の正確性自体が中核の案件',
-  },
-  業務改善力: {
-    evidenceCards: ['CARD-01', 'CARD-02', 'CARD-03', 'CARD-07', 'CARD-11'],
-    substituteFor: '他業界の小規模業務改善、マニュアル、AI活用整理',
-    insufficientFor: '大規模組織改革、専門システム開発を伴う案件',
-  },
-  改善提案力: {
-    evidenceCards: ['CARD-02', 'CARD-07', 'CARD-08'],
-    substituteFor: '他業界の営業資料、BtoBライティング',
-    insufficientFor: '成果保証や高度な業界専門性が必須の提案',
-  },
-  数値管理力: {
-    evidenceCards: ['CARD-01', 'CARD-02', 'CARD-04', 'CARD-07'],
-    substituteFor: '他業界のレポート・リサーチ整理',
-    insufficientFor: '会計・財務・税務の専門判断、大規模データ分析',
-  },
-  人材育成力: {
-    evidenceCards: ['CARD-01', 'CARD-05'],
-    substituteFor: '他業界のマニュアル、研修資料、教育コンテンツ',
-    insufficientFor: '専門資格教育や登壇実績が必須の研修',
-  },
-  相手目線: {
-    evidenceCards: ['CARD-05', 'CARD-06', 'CARD-07', 'CARD-08', 'CARD-10', 'CARD-12', 'CARD-13'],
-    substituteFor: 'ライティング、Canva、サービス紹介',
-    insufficientFor: '特定専門職の深い顧客理解が必須の案件',
-  },
-  構成力: {
-    evidenceCards: ['CARD-05', 'CARD-07', 'CARD-08', 'CARD-12', 'CARD-13'],
-    substituteFor: 'ホワイトペーパー、サービス紹介資料',
-    insufficientFor: '高度な専門知識や大規模実績が必須の制作',
-  },
-  仕組み化力: {
-    evidenceCards: ['CARD-03', 'CARD-05', 'CARD-11'],
-    substituteFor: '他業界の小規模マニュアル、AI活用整理',
-    insufficientFor: '大規模システム開発、全社基幹業務の設計',
-  },
-  現場理解力: {
-    evidenceCards: ['CARD-01', 'CARD-02', 'CARD-03', 'CARD-05', 'CARD-10'],
-    substituteFor: '他業界の現場業務改善',
-    insufficientFor: '未経験業界の専門実務経験が必須の案件',
-  },
-  AI活用力: {
-    evidenceCards: ['CARD-11', 'CARD-12', 'CARD-13'],
-    substituteFor: '小規模なAI活用整理、業務フロー改善',
-    insufficientFor: '大規模AIシステム開発、企業導入実績が必須の案件',
-  },
-  継続運用力: {
-    evidenceCards: ['CARD-01', 'CARD-04', 'CARD-05', 'CARD-11'],
-    substituteFor: '他業界のマニュアル、運用設計',
-    insufficientFor: '大規模組織・システムの保守運用',
-  },
-  品質管理力: {
-    evidenceCards: ['CARD-04', 'CARD-10', 'CARD-12', 'CARD-13', 'CARD-14'],
-    substituteFor: 'マニュアル、サービス紹介資料',
-    insufficientFor: '法務・医療・会計など専門監修が必須の品質保証',
-  },
+  課題発見力: { substituteFor: '他業界の業務改善、提案資料', insufficientFor: '高度な専門診断・監査が必須の案件' },
+  課題整理力: { substituteFor: '他業界の提案資料、営業資料、AI活用整理', insufficientFor: '専門資格・高度な技術判断が中核の案件' },
+  情報整理力: { substituteFor: 'マニュアル、ホワイトペーパー、他業界の資料', insufficientFor: '高度な専門知識の正確性自体が中核の案件' },
+  業務改善力: { substituteFor: '他業界の小規模業務改善、マニュアル、AI活用整理', insufficientFor: '大規模組織改革、専門システム開発を伴う案件' },
+  改善提案力: { substituteFor: '他業界の営業資料、BtoBライティング', insufficientFor: '成果保証や高度な業界専門性が必須の提案' },
+  数値管理力: { substituteFor: '他業界のレポート・リサーチ整理', insufficientFor: '会計・財務・税務の専門判断、大規模データ分析' },
+  人材育成力: { substituteFor: '他業界のマニュアル、研修資料、教育コンテンツ', insufficientFor: '専門資格教育や登壇実績が必須の研修' },
+  相手目線: { substituteFor: 'ライティング、Canva、サービス紹介', insufficientFor: '特定専門職の深い顧客理解が必須の案件' },
+  構成力: { substituteFor: 'ホワイトペーパー、サービス紹介資料', insufficientFor: '高度な専門知識や大規模実績が必須の制作' },
+  仕組み化力: { substituteFor: '他業界の小規模マニュアル、AI活用整理', insufficientFor: '大規模システム開発、全社基幹業務の設計' },
+  現場理解力: { substituteFor: '他業界の現場業務改善', insufficientFor: '未経験業界の専門実務経験が必須の案件' },
+  AI活用力: { substituteFor: '小規模なAI活用整理、業務フロー改善', insufficientFor: '大規模AIシステム開発、企業導入実績が必須の案件' },
+  継続運用力: { substituteFor: '他業界のマニュアル、運用設計', insufficientFor: '大規模組織・システムの保守運用' },
+  品質管理力: { substituteFor: 'マニュアル、サービス紹介資料', insufficientFor: '法務・医療・会計など専門監修が必須の品質保証' },
 };
 
-// ===== 転用可能な能力（能力辞典のキー一覧） =====
 const TRANSFERABLE_SKILLS = Object.keys(CAPABILITIES);
-
-// ===== 非希望領域（EXCLUDED_AREASのラベル一覧） =====
 const NON_PREFERRED_AREAS = EXCLUDED_AREAS.map(a => a.label);
 
 // ===== 使用可能な経験・実績（Sales Knowledge 5-1 使用可能のみ。要確認は含めない） =====
@@ -319,8 +315,8 @@ module.exports = {
     common: 'yuki_common_knowledge.md (最終更新 2026-07-11)',
   },
   tools: { available: AVAILABLE_TOOLS },
-  availableCategories: AVAILABLE_CATEGORIES,
-  challengeCategories: CHALLENGE_CATEGORIES,
+  domainExperiences: DOMAIN_EXPERIENCES,
+  taskCategories: TASK_CATEGORIES,
   excludedAreas: EXCLUDED_AREAS,
   capabilities: CAPABILITIES,
   transferableSkills: TRANSFERABLE_SKILLS,
