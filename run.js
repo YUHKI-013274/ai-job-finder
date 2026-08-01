@@ -67,10 +67,10 @@ async function main() {
 
   console.log(`\nフェーズ: ${CURRENT_PHASE_KEY}（${CURRENT_PHASE.label}）`);
   console.log('案件を評価・分類中...');
-  const { candidates, growthCandidates, holds, excluded, allEvaluated } = classifyJobs(rawJobs, appliedMap, seenMap, rejectedMap);
+  const { nowApply, highValueChallenge, normalChallenge, holds, excluded, allEvaluated } = classifyJobs(rawJobs, appliedMap, seenMap, rejectedMap);
 
-  if (candidates.length < 5) {
-    console.log(`ℹ️  今日の応募候補は${candidates.length}件です（S・Aランクのみ。無理な枠埋めはしていません）`);
+  if (nowApply.length < 5) {
+    console.log(`ℹ️  今日の「今すぐ応募」案件は${nowApply.length}件です（無理な枠埋めはしていません）`);
   }
 
   // 3. 既出リストを更新（今回取得した全案件を記録し、翌回以降は重複表示しない）
@@ -88,7 +88,7 @@ async function main() {
     return acc;
   }, {});
 
-  console.log(`応募候補 ${candidates.length}件 / 成長候補 ${growthCandidates.length}件 / 保留 ${holds.length}件 / 除外 ${excluded.length}件`);
+  console.log(`今すぐ応募 ${nowApply.length}件 / 高単価チャレンジ ${highValueChallenge.length}件 / 通常チャレンジ ${normalChallenge.length}件 / 保留 ${holds.length}件 / 除外 ${excluded.length}件`);
   console.log('除外内訳:', JSON.stringify(excludeReasonCounts));
   console.log(`(新規に既出登録: ${newlySeenCount}件)`);
 
@@ -96,7 +96,7 @@ async function main() {
   // 注意1：job.matchedKeyword はevaluator.js側で表示用に「実際に一致した業務内容の代表語」へ
   // 上書きされるため、検索キーワード別の内訳には使えない。scraper.jsが保持する
   // matchedKeywords／matchedCategories（上書きされない配列）を使って集計する。
-  // 注意2：candidates/growthCandidates/holdsは表示件数の上限で切り詰め済みのため、
+  // 注意2：nowApply/highValueChallenge/normalChallenge/holdsは表示件数の上限で切り詰め済みのため、
   // 集計には切り詰め前の全件を保持するallEvaluatedを使う（表示は従来通りcapped版を使用）。
   const rankByKeyword = {};
   for (const job of allEvaluated) {
@@ -124,12 +124,12 @@ async function main() {
   }
 
   // 4. HTML / Markdown 出力
-  const htmlContent = renderHTML({ candidates, growthCandidates, holds, excluded }, now, PAGE_URL);
+  const htmlContent = renderHTML({ nowApply, highValueChallenge, normalChallenge, holds, excluded }, now, PAGE_URL);
   fs.writeFileSync(path.join(outputDir, `jobs_${dateLabel}.html`), htmlContent, 'utf8');
   fs.writeFileSync(path.join(outputDir, 'index.html'), htmlContent, 'utf8');
   fs.writeFileSync(path.join(outputDir, 'latest.html'), htmlContent, 'utf8');
 
-  const mdContent = renderMarkdown({ candidates, growthCandidates, holds, excluded }, now);
+  const mdContent = renderMarkdown({ nowApply, highValueChallenge, normalChallenge, holds, excluded }, now);
   fs.writeFileSync(path.join(outputDir, `jobs_${dateLabel}.md`), mdContent, 'utf8');
   fs.writeFileSync(path.join(outputDir, 'latest.md'), mdContent, 'utf8');
 
@@ -150,8 +150,8 @@ async function main() {
   );
 
   // 5. 結果サマリー
-  console.log('\n=== 応募候補 ===');
-  candidates.forEach((job, i) => {
+  console.log('\n=== 今すぐ応募 ===');
+  nowApply.forEach((job, i) => {
     const mark = i < 3 ? '🎯' : '  ';
     console.log(`${mark} ${i + 1}. [${job.rank}] ${job.title.substring(0, 45)}...`);
     console.log(`      ${job.url}`);
@@ -162,12 +162,10 @@ async function main() {
     console.log('\nGitHub Pages へ push 中...');
     try {
       const repoDir = __dirname;
-      const sCount = candidates.filter(j => j.rank === 'S').length;
-      const aCount = candidates.filter(j => j.rank === 'A').length;
       execSync('git add output/ data/', { cwd: repoDir, stdio: 'inherit' });
 
       // gh-pages ブランチへ直接コミット&プッシュ
-      const msg = `📋 案件更新 ${dateLabel} (候補:${candidates.length} 成長候補:${growthCandidates.length} 保留:${holds.length} 除外:${excluded.length})`;
+      const msg = `📋 案件更新 ${dateLabel} (今すぐ応募:${nowApply.length} 高単価チャレンジ:${highValueChallenge.length} 通常チャレンジ:${normalChallenge.length} 保留:${holds.length} 除外:${excluded.length})`;
       execSync(`git commit -m "${msg}" --allow-empty`, { cwd: repoDir, stdio: 'inherit' });
       execSync('git push origin master', { cwd: repoDir, stdio: 'inherit' });
       console.log('✅ masterへpush完了');
@@ -184,7 +182,7 @@ async function main() {
   const gmailPass = process.env.GMAIL_APP_PASSWORD || '';
   if (gmailUser && gmailPass) {
     console.log('\nGmail通知を送信中...');
-    await sendGmailNotification({ jobs: candidates, growthCount: growthCandidates.length, pageUrl: PAGE_URL, date: now });
+    await sendGmailNotification({ jobs: nowApply, growthCount: highValueChallenge.length + normalChallenge.length, pageUrl: PAGE_URL, date: now });
   } else {
     console.log('\n💡 Gmail通知をスキップ（環境変数未設定）');
     console.log('   .env ファイルに GMAIL_USER と GMAIL_APP_PASSWORD を設定してください');

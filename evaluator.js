@@ -479,6 +479,32 @@ function evaluateJob(job) {
 
   const genre = capability.matchedCategory ? capability.matchedCategory.label : categoryInfo.label;
 
+  // 表示区分（今すぐ応募／高単価チャレンジ／通常チャレンジ）。
+  // capabilityStatus・evidenceType（Knowledge判定）は変更せず、既に計算済みの単価・継続性・
+  // 長期資産性スコアを組み合わせて「高単価チャレンジ」に該当するかだけを追加で判定する
+  // （新しい検索キーワード・カテゴリ・ランク条件は追加しない。既存スコアの組み合わせのみ）。
+  const strongEvidence = evidenceStrength === '直接証明' || evidenceStrength === '強い代替証明';
+  const highValueSignals = [];
+  if (priceScore >= 4 && priceYen !== null) highValueSignals.push({ type: 'price', text: `報酬${priceYen.toLocaleString()}円で単価が高い` });
+  if (continuityMatches.length > 0) highValueSignals.push({ type: 'continuity', text: '継続案件のシグナルがあり、次の案件・継続契約につながる可能性がある' });
+  if (longTermAssetScore >= 4) highValueSignals.push({ type: 'asset', text: '長期的な営業資産（実績・ポートフォリオ）として残る度合いが高い' });
+
+  let displayTier;
+  if (capability.capabilityStatus === '応募可能' && strongEvidence) {
+    displayTier = priceUnverified ? 'now_pending' : 'now';
+  } else if (capability.capabilityStatus === 'チャレンジ可能' && strongEvidence && highValueSignals.length > 0) {
+    displayTier = 'high_value_challenge';
+  } else if (capability.capabilityStatus === 'チャレンジ可能' || capability.capabilityStatus === '応募可能') {
+    displayTier = 'normal_challenge';
+  } else {
+    displayTier = 'hold';
+  }
+
+  // 応募前に確認すべき条件（案件ごとに該当するものだけ）
+  const confirmBeforeApply = [];
+  if (priceUnverified) confirmBeforeApply.push('報酬額（案件詳細で確認）');
+  if (industryMismatchMatches.length > 0) confirmBeforeApply.push(`業界の一致度（${industryMismatchMatches[0]}）`);
+
   // 高評価の理由（★の数で重要度が分かる形式で可視化）
   const matchedSignals = buildWeightedSignals({
     categoryInfo, portfolioActivationScore, aptitudeScore, beginnerMatches, continuityMatches,
@@ -519,6 +545,9 @@ function evaluateJob(job) {
     evidenceType: capability.evidenceType,
     missingEvidence: capability.missingEvidence,
     decisionSource: capability.decisionSource,
+    displayTier,
+    highValueSignals,
+    confirmBeforeApply,
     totalScore,
     rank,
     priceUnverified,
@@ -697,9 +726,19 @@ function byRankThenScore(a, b) {
 // 応募数を埋めるための枠埋め（保留からの昇格）は廃止した。応募候補は必ずS/Aランクかつ
 // 単価確認済みの案件のみとし、5件に満たない日があっても低品質案件で埋めない。
 // Bランクは「今後の営業資産づくりにつながる成長候補」として別バケットに分離する。
+// 案件一覧を5区分（今すぐ応募／高単価チャレンジ／通常チャレンジ／保留／除外）に振り分ける。
+// 表示順もこの順序を優先度として使う（renderer.js側のタブ順もこれに合わせる）。
+//
+// - 今すぐ応募（nowApply）：capabilityStatus=応募可能・直接証明または強い代替証明。
+//   単価未確認の場合は同じ枠内で「条件確認後に応募」として区別する（job.displayTier==='now_pending'）。
+// - 高単価チャレンジ（highValueChallenge）：capabilityStatus=チャレンジ可能・強い代替証明以上・かつ
+//   単価/継続性/長期資産性のいずれかが高い案件（既存スコアの組み合わせのみで判定。新しい条件は追加しない）。
+// - 通常チャレンジ（normalChallenge）：上記以外のチャレンジ可能案件、および応募可能だが経済条件が弱い案件。
+// - 保留（holds）：単価不明等の情報不足で、今すぐ応募にも各チャレンジ枠にも分類できない案件のみ。
 function classifyJobs(jobs, appliedMap = {}, seenMap = {}, rejectedMap = {}) {
-  const candidates = [];
-  const growthCandidates = [];
+  const nowApply = [];
+  const highValueChallenge = [];
+  const normalChallenge = [];
   const holds = [];
   const excluded = [];
 
@@ -728,29 +767,35 @@ function classifyJobs(jobs, appliedMap = {}, seenMap = {}, rejectedMap = {}) {
       continue;
     }
 
-    if (job.rank === 'B') {
-      // Bランク（チャレンジ可能、または応募可能だが経済条件が弱い案件）は常に成長候補へ。
-      // 対応不可はevaluateJob側で既に除外済みのため、ここでの追加ゲートは行わない
-      // （固定キーワード不一致だけを理由にBランクを保留へ落とさない）。
-      growthCandidates.push(job);
-    } else if (!job.priceUnverified && (job.rank === 'S' || job.rank === 'A')) {
-      candidates.push(job);
-    } else {
-      // 単価未確認のS/Aのみ保留（＝情報不足で判断できない案件に限定）
-      holds.push(job);
+    switch (job.displayTier) {
+      case 'now':
+      case 'now_pending':
+        nowApply.push(job);
+        break;
+      case 'high_value_challenge':
+        highValueChallenge.push(job);
+        break;
+      case 'normal_challenge':
+        normalChallenge.push(job);
+        break;
+      default:
+        // 情報不足（単価不明等）で上記いずれにも分類できない案件のみ保留に回す
+        holds.push(job);
     }
   }
 
-  candidates.sort(byRankThenScore);
-  growthCandidates.sort(byRankThenScore);
+  nowApply.sort(byRankThenScore);
+  highValueChallenge.sort(byRankThenScore);
+  normalChallenge.sort(byRankThenScore);
   holds.sort(byRankThenScore);
 
   // 表示件数の上限で切り詰める前の全評価済み案件（キーワード別集計等の統計用）
-  const allEvaluated = [...candidates, ...growthCandidates, ...holds, ...excluded];
+  const allEvaluated = [...nowApply, ...highValueChallenge, ...normalChallenge, ...holds, ...excluded];
 
   return {
-    candidates: candidates.slice(0, MAX_JOBS),
-    growthCandidates: growthCandidates.slice(0, MAX_GROWTH),
+    nowApply: nowApply.slice(0, MAX_JOBS),
+    highValueChallenge: highValueChallenge.slice(0, MAX_GROWTH),
+    normalChallenge: normalChallenge.slice(0, MAX_GROWTH),
     holds: holds.slice(0, MAX_HOLDS),
     excluded,
     allEvaluated,

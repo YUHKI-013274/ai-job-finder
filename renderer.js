@@ -28,6 +28,13 @@ function getCapabilityColor(status) {
   return { '応募可能': '#27ae60', 'チャレンジ可能': '#2980b9' }[status] || '#7f8c8d';
 }
 
+function getTierBadge(displayTier) {
+  if (displayTier === 'now_pending') return { text: '⏳ 条件確認後に応募', bg: '#e0e0e0', color: '#555' };
+  if (displayTier === 'high_value_challenge') return { text: '🔥 高単価チャレンジ', bg: '#d35400', color: '#fff' };
+  if (displayTier === 'normal_challenge') return { text: '🌱 通常チャレンジ', bg: '#27ae60', color: '#fff' };
+  return null;
+}
+
 function escapeHtml(str) {
   if (!str) return '';
   return String(str)
@@ -40,6 +47,7 @@ function escapeHtml(str) {
 function renderJobCard(job, i, isTop3 = false) {
   const rankColor = getRankColor(job.rank);
   const rankBg = getRankBg(job.rank);
+  const tierBadge = getTierBadge(job.displayTier);
 
   return `
     <div class="job-card rank-${job.rank.toLowerCase()}${isTop3 ? ' top3-card' : ''}"
@@ -50,6 +58,7 @@ function renderJobCard(job, i, isTop3 = false) {
         <span class="job-number" style="background:${rankColor}">${i + 1}</span>
         <span class="rank-badge" style="background:${rankColor}">${job.rank}ランク</span>
         ${isTop3 ? '<span class="top3-badge">🎯 今日応募すべき案件</span>' : ''}
+        ${tierBadge ? `<span class="tier-badge" style="background:${tierBadge.bg}; color:${tierBadge.color}">${tierBadge.text}</span>` : ''}
         ${job.priceUnverified ? '<span class="promoted-badge">💰 金額確認待ち</span>' : ''}
         ${job.capabilityStatus ? `<span class="capability-badge" style="background:${getCapabilityColor(job.capabilityStatus)}">${escapeHtml(job.capabilityStatus)}</span>` : ''}
         <span class="genre-tag">${escapeHtml(job.genre)}</span>
@@ -105,6 +114,18 @@ function renderJobCard(job, i, isTop3 = false) {
         ${job.matchedCapabilities && job.matchedCapabilities.length > 0 ? `<div class="detail-text" style="margin-top:2px">使用できる能力: ${job.matchedCapabilities.map(escapeHtml).join('・')}</div>` : ''}
         ${job.decisionSource ? `<div class="decision-source">判定根拠: ${escapeHtml(job.decisionSource)}</div>` : ''}` : ''}
       </div>
+
+      ${(job.displayTier === 'high_value_challenge' && job.highValueSignals && job.highValueSignals.length > 0) ? `
+      <div class="detail-section highvalue">
+        <div class="detail-label">🔥 高単価チャレンジと判断した理由</div>
+        <div class="detail-text">${job.highValueSignals.map(s => escapeHtml(s.text)).join('、')}</div>
+      </div>` : ''}
+
+      ${(job.confirmBeforeApply && job.confirmBeforeApply.length > 0) ? `
+      <div class="detail-section confirm">
+        <div class="detail-label">☑️ 応募前に確認すべき条件</div>
+        <div class="detail-text">${job.confirmBeforeApply.map(escapeHtml).join('、')}</div>
+      </div>` : ''}
 
       <div class="detail-section strength">
         <div class="detail-label">💡 提案文の軸</div>
@@ -182,21 +203,24 @@ function renderRankSections(jobs, startIndex) {
   return html;
 }
 
-function renderHTML({ candidates, growthCandidates = [], holds, excluded }, date, pageUrl) {
+function renderHTML({ nowApply, highValueChallenge = [], normalChallenge = [], holds, excluded }, date, pageUrl) {
   const dateStr = date.toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo', year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
-  const sJobs = candidates.filter(j => j.rank === 'S');
-  const aJobs = candidates.filter(j => j.rank === 'A');
+  const sJobs = nowApply.filter(j => j.rank === 'S');
+  const aJobs = nowApply.filter(j => j.rank === 'A');
+  const pendingJobs = nowApply.filter(j => j.displayTier === 'now_pending');
 
-  const todayTop = candidates.slice(0, 5);
-  const rest = candidates.slice(5);
+  const todayTop = nowApply.slice(0, 5);
+  const rest = nowApply.slice(5);
 
   const todayTopCards = todayTop.map((job, i) => renderJobCard(job, i, true)).join('\n');
-  const candidateRestCards = renderRankSections(rest, todayTop.length);
+  const nowRestCards = renderRankSections(rest, todayTop.length);
   const holdCards = renderRankSections(holds, 0);
-  const growthCards = renderRankSections(growthCandidates, 0);
+  const highValueCards = renderRankSections(highValueChallenge, 0);
+  const normalChallengeCards = renderRankSections(normalChallenge, 0);
 
-  // 成長候補（Bランク）に共通する不足資産を集計（重複をまとめて一覧化）
-  const missingAssetCounts = growthCandidates.reduce((acc, j) => {
+  // チャレンジ枠（高単価・通常）に共通する不足資産を集計（重複をまとめて一覧化）
+  const challengeJobs = [...highValueChallenge, ...normalChallenge];
+  const missingAssetCounts = challengeJobs.reduce((acc, j) => {
     (j.missingAssets || []).forEach(m => { acc[m] = (acc[m] || 0) + 1; });
     return acc;
   }, {});
@@ -404,6 +428,12 @@ function renderHTML({ candidates, growthCandidates = [], holds, excluded }, date
       font-size: 0.72rem;
       font-weight: 700;
     }
+    .tier-badge {
+      padding: 2px 8px;
+      border-radius: 20px;
+      font-size: 0.72rem;
+      font-weight: 700;
+    }
     .genre-tag {
       background: #ecf0f1;
       color: #555;
@@ -472,6 +502,8 @@ function renderHTML({ candidates, growthCandidates = [], holds, excluded }, date
     .detail-section.caution { background: #fff8f0; }
     .detail-section.strength { background: #f0f0ff; }
     .detail-section.missing { background: #fdf0f0; }
+    .detail-section.highvalue { background: #fdf1e6; border: 1px solid #f0c896; }
+    .detail-section.confirm { background: #eef6fb; }
     .detail-label { font-weight: 700; font-size: 0.73rem; margin-bottom: 3px; color: #555; }
     .detail-text { line-height: 1.5; color: #333; }
     .signal-chips { display: flex; flex-wrap: wrap; gap: 4px; }
@@ -772,7 +804,8 @@ function renderHTML({ candidates, growthCandidates = [], holds, excluded }, date
     <div class="header-stats">
       <span class="stat-chip s">🔴 今日の最優先(S) ${sJobs.length}件</span>
       <span class="stat-chip a">🟠 優先応募(A) ${aJobs.length}件</span>
-      <span class="stat-chip">🌱 成長候補(B) ${growthCandidates.length}件</span>
+      <span class="stat-chip" style="background:rgba(211,84,0,0.55)">🔥 高単価チャレンジ ${highValueChallenge.length}件</span>
+      <span class="stat-chip">🌱 通常チャレンジ ${normalChallenge.length}件</span>
       <span class="stat-chip">🚫 見送り ${gateRejectedCount}件</span>
       <span class="stat-chip">🧩 不足資産 ${missingAssetList.length}件</span>
       <span class="stat-chip">保留 ${holds.length}件</span>
@@ -782,15 +815,16 @@ function renderHTML({ candidates, growthCandidates = [], holds, excluded }, date
 
   <!-- タブバー -->
   <div class="tab-bar">
-    <div class="tab active" onclick="switchTab('candidates', this)">📋 応募候補</div>
-    <div class="tab" onclick="switchTab('growth', this)">🌱 成長候補</div>
+    <div class="tab active" onclick="switchTab('now', this)">📋 今すぐ応募</div>
+    <div class="tab" onclick="switchTab('highvalue', this)">🔥 高単価チャレンジ</div>
+    <div class="tab" onclick="switchTab('normal', this)">🌱 通常チャレンジ</div>
     <div class="tab" onclick="switchTab('holds', this)">⏸ 保留</div>
     <div class="tab" onclick="switchTab('excluded', this)">🚫 除外</div>
     <div class="tab" onclick="switchTab('saved', this)">🔖 候補リスト</div>
   </div>
 
-  <!-- 応募候補タブ -->
-  <div id="tab-candidates" class="tab-content active">
+  <!-- 今すぐ応募タブ -->
+  <div id="tab-now" class="tab-content active">
     <div class="update-info">最終更新: ${date.toLocaleString('ja-JP')}</div>
     <div id="applied-filter-bar">
       <input type="checkbox" id="hide-applied" onchange="applyAppliedFilter()" checked>
@@ -799,17 +833,24 @@ function renderHTML({ candidates, growthCandidates = [], holds, excluded }, date
 
     <!-- TODAY TOP（今日応募すべき案件） -->
     <div class="top3-section">
-      <div class="top3-header">🎯 今日応募すべき案件（S・A、最大5件。無理な枠埋めはしません）</div>
-      ${todayTopCards || '<div class="saved-empty" style="background:white">本日はS・Aランクの応募候補がありません。無理に低品質案件では埋めていません</div>'}
+      <div class="top3-header">🎯 今日応募すべき案件（capabilityStatus=応募可能・直接証明/強い代替証明、最大5件。無理な枠埋めはしません）</div>
+      ${todayTopCards || '<div class="saved-empty" style="background:white">本日は「今すぐ応募」の候補がありません。無理に低品質案件では埋めていません</div>'}
     </div>
+    ${pendingJobs.length > 0 ? `<div class="update-info">⏳ 条件確認後に応募（報酬額など要確認、${pendingJobs.length}件）はカード内バッジで区別されています</div>` : ''}
 
-    <!-- 残り応募候補 -->
-    ${candidateRestCards}
+    <!-- 残り今すぐ応募候補 -->
+    ${nowRestCards}
   </div>
 
-  <!-- 成長候補タブ -->
-  <div id="tab-growth" class="tab-content">
-    <div class="update-info">Bランク：不足している証拠・実績を補えば今後S/Aを狙える案件（今日は応募必須ではない）</div>
+  <!-- 高単価チャレンジタブ -->
+  <div id="tab-highvalue" class="tab-content">
+    <div class="update-info">🔥 直接実績は不足していても、強い代替証明があり、単価・継続性・長期資産性のいずれかが高い案件。実績獲得目的で積極的にチャレンジ応募する枠</div>
+    ${highValueCards || '<div class="saved-empty">高単価チャレンジ候補はありません</div>'}
+  </div>
+
+  <!-- 通常チャレンジタブ -->
+  <div id="tab-normal" class="tab-content">
+    <div class="update-info">🌱 実績獲得目的のチャレンジ候補（高単価チャレンジ基準には届かないが、応募理由は作れる案件）</div>
     ${missingAssetList.length > 0 ? `
     <div class="detail-section missing" style="margin-bottom:12px">
       <div class="detail-label">🧩 今回見つかった営業資産の不足（重複をまとめて集計）</div>
@@ -817,12 +858,12 @@ function renderHTML({ candidates, growthCandidates = [], holds, excluded }, date
         ${missingAssetList.map(([name, count]) => `${escapeHtml(name)}（${count}件）`).join('<br>')}
       </div>
     </div>` : ''}
-    ${growthCards || '<div class="saved-empty">成長候補はありません</div>'}
+    ${normalChallengeCards || '<div class="saved-empty">通常チャレンジ候補はありません</div>'}
   </div>
 
   <!-- 保留タブ -->
   <div id="tab-holds" class="tab-content">
-    <div class="update-info">応募候補に届かなかった案件（今後の参考用）</div>
+    <div class="update-info">単価不明等、情報不足で判断できない案件のみ（今後の参考用）</div>
     ${holdCards || '<div class="saved-empty">保留案件はありません</div>'}
   </div>
 
@@ -856,7 +897,7 @@ function renderHTML({ candidates, growthCandidates = [], holds, excluded }, date
 
   <script>
     // ===== タブ切り替え =====
-    const TAB_NAMES = ['candidates', 'growth', 'holds', 'excluded', 'saved'];
+    const TAB_NAMES = ['now', 'highvalue', 'normal', 'holds', 'excluded', 'saved'];
     function switchTab(name, el) {
       document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
       document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -1168,26 +1209,27 @@ function renderHTML({ candidates, growthCandidates = [], holds, excluded }, date
 </html>`;
 }
 
-function renderMarkdown({ candidates, growthCandidates = [], holds, excluded }, date) {
+function renderMarkdown({ nowApply, highValueChallenge = [], normalChallenge = [], holds, excluded }, date) {
   const dateStr = date.toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo' });
-  const todayTop = candidates.slice(0, 5);
+  const todayTop = nowApply.slice(0, 5);
   const gateRejectedCount = excluded.filter(j => !['応募済み', '見送り', '既出'].includes(j.excludeReason)).length;
-  const missingAssetCounts = growthCandidates.reduce((acc, j) => {
+  const challengeJobs = [...highValueChallenge, ...normalChallenge];
+  const missingAssetCounts = challengeJobs.reduce((acc, j) => {
     (j.missingAssets || []).forEach(m => { acc[m] = (acc[m] || 0) + 1; });
     return acc;
   }, {});
   const missingAssetList = Object.entries(missingAssetCounts).sort((a, b) => b[1] - a[1]);
 
   let md = `# 今日の応募候補\n\n**日付**: ${dateStr}\n\n`;
-  md += `今日の最優先応募(S) ${candidates.filter(j => j.rank === 'S').length}件 / `;
-  md += `優先応募(A) ${candidates.filter(j => j.rank === 'A').length}件 / `;
-  md += `成長候補(B) ${growthCandidates.length}件 / 見送り ${gateRejectedCount}件 / 不足資産 ${missingAssetList.length}件\n\n`;
+  md += `今日の最優先応募(S) ${nowApply.filter(j => j.rank === 'S').length}件 / `;
+  md += `優先応募(A) ${nowApply.filter(j => j.rank === 'A').length}件 / `;
+  md += `🔥高単価チャレンジ ${highValueChallenge.length}件 / 🌱通常チャレンジ ${normalChallenge.length}件 / 見送り ${gateRejectedCount}件 / 不足資産 ${missingAssetList.length}件\n\n`;
   md += `保留 ${holds.length}件 / 除外 ${excluded.length}件\n\n`;
 
-  md += `## 🎯 今日応募すべき案件（S・A、最大5件。無理な枠埋めはしません）\n\n`;
-  if (todayTop.length === 0) md += `本日はS・Aランクの応募候補がありません。\n\n`;
+  md += `## 🎯 今日応募すべき案件（今すぐ応募、最大5件。無理な枠埋めはしません）\n\n`;
+  if (todayTop.length === 0) md += `本日は「今すぐ応募」の候補がありません。\n\n`;
   todayTop.forEach((job, i) => {
-    md += `### ${i + 1}. ${job.title}\n\n`;
+    md += `### ${i + 1}. ${job.title}${job.displayTier === 'now_pending' ? '（⏳条件確認後に応募）' : ''}\n\n`;
     md += `- URL: ${job.url}\n`;
     md += `- 報酬: ${job.price || '要確認'}\n`;
     md += `- ランク: **${job.rank}**（証拠の強さ: ${job.evidenceStrength}）\n`;
@@ -1197,19 +1239,25 @@ function renderMarkdown({ candidates, growthCandidates = [], holds, excluded }, 
     md += `---\n\n`;
   });
 
-  md += `## 📋 応募候補（全${candidates.length}件）\n\n`;
-  candidates.forEach((job, i) => {
-    md += `${i + 1}. [${job.rank}] ${job.title}\n   URL: ${job.url}\n   報酬: ${job.price || '要確認'}\n   証拠の強さ: ${job.evidenceStrength}\n   応募理由: ${job.reason}\n\n`;
+  md += `## 📋 今すぐ応募（全${nowApply.length}件）\n\n`;
+  nowApply.forEach((job, i) => {
+    md += `${i + 1}. [${job.rank}]${job.displayTier === 'now_pending' ? '[条件確認後]' : ''} ${job.title}\n   URL: ${job.url}\n   報酬: ${job.price || '要確認'}\n   証拠の強さ: ${job.evidenceStrength}\n   応募理由: ${job.reason}\n\n`;
   });
 
-  md += `## 🌱 成長候補（Bランク・全${growthCandidates.length}件）\n\n`;
-  md += `不足している証拠・実績を補えば今後S/Aを狙える案件。\n\n`;
+  md += `## 🔥 高単価チャレンジ（全${highValueChallenge.length}件）\n\n`;
+  md += `直接実績は不足していても、強い代替証明があり、単価・継続性・長期資産性のいずれかが高い案件。\n\n`;
+  highValueChallenge.forEach((job, i) => {
+    md += `${i + 1}. ${job.title}\n   URL: ${job.url}\n   報酬: ${job.price || '要確認'}\n   高単価と判断した理由: ${(job.highValueSignals || []).map(s => s.text).join('、') || 'なし'}\n   不足資産: ${(job.missingAssets || []).join('、') || 'なし'}\n\n`;
+  });
+
+  md += `## 🌱 通常チャレンジ（全${normalChallenge.length}件）\n\n`;
+  md += `実績獲得目的のチャレンジ候補（高単価チャレンジ基準には届かないが、応募理由は作れる案件）。\n\n`;
   if (missingAssetList.length > 0) {
-    md += `### 今回見つかった営業資産の不足\n\n`;
+    md += `### 今回見つかった営業資産の不足（高単価・通常チャレンジ合算）\n\n`;
     missingAssetList.forEach(([name, count]) => { md += `- ${name}（${count}件）\n`; });
     md += `\n`;
   }
-  growthCandidates.forEach((job, i) => {
+  normalChallenge.forEach((job, i) => {
     md += `${i + 1}. ${job.title}\n   URL: ${job.url}\n   報酬: ${job.price || '要確認'}\n   不足資産: ${(job.missingAssets || []).join('、') || 'なし'}\n\n`;
   });
 

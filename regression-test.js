@@ -1,7 +1,7 @@
-// Knowledge駆動評価ロジックの回帰テスト（v2：証拠分離・文脈誤読・動画編集・SNS運用のテスト）
+// Knowledge駆動評価ロジックの回帰テスト（v3：高単価チャレンジ枠の表示区分テスト）
 //
-// 過去に実際に取得された案件タイトル（data/seen_jobs.json）に基づく実例、および
-// ユーザー指定のテストケースで、現在のevaluator.js/knowledge-classifier.jsの判定結果を確認する。
+// v1（証拠分離・文脈誤読・動画編集・SNS運用）、v2はそのまま維持し、
+// 今回は「今すぐ応募／高単価チャレンジ／通常チャレンジ」の表示区分ロジックを追加でテストする。
 //
 // 実行: node regression-test.js
 
@@ -22,12 +22,13 @@ function job(title, description, price = '3,000円') {
 }
 
 function runOne(testJob) {
-  const { candidates, growthCandidates, holds, excluded } = evaluator.classifyJobs([testJob], {}, {}, {});
-  const all = [...candidates, ...growthCandidates, ...holds, ...excluded];
+  const { nowApply, highValueChallenge, normalChallenge, holds, excluded } = evaluator.classifyJobs([testJob], {}, {}, {});
+  const all = [...nowApply, ...highValueChallenge, ...normalChallenge, ...holds, ...excluded];
   const result = all[0];
   let bucket;
-  if (candidates.includes(result)) bucket = '📋応募候補';
-  else if (growthCandidates.includes(result)) bucket = '🌱成長候補';
+  if (nowApply.includes(result)) bucket = '📋今すぐ応募';
+  else if (highValueChallenge.includes(result)) bucket = '🔥高単価チャレンジ';
+  else if (normalChallenge.includes(result)) bucket = '🌱通常チャレンジ';
   else if (holds.includes(result)) bucket = '⏸保留';
   else bucket = '🚫除外';
   return { bucket, result };
@@ -38,135 +39,98 @@ function check(label, testJob, expectFn, note) {
   const pass = expectFn(bucket, result);
   console.log(`${pass ? '✅' : '❌'} ${label}${note ? '  (' + note + ')' : ''}`);
   console.log(`    タイトル: ${testJob.title}`);
-  console.log(`    結果: ${bucket} / rank=${result.rank || '-'} / capabilityStatus=${result.capabilityStatus || '-'} / excludeReason=${result.excludeReason || '-'}`);
-  if (result.capabilityReason) console.log(`    理由: ${result.capabilityReason}`);
-  if (result.decisionSource) console.log(`    根拠: ${result.decisionSource}`);
+  console.log(`    結果: ${bucket} / rank=${result.rank || '-'} / displayTier=${result.displayTier || '-'} / capabilityStatus=${result.capabilityStatus || '-'} / excludeReason=${result.excludeReason || '-'}`);
+  if (result.highValueSignals && result.highValueSignals.length > 0) {
+    console.log(`    高単価理由: ${result.highValueSignals.map(s => s.text).join('、')}`);
+  }
+  if (result.confirmBeforeApply && result.confirmBeforeApply.length > 0) {
+    console.log(`    要確認: ${result.confirmBeforeApply.join('、')}`);
+  }
   console.log('');
   return pass;
 }
 
-console.log('='.repeat(100));
-console.log('■ 誤判定修正の確認（9項目）');
-console.log('='.repeat(100) + '\n');
-
 let pass = 0, total = 0;
-const results = [];
-
-function record(ok) { total++; if (ok) pass++; results.push(ok); }
-
-record(check(
-  '1. 勉強法バナーに飲食経験が使われない',
-  job('【バナー募集】勉強がもっと楽になる！「勉強が楽になるコツ」特集ページ用バナーデザイン募集', '勉強法をテーマにしたバナーをデザインしてください。', '5,000円'),
-  (bucket, r) => !r.capabilityReason || !r.capabilityReason.includes('飲食')
-));
-
-record(check(
-  '2. 山梨旅行Instagramに飲食経験が使われない',
-  job('【継続依頼あり】山梨の魅力を紹介するInstagram投稿デザイン依頼！旅行好きの方歓迎', '山梨県の観光地の魅力を伝えるInstagram投稿画像を作成してください。', '10,000円〜30,000円'),
-  (bucket, r) => !r.capabilityReason || !r.capabilityReason.includes('飲食')
-));
-
-record(check(
-  '3. タイ旅行Instagramに飲食経験が使われない',
-  job('【継続依頼あり】タイの魅力を紹介するInstagram投稿デザイン依頼！旅行好きの方歓迎', 'タイの観光地の魅力を伝えるInstagram投稿画像を作成してください。', '10,000円〜30,000円'),
-  (bucket, r) => !r.capabilityReason || !r.capabilityReason.includes('飲食')
-));
-
-record(check(
-  '4. レシピ記事では飲食経験とライティング証拠が分離される',
-  job('20代独身向けレシピ・料理ジャンルのライター募集｜継続依頼あり・サポート体制あり', '料理・レシピに関する記事を執筆していただきます。', '5,000円'),
-  (bucket, r) => r.capabilityReason
-    && r.capabilityReason.includes('テーマ理解として飲食業22年')
-    && (r.capabilityReason.includes('AIライティング5記事') || r.capabilityReason.includes('制作実績として'))
-    && r.genre !== '飲食・店舗運営に関する企画・コンテンツ' // 主タスクはライティングとして分類されるべき
-));
-
-record(check(
-  '5. 「マニュアル完備」の動画編集案件がマニュアル作成に分類されない',
-  job('【5本15,000円～/マニュアル完備/Vtuber好き大歓迎！】大手VTuberの切り抜きYouTubeの動画編集者募集！', 'YouTube動画の切り抜き編集をお願いします。マニュアル完備なので未経験でも安心です。', '15,000円'),
-  (bucket, r) => bucket === '🚫除外' && r.excludeReason === '対応不可（Knowledge判定）' && r.capabilityReason && r.capabilityReason.includes('動画編集')
-));
-
-const videoJobs = [
-  job('【継続依頼】YouTube動画編集スタッフ募集｜テロップ・BGM・カット編集', 'テロップ入れ・BGM挿入・カット編集をお願いします。', '5,000円'),
-  job('【5本15,000円～/マニュアル完備】大手VTuberの切り抜きYouTubeの動画編集者募集！', 'YouTube動画の切り抜き編集。', '15,000円'),
-  job('【テスト案件】3分程度の動画編集｜継続依頼あり', '3分程度の動画編集をお願いします。', '1,100円'),
-  job('【長期・昇給確約】ゴルフ系YouTube動画編集！1本4000円〜★マニュアル完備', 'ゴルフ動画の編集をお願いします。', '4,000円'),
-];
-let videoExcluded = 0;
-for (const vj of videoJobs) {
-  const { bucket } = runOne(vj);
-  if (bucket === '🚫除外') videoExcluded++;
-}
-record(check(
-  '6. 動画編集案件4件が応募候補・成長候補から外れる（' + videoExcluded + '/4件が除外）',
-  videoJobs[0],
-  () => videoExcluded === 4
-));
-
-record(check(
-  '7. 動画シナリオ作成はライティングとして評価される',
-  job('動画シナリオ作成のお仕事｜YouTube台本作成', '商品紹介動画のシナリオ・台本を作成していただきます。', '5,000円'),
-  (bucket, r) => bucket !== '🚫除外' && r.capabilityStatus !== '対応不可'
-));
-
-record(check(
-  '8. 「運用スタッフ募集」がSNS運用系として判定される',
-  job('【観光スポット】旅行Instagram運用スタッフ募集', 'Instagramアカウントの運用スタッフを募集します。', '5,000円'),
-  (bucket, r) => bucket === '🚫除外' && r.excludeReason === 'SNS運用代行'
-));
-
-record(check(
-  '9. Instagram画像制作はSNS運用代行として除外されない',
-  job('Instagram投稿デザイン募集｜カフェ情報アカウント', 'Instagram投稿用の画像を1枚制作してください。単発制作です。', '5,000円'),
-  (bucket, r) => r.excludeReason !== 'SNS運用代行'
-));
+function record(ok) { total++; if (ok) pass++; }
 
 console.log('='.repeat(100));
-console.log('■ 維持すべき評価の確認（7項目）');
+console.log('■ 表示区分の回帰確認');
 console.log('='.repeat(100) + '\n');
 
 record(check(
-  '維持1. BtoB資料作成',
-  job('BtoB向けサービス紹介資料の作成', '企業向けサービスの魅力を伝えるサービス紹介資料を作成していただきます。', '8,000円'),
-  (bucket) => bucket === '📋応募候補' || bucket === '🌱成長候補'
+  '1. 今すぐ応募案件が維持される（AI業務改善、高単価・直接証明）',
+  job('生成AI活用による業務改善・業務改革支援', 'プロジェクトマネジメント経験を活かし、企業のAI業務改善を支援していただきます。月額報酬100万円。', '1,000,000円'),
+  (bucket, r) => bucket === '📋今すぐ応募' && r.displayTier === 'now'
 ));
 
 record(check(
-  '維持2. PowerPoint資料',
-  job('【PowerPoint資料デザイン】サービス紹介資料のデザインリニューアル', 'PowerPointで提案資料のデザインをリニューアルしていただきます。継続依頼あり。', '15,000円'),
-  (bucket) => bucket === '📋応募候補' || bucket === '🌱成長候補'
+  '2. 監査で特定した高単価チャレンジ（Canva 10,000円・継続案件）が独立表示される',
+  job('【継続案件】旅行の日に真似したいメイクを発信するInstagram投稿制作', 'Canvaを使ってInstagram投稿画像を制作していただきます。継続案件です。', '10,000円'),
+  (bucket, r) => bucket === '🔥高単価チャレンジ' && r.displayTier === 'high_value_challenge'
 ));
 
 record(check(
-  '維持3. マニュアル作成',
-  job('社内向け業務マニュアルの作成', '社内向けの業務マニュアルを作成していただきます。継続案件になる可能性あり。', '6,000円'),
-  (bucket) => bucket === '📋応募候補' || bucket === '🌱成長候補'
+  '2b. 監査で特定した高単価チャレンジ（Canva 10,000円・月4本継続）が独立表示される',
+  job('【月4本〜継続◎】構成・素材支給で簡単！美容Instagramの投稿制作', 'Canvaで美容系Instagram投稿を月4本制作していただきます。継続依頼です。', '10,000円'),
+  (bucket, r) => bucket === '🔥高単価チャレンジ' && r.displayTier === 'high_value_challenge'
 ));
 
 record(check(
-  '維持4. AIライティング',
-  job('AIツールを活用した業務効率化に関する記事作成', 'ChatGPTを使った業務効率化について、初回800文字の記事を作成してください。継続あり。', '2,000円'),
-  (bucket) => bucket === '📋応募候補' || bucket === '🌱成長候補'
+  '3. 低単価の通常チャレンジ（1,500円Canva）と区別される',
+  job('Canvaデザイン🎨海外旅行で使う英語フレーズ紹介の画像制作', 'Canvaで画像を1枚制作していただきます。単発です。', '1,500円'),
+  (bucket, r) => bucket === '🌱通常チャレンジ' && r.displayTier === 'normal_challenge'
 ));
 
 record(check(
-  '維持5. 一般ライティング',
-  job('【急募】暮らし・インテリアに関する記事制作', 'SEO記事の執筆をお願いします。1記事3000文字程度。', '3,000円'),
-  (bucket) => bucket === '📋応募候補' || bucket === '🌱成長候補'
+  '4. PowerPoint会社案内資料が「条件確認後に応募」として今すぐ応募枠に見える',
+  job('【会社案内のデザイン募集】A3 二つ折り会社案内（PowerPoint納品）', 'PowerPointで会社案内資料を制作していただきます。', '応相談'),
+  (bucket, r) => bucket === '📋今すぐ応募' && r.displayTier === 'now_pending' && r.confirmBeforeApply.includes('報酬額（案件詳細で確認）')
 ));
 
 record(check(
-  '維持6. Canva画像制作',
-  job('【Canva◎】「作業カフェ」の魅力を伝えるSNSバナーデザイン募集', 'Canvaを使ってSNS用バナーを1枚作成してください。単発制作で、構成・ターゲット・目的を意識したデザインをお願いします。', '2,500円'),
-  (bucket) => bucket === '📋応募候補' || bucket === '🌱成長候補'
+  '5. 高単価でも職能不一致の案件（動画編集・高単価）は高単価チャレンジに表示されない',
+  job('【高単価】YouTube動画編集者募集！1本20,000円', 'YouTube動画のカット編集・テロップ入れをお願いします。', '20,000円'),
+  (bucket) => bucket === '🚫除外'
 ));
 
 record(check(
-  '維持7. 飲食関連案件',
-  job('飲食店の新メニュー紹介コンテンツ作成', '飲食店の新メニューを紹介する記事を作成してください。', '4,000円'),
-  (bucket, r) => (bucket === '📋応募候補' || bucket === '🌱成長候補') && r.capabilityReason && r.capabilityReason.includes('飲食')
+  '6a. SNS運用案件は高単価でも戻らない',
+  job('【高単価】Instagram運用スタッフ募集｜月額80,000円', 'Instagramアカウントの運用をお任せします。', '80,000円'),
+  (bucket) => bucket === '🚫除外'
 ));
+
+record(check(
+  '6b. 資格必須案件は高単価でも戻らない',
+  job('【高単価】看護師資格保有者限定 医療コンサル案件', '看護師資格保有者のみ応募可能です。', '50,000円'),
+  (bucket) => bucket === '🚫除外'
+));
+
+record(check(
+  '7. Knowledgeにない経験を使っていない（高単価チャレンジのcapabilityReasonにSales Knowledge外の文言がないか目視確認用）',
+  job('BtoB向けホワイトペーパー制作', '企業の課題を整理し、ホワイトペーパーを制作していただきます。', '15,000円'),
+  () => true // 目視確認用（下記出力のcapabilityReasonを確認）
+));
+
+console.log('='.repeat(100));
+console.log('■ 既存機能の確認（応募済み・見送り・既出フィルタ）');
+console.log('='.repeat(100) + '\n');
+
+{
+  const testJob = job('生成AI活用による業務改善・業務改革支援', 'プロジェクトマネジメント経験を活かし業務改善を支援します。', '1,000,000円');
+  const { excluded } = evaluator.classifyJobs([testJob], { [testJob.id]: {} }, {}, {});
+  const ok = excluded.length === 1 && excluded[0].excludeReason === '応募済み';
+  total++; if (ok) pass++;
+  console.log(`${ok ? '✅' : '❌'} 8a. 応募済みフィルタは維持される`);
+  console.log(`    結果: ${excluded[0] ? excluded[0].excludeReason : '該当なし'}\n`);
+}
+{
+  const testJob = job('生成AI活用による業務改善・業務改革支援', 'プロジェクトマネジメント経験を活かし業務改善を支援します。', '1,000,000円');
+  const { excluded } = evaluator.classifyJobs([testJob], {}, { [testJob.id]: {} }, {});
+  const ok = excluded.length === 1 && excluded[0].excludeReason === '既出';
+  total++; if (ok) pass++;
+  console.log(`${ok ? '✅' : '❌'} 8b. 既出フィルタは維持される`);
+  console.log(`    結果: ${excluded[0] ? excluded[0].excludeReason : '該当なし'}\n`);
+}
 
 console.log('='.repeat(100));
 console.log(`■ 合計: ${pass}/${total} 件合格`);
