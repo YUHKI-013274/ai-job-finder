@@ -18,7 +18,14 @@ function getReasonColor(reason) {
     '条件不一致（属性）': '#8e44ad',
     'SNS運用代行': '#16a085',
     'リスクあり': '#e74c3c',
+    '必須条件不一致（資格・専門実務）': '#8e44ad',
+    '必須条件不一致（指定ツール）': '#8e44ad',
+    '対応不可（Knowledge判定）': '#c0392b',
   }[reason] || '#555';
+}
+
+function getCapabilityColor(status) {
+  return { '応募可能': '#27ae60', 'チャレンジ可能': '#2980b9' }[status] || '#7f8c8d';
 }
 
 function escapeHtml(str) {
@@ -44,6 +51,7 @@ function renderJobCard(job, i, isTop3 = false) {
         <span class="rank-badge" style="background:${rankColor}">${job.rank}ランク</span>
         ${isTop3 ? '<span class="top3-badge">🎯 今日応募すべき案件</span>' : ''}
         ${job.priceUnverified ? '<span class="promoted-badge">💰 金額確認待ち</span>' : ''}
+        ${job.capabilityStatus ? `<span class="capability-badge" style="background:${getCapabilityColor(job.capabilityStatus)}">${escapeHtml(job.capabilityStatus)}</span>` : ''}
         <span class="genre-tag">${escapeHtml(job.genre)}</span>
       </div>
 
@@ -92,6 +100,10 @@ function renderJobCard(job, i, isTop3 = false) {
             ? job.matchedSignals.map(s => `<span class="signal-chip">${toStars(s.stars)} ${escapeHtml(s.label)}</span>`).join('')
             : `<span class="detail-text">${escapeHtml(job.reason)}</span>`}
         </div>
+        ${job.capabilityReason ? `
+        <div class="detail-text" style="margin-top:6px">🧭 ${escapeHtml(job.capabilityReason)}</div>
+        ${job.matchedCapabilities && job.matchedCapabilities.length > 0 ? `<div class="detail-text" style="margin-top:2px">使用できる能力: ${job.matchedCapabilities.map(escapeHtml).join('・')}</div>` : ''}
+        ${job.decisionSource ? `<div class="decision-source">判定根拠: ${escapeHtml(job.decisionSource)}</div>` : ''}` : ''}
       </div>
 
       <div class="detail-section strength">
@@ -143,6 +155,7 @@ function renderExcludedCard(job) {
         <span class="meta-item">💰 ${escapeHtml(job.price || '要確認')}</span>
       </div>
       ${job.skipReason ? `<div class="skip-reason-text">見送り理由: ${escapeHtml(job.skipReason)}</div>` : ''}
+      ${job.capabilityReason ? `<div class="skip-reason-text">🧭 ${escapeHtml(job.capabilityReason)}${job.decisionSource ? `（判定根拠: ${escapeHtml(job.decisionSource)}）` : ''}</div>` : ''}
     </div>
   `;
 }
@@ -196,7 +209,7 @@ function renderHTML({ candidates, growthCandidates = [], holds, excluded }, date
     acc[j.excludeReason] = (acc[j.excludeReason] || 0) + 1;
     return acc;
   }, {});
-  const reasonOrder = ['応募済み', '見送り', '既出', '単価が低すぎる', '条件不一致', '条件不一致（属性）', 'SNS運用代行', 'リスクあり'];
+  const reasonOrder = ['応募済み', '見送り', '既出', '単価が低すぎる', '条件不一致', '条件不一致（属性）', 'SNS運用代行', 'リスクあり', '必須条件不一致（資格・専門実務）', '必須条件不一致（指定ツール）', '対応不可（Knowledge判定）'];
   let excludedHtml = '';
   for (const reason of reasonOrder) {
     const list = excluded.filter(j => j.excludeReason === reason);
@@ -397,6 +410,18 @@ function renderHTML({ candidates, growthCandidates = [], holds, excluded }, date
       padding: 2px 8px;
       border-radius: 10px;
       font-size: 0.7rem;
+    }
+    .capability-badge {
+      color: white;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 0.7rem;
+      font-weight: 700;
+    }
+    .decision-source {
+      font-size: 0.7rem;
+      color: #888;
+      margin-top: 4px;
     }
 
     .job-title {
@@ -1194,7 +1219,7 @@ function renderMarkdown({ candidates, growthCandidates = [], holds, excluded }, 
   });
 
   md += `## 🚫 除外（全${excluded.length}件）\n\n`;
-  const reasonOrder = ['応募済み', '見送り', '既出', '単価が低すぎる', '条件不一致', '条件不一致（属性）', 'SNS運用代行', 'リスクあり'];
+  const reasonOrder = ['応募済み', '見送り', '既出', '単価が低すぎる', '条件不一致', '条件不一致（属性）', 'SNS運用代行', 'リスクあり', '必須条件不一致（資格・専門実務）', '必須条件不一致（指定ツール）', '対応不可（Knowledge判定）'];
   for (const reason of reasonOrder) {
     const list = excluded.filter(j => j.excludeReason === reason);
     if (list.length === 0) continue;

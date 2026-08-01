@@ -35,9 +35,8 @@ const {
   SPECIALIZED_SCOPE_PATTERNS,
   REQUIRED_TOOL_DISALLOWED,
 } = require('./config');
-
-// 営業資料（ポートフォリオページ）が存在する3カテゴリ
-const PORTFOLIO_BACKED_TIERS = ['writing', 'design', 'ai_business'];
+const yukiProfile = require('./knowledge/yuki_profile');
+const { classifyCapability } = require('./knowledge-classifier');
 
 function toStars(score, max = 5) {
   const filled = Math.round(Math.min(max, Math.max(0, score)));
@@ -196,9 +195,10 @@ function computePortfolioActivationScore(categoryInfo, text) {
 }
 
 // ③ゆうきとの適性：AI活用・ライティング関連の強みキーワードの一致量
-function computeAptitudeScore(aiFriendlyMatches, categoryInfo) {
+// （Knowledge判定で「対応可能業務」に該当する案件は適性ボーナスを加える。固定CATEGORY_TIERSではなくcapabilityStatusを使う）
+function computeAptitudeScore(aiFriendlyMatches, capability) {
   let score = 1 + Math.min(3, aiFriendlyMatches.length);
-  if (PORTFOLIO_BACKED_TIERS.includes(categoryInfo.tier)) score += 1;
+  if (capability.capabilityStatus === '応募可能') score += 1;
   return Math.min(5, score);
 }
 
@@ -235,12 +235,12 @@ function computeClientRiskDelta(text) {
 }
 
 // ⑥経験者優遇は単独で減点確定せず、未経験可否・ポートフォリオ必須の有無・案件適合度と組み合わせて評価する。
-function computeExperienceAdjustment(text, experiencePreferredMatches, beginnerMatches, categoryInfo, aptitudeScore) {
+function computeExperienceAdjustment(text, experiencePreferredMatches, beginnerMatches, capability, aptitudeScore) {
   if (experiencePreferredMatches.length === 0) return 0;
   let adjustment = -1;
   if (beginnerMatches.length > 0) adjustment += 1; // 未経験OKも併記されている場合はハードルが実質低いとみなす
   if (/ポートフォリオ必須|実績提出必須|ポートフォリオ提出必須/.test(text)) adjustment -= 1; // 提出必須は実質的な参入障壁
-  if (PORTFOLIO_BACKED_TIERS.includes(categoryInfo.tier) && aptitudeScore >= 4) adjustment += 1; // 案件との適合度が高ければ相殺
+  if (capability.capabilityStatus === '応募可能' && aptitudeScore >= 4) adjustment += 1; // 案件との適合度が高ければ相殺
   return Math.max(-2, Math.min(1, adjustment));
 }
 
@@ -272,85 +272,34 @@ function computePriceScore(priceYen) {
 // ⑧長期資産性：この案件を完了した場合に、継続・高単価化・営業資産（実績・評価・制作物）
 // として残る度合いを判定する。存在しない実績を補うのではなく、案件カテゴリ（営業資料と
 // 直結するか）・継続シグナル・単価・「実績公開可」等の明言のみから判定できる範囲に限定する。
-function computeLongTermAssetScore({ categoryInfo, continuityMatches, priceYen, assetSignalMatches }) {
+// Knowledge判定（capabilityStatus==='応募可能'）の案件を長期資産性の中心とする。
+// チャレンジ可能（成長領域）も、Sales Knowledge 2-4「今後の事業資産になるか」の観点から小さく加点する。
+function computeLongTermAssetScore({ capability, continuityMatches, priceYen, assetSignalMatches }) {
   let score = 1;
-  if (PORTFOLIO_BACKED_TIERS.includes(categoryInfo.tier)) score += 2;
+  if (capability.capabilityStatus === '応募可能') score += 2;
+  else if (capability.capabilityStatus === 'チャレンジ可能') score += 1;
   if (continuityMatches.length > 0) score += 1;
   if (priceYen !== null && priceYen >= 5000) score += 1;
   if (assetSignalMatches.length > 0) score += 1;
   return Math.min(5, score);
 }
 
-// 採用理由・証拠の強さを4段階で分類する（直接証明／強い代替証明／弱い代替証明／証明不足）。
-// 複雑な推測はせず、案件カテゴリとポートフォリオ活用度の対応関係のみから判定する。
-//
-// 「バナー制作」「SEO記事」「AI活用」等の形式・トピック一致だけでは「直接証明」にしない。
-// 建築・医療・金融・法律・製造業等、実績と明確に異なる専門業界（industryMismatch）が
-// 案件文に含まれる場合は、形式が一致していても1段階下げて「強い代替証明」までとする
-// （スキル自体は転用可能なため「証明不足」まで下げすぎない）。
-function computeEvidenceStrength({ categoryInfo, portfolioActivationScore, hospitalityRelevant, industryMismatch }) {
-  const isBacked = PORTFOLIO_BACKED_TIERS.includes(categoryInfo.tier);
-  if (isBacked && portfolioActivationScore >= 4) {
-    return industryMismatch ? '強い代替証明' : '直接証明';
-  }
-  if (isBacked && portfolioActivationScore === 3) return '強い代替証明';
-  if ((isBacked && portfolioActivationScore <= 2) || (!isBacked && hospitalityRelevant)) return '弱い代替証明';
-  return '証明不足';
-}
-
-// 不足している営業資産（実績・証拠）を、案件カテゴリと既存ポートフォリオの対応関係から
-// 判定できる範囲に限定して抽出する（存在しない実績の補完・複雑な推測は行わない）。
-function buildMissingAssets({ categoryInfo, evidenceStrength, portfolioActivationScore }) {
-  const missing = [];
-  if (evidenceStrength === '直接証明') return missing;
-
-  if (categoryInfo.tier === 'writing') {
-    missing.push('SEO記事・比較記事など外部公開できるライティング実績');
-  } else if (categoryInfo.tier === 'design') {
-    missing.push('バナー・SNS画像等の外部クライアント向け制作実績');
-  } else if (categoryInfo.tier === 'ai_business') {
-    missing.push('AI業務改善・仕組み化の外部導入実績');
-  } else {
-    missing.push('この職種に直接対応するポートフォリオページ');
-  }
-
-  if (portfolioActivationScore <= 2) {
-    missing.push('案件テーマに直結する制作物サンプル');
-  }
-  return missing;
-}
-
-// Aランクの最低条件（点数だけで判定しない）。すべて満たさない場合は、合計点が高くても
-// B以下へ下げる。
-function meetsARankConditions({ categoryInfo, evidenceStrength, priceScore, longTermAssetScore, winScore }) {
-  if (categoryInfo.tier === 'low') return false;
-  if (categoryInfo.score < 3) return false;
-  if (evidenceStrength === '証明不足') return false;
+// Aランクの最低条件（点数だけで判定しない）。Knowledge駆動の3段階判定（capabilityStatus）を
+// 主要条件とし、固定キーワードによるカテゴリスコアや証拠強度の一律ゲートには依存しない。
+// すべて満たさない場合は、合計点が高くてもB（成長候補）へ下げる。
+function meetsARankConditions({ capability, priceScore, longTermAssetScore, winScore }) {
+  if (capability.capabilityStatus !== '応募可能') return false; // Sales Knowledgeの対応可能業務に該当すること
   if (priceScore < 4 && longTermAssetScore < 4) return false;
   if (winScore < 3) return false;
   return true;
 }
 
-// Bランク（成長候補）の最低条件。単にA未満というだけの案件を「成長候補」にはしない。
-// 「証拠・実績を補えば今後狙う価値がある」案件（主戦場・成長領域に近く、不足を具体的に
-// 特定でき、単純作業・視聴・アンケート・紹介のみの案件ではない）だけに限定する。
-// 満たさない場合は成長候補ではなく保留に回す（除外はしない＝参考情報としては残す）。
-function meetsGrowthCandidateConditions({ categoryInfo, evidenceStrength, missingAssets, simpleWork, growthDisqualifyingMatches }) {
-  if (categoryInfo.tier === 'low') return false; // 動画・撮影・音声系
-  if (categoryInfo.score < 3) return false; // 主戦場・成長領域に該当しない
-  if (evidenceStrength === '証明不足') return false;
-  if (missingAssets.length === 0) return false; // 「補うべき不足」を具体的に特定できない
-  if (simpleWork) return false; // データ入力等の単純作業
-  if (growthDisqualifyingMatches.length > 0) return false; // 視聴・アンケート・紹介のみ等
-  return true;
-}
-
-// Sランクは「3つの営業資料カテゴリ（ライティング/画像制作/AI活用・業務改善）のいずれかで
-// 証拠が強く、高単価または継続時の収益性が高く、長期資産性・受注可能性も高い」場合のみに限定する。
+// Sランクは「対応可能業務に該当し、証拠が直接証明または強い代替証明で、高単価または継続時の
+// 収益性が高く、長期資産性・受注可能性も高い」場合のみに限定する。
 // 「未経験歓迎」は必須条件にしない（⑦未経験歓迎の軽い加点にとどめ、S/Aの必須要件からは外す）。
-function meetsSRankConditions({ categoryInfo, evidenceStrength, priceScore, continuityMatches, longTermAssetScore, winScore, priceYen }) {
-  if (!PORTFOLIO_BACKED_TIERS.includes(categoryInfo.tier)) return false; // 非希望領域ではない・主戦場と一致
-  if (evidenceStrength !== '直接証明' && evidenceStrength !== '強い代替証明') return false; // 証拠の強さ
+function meetsSRankConditions({ capability, priceScore, continuityMatches, longTermAssetScore, winScore, priceYen }) {
+  if (capability.capabilityStatus !== '応募可能') return false;
+  if (capability.evidenceType !== '直接証明' && capability.evidenceType !== '強い代替証明') return false;
   if (priceYen === null) return false; // 必須条件：単価が確認できること
   if (priceScore < 4 && continuityMatches.length === 0) return false; // 高単価または継続時の収益性が高い
   if (longTermAssetScore < 4) return false; // 長期資産性が高い
@@ -421,13 +370,34 @@ function evaluateJob(job) {
   // 応募候補（TOP5）には入れず保留に回す（classifyJobsで制御するためのフラグ）
   const priceUnverified = parsedPriceYen === null || isPriceAmbiguous(job.price);
 
-  // ②ライティング・画像・AI活用との一致度。タイトル/本文の一致数で中心業務を判定する
+  // Knowledge駆動の3段階判定（応募可能／チャレンジ可能／対応不可）。
+  // yuki_sales_knowledge_v1.md / yuki_common_knowledge.md 由来の構造化プロフィール（knowledge/yuki_profile.js）を
+  // 最終判断として使用する。対応不可の場合は、固定除外条件を追加せずここでスコア計算前に見送る。
+  const capability = classifyCapability(text, yukiProfile);
+  if (capability.capabilityStatus === '対応不可') {
+    return {
+      ...job,
+      excluded: true,
+      excludeReason: '対応不可（Knowledge判定）',
+      capabilityStatus: capability.capabilityStatus,
+      capabilityReason: capability.capabilityReason,
+      matchedCapabilities: capability.matchedCapabilities,
+      evidenceType: capability.evidenceType,
+      missingEvidence: capability.missingEvidence,
+      decisionSource: capability.decisionSource,
+      priceYen,
+    };
+  }
+
+  // ②ライティング・画像・AI活用との一致度（固定CATEGORY_TIERS）。
+  // Knowledge判定（capability）が最終判断のため、ここでの結果は職能一致度スコア表示・提案文生成の補助にのみ使う
+  // （categoryInfo.score>=3ゲートは廃止済み。固定リストと一致しない案件も、capabilityStatusがKnowledge由来なら通過する）。
   const categoryInfo = detectCategoryTier(job);
 
-  // ③データ入力・リスト作成等の単純作業は、営業資料ページを持つ3ジャンル（writing/design/ai_business）
-  // に該当しない限り、ジャンルスコアを下げて低優先として扱う
+  // ③データ入力・リスト作成等の単純作業は、Knowledgeが対応可能業務と認めた案件でない限り
+  // ジャンルスコアを下げて低優先として扱う（補助スコアのみ。合否判定はcapabilityStatusが担う）
   const simpleWorkMatches = matchPatterns(text, SIMPLE_WORK_PATTERNS);
-  if (simpleWorkMatches.length > 0 && !PORTFOLIO_BACKED_TIERS.includes(categoryInfo.tier)) {
+  if (simpleWorkMatches.length > 0 && capability.capabilityStatus !== '応募可能') {
     categoryInfo.score = Math.max(1, categoryInfo.score - 2);
   }
 
@@ -443,7 +413,7 @@ function evaluateJob(job) {
   // ③ゆうきとの適性
   const aiFriendlyMatches = matchPatterns(text, AI_FRIENDLY_KEYWORDS);
   const technicalMatches = matchPatterns(text, AI_TECHNICAL_KEYWORDS);
-  const aptitudeScore = computeAptitudeScore(aiFriendlyMatches, categoryInfo);
+  const aptitudeScore = computeAptitudeScore(aiFriendlyMatches, capability);
 
   // ⑦未経験歓迎（最も軽い重み。単独では高評価にしない）。⑥の経験者優遇の複合評価でも使うため先に計算する
   const beginnerMatches = matchPatterns(text, BEGINNER_PATTERNS);
@@ -453,7 +423,7 @@ function evaluateJob(job) {
   const supportMatches = matchPatterns(text, SUPPORT_PATTERNS);
   const trustMatches = matchPatterns(text, CLIENT_TRUST_PATTERNS);
   const experiencePreferredMatches = matchPatterns(text, EXPERIENCE_PREFERRED_PATTERNS);
-  const experienceAdjustment = computeExperienceAdjustment(text, experiencePreferredMatches, beginnerMatches, categoryInfo, aptitudeScore);
+  const experienceAdjustment = computeExperienceAdjustment(text, experiencePreferredMatches, beginnerMatches, capability, aptitudeScore);
   const clientRisk = computeClientRiskDelta(text);
   const winScore = computeWinScore(text, supportMatches, trustMatches, experienceAdjustment, clientRisk.delta);
 
@@ -466,21 +436,13 @@ function evaluateJob(job) {
 
   // ⑧長期資産性：継続・単価・「実績公開可」等の明言から、営業資産として残る度合いを判定する
   const assetSignalMatches = matchPatterns(text, ASSET_SIGNAL_PATTERNS);
-  const longTermAssetScore = computeLongTermAssetScore({ categoryInfo, continuityMatches, priceYen, assetSignalMatches });
+  const longTermAssetScore = computeLongTermAssetScore({ capability, continuityMatches, priceYen, assetSignalMatches });
 
-  // 採用理由・証拠の強さ（直接証明／強い代替証明／弱い代替証明／証明不足）
+  // 採用理由・証拠の強さ（直接証明／強い代替証明／弱い代替証明／証明不足）はKnowledge判定（capability）をそのまま使う
   const hospitalityRelevant = /飲食|接客|店舗運営|店舗管理|店舗マネジメント|人材育成|採用面接|業務改善|マネジメント|マネージャー|店長/.test(text);
   const industryMismatchMatches = matchPatterns(text, INDUSTRY_MISMATCH_PATTERNS);
-  const evidenceStrength = computeEvidenceStrength({ categoryInfo, portfolioActivationScore, hospitalityRelevant, industryMismatch: industryMismatchMatches.length > 0 });
-  const missingAssets = buildMissingAssets({ categoryInfo, evidenceStrength, portfolioActivationScore });
-
-  // 成長候補（Bランク）の最低条件判定に使う「単純作業・視聴・アンケート・紹介のみ」シグナル
-  const growthDisqualifyingMatches = matchPatterns(text, GROWTH_DISQUALIFYING_PATTERNS);
-  const meetsGrowthGate = meetsGrowthCandidateConditions({
-    categoryInfo, evidenceStrength, missingAssets,
-    simpleWork: simpleWorkMatches.length > 0,
-    growthDisqualifyingMatches,
-  });
+  const evidenceStrength = capability.evidenceType;
+  const missingAssets = capability.missingEvidence;
 
   // 総合スコア（②職能一致・⑥単価・⑤継続性・⑧長期資産性を重視した重み付け）
   const totalScore =
@@ -495,38 +457,27 @@ function evaluateJob(job) {
 
   let rank = totalScoreToRank(totalScore);
 
-  // Sランクは3つの営業資料カテゴリで証拠が強く、高単価または継続時の収益性・長期資産性・受注可能性が高い場合のみ
-  if (rank === 'S' && !meetsSRankConditions({ categoryInfo, evidenceStrength, priceScore, continuityMatches, longTermAssetScore, winScore, priceYen })) {
-    rank = 'A';
-  }
-  // 動画編集・撮影・音声系は未経験歓迎でも高評価にしない（S/Aには乗せない）
-  if (categoryInfo.tier === 'low' && (rank === 'S' || rank === 'A')) {
+  // Knowledge判定が「チャレンジ可能」の案件はB（成長候補）が上限。S/Aは「応募可能」のみに限定する。
+  if (capability.capabilityStatus === 'チャレンジ可能' && (rank === 'S' || rank === 'A')) {
     rank = 'B';
   }
-  // ③データ入力・リスト作成等の単純作業中心の案件も、営業資料ページを持つ3ジャンルに該当しない限りS/Aには乗せない
-  if (simpleWorkMatches.length > 0 && !PORTFOLIO_BACKED_TIERS.includes(categoryInfo.tier) && (rank === 'S' || rank === 'A')) {
+  // Sランクは対応可能業務に該当し、証拠が強く、高単価または継続時の収益性・長期資産性・受注可能性が高い場合のみ
+  if (rank === 'S' && !meetsSRankConditions({ capability, priceScore, continuityMatches, longTermAssetScore, winScore, priceYen })) {
+    rank = 'A';
+  }
+  // Aランクの最低条件（点数だけで判定しない）。capabilityStatusが「応募可能」であることを前提に、
+  // 単価・受注可能性等の経済条件が弱い場合のみBへ下げる（Knowledge判定自体は変えない＝除外はしない）。
+  if ((rank === 'S' || rank === 'A') && !meetsARankConditions({ capability, priceScore, longTermAssetScore, winScore })) {
     rank = 'B';
   }
-  // Aランクの最低条件（点数だけで判定しない）。満たさない場合は合計点が高くてもBへ下げる。
-  // ただし「直接証明」があり主戦場に一致する案件は、単価・受注可能性等の経済条件だけが
-  // 理由でAに届かない場合でも、証拠・専門性そのものは十分なため応募候補として残す
-  // （＝Bへは落とさずAのまま維持し、再判定であることを注意点に明示する）。
-  const isMainField = categoryInfo.tier !== 'low' && categoryInfo.score >= 3;
-  let reconsideredFromB = false;
-  if ((rank === 'S' || rank === 'A') && !meetsARankConditions({ categoryInfo, evidenceStrength, priceScore, longTermAssetScore, winScore })) {
-    if (evidenceStrength === '直接証明' && isMainField) {
-      rank = 'A';
-      reconsideredFromB = true;
-    } else {
-      rank = 'B';
-    }
-  } else if (rank === 'B' && evidenceStrength === '直接証明' && isMainField) {
-    // 生スコアの時点でBだった案件も、直接証明・主戦場一致なら応募候補への再判定対象とする
-    rank = 'A';
-    reconsideredFromB = true;
+  // 対応不可は既にevaluateJobの冒頭で除外済みのため、ここでのC評価は
+  // 「応募可能／チャレンジ可能だが経済条件が弱い」案件のみ。保留は単価未確認等の情報不足に限定するため、
+  // 固定キーワード不足や経済条件の弱さだけでは保留にせず、成長候補（B）として残す。
+  if (rank === 'C') {
+    rank = 'B';
   }
 
-  const genre = categoryInfo.label;
+  const genre = capability.matchedCategory ? capability.matchedCategory.label : categoryInfo.label;
 
   // 高評価の理由（★の数で重要度が分かる形式で可視化）
   const matchedSignals = buildWeightedSignals({
@@ -538,23 +489,9 @@ function evaluateJob(job) {
     : '安全に完了できそうな案件（実績作りとして検討可）';
 
   // 注意点
-  let caution = buildCaution(text, technicalMatches, aiFriendlyMatches, categoryInfo, priceUnverified, experiencePreferredMatches, {
+  const caution = buildCaution(text, technicalMatches, aiFriendlyMatches, capability, priceUnverified, experiencePreferredMatches, {
     snsAdjustment, simpleWorkMatches, clientRisk, industryMismatchMatches,
   });
-  if (reconsideredFromB) {
-    const appMatch = text.match(/(\d+)\s*人が応募/);
-    let reconsiderNote;
-    if (priceUnverified) {
-      reconsiderNote = '報酬条件が不明なため応募前に確認してください';
-    } else if (appMatch && parseInt(appMatch[1], 10) > 20) {
-      reconsiderNote = '応募者数が多いため差別化が必要です';
-    } else if (winScore < 3) {
-      reconsiderNote = '稼働条件の確認が必要です';
-    } else {
-      reconsiderNote = '必須条件の読み取りを再確認してください';
-    }
-    caution = `Aランク基準の点数には届きませんが、証拠・職能一致度が十分なため応募候補に含めています（${reconsiderNote}）、${caution}`;
-  }
 
   // 提案文の軸（職能の組み合わせ→今回できること→クライアントへの価値）
   const strengthHint = buildStrengthHint({ text, categoryInfo, hospitalityRelevant, representative: categoryInfo.representative });
@@ -575,7 +512,13 @@ function evaluateJob(job) {
     longTermAssetScore,
     evidenceStrength,
     missingAssets,
-    meetsGrowthGate,
+    // Knowledge駆動の3段階判定（応募可能／チャレンジ可能／対応不可）とその根拠
+    capabilityStatus: capability.capabilityStatus,
+    capabilityReason: capability.capabilityReason,
+    matchedCapabilities: capability.matchedCapabilities,
+    evidenceType: capability.evidenceType,
+    missingEvidence: capability.missingEvidence,
+    decisionSource: capability.decisionSource,
     totalScore,
     rank,
     priceUnverified,
@@ -642,7 +585,7 @@ function buildWeightedSignals({ categoryInfo, portfolioActivationScore, aptitude
   return signals.sort((a, b) => b.stars - a.stars);
 }
 
-function buildCaution(text, technicalMatches, aiFriendlyMatches, categoryInfo, priceUnverified, experiencePreferredMatches, extra = {}) {
+function buildCaution(text, technicalMatches, aiFriendlyMatches, capability, priceUnverified, experiencePreferredMatches, extra = {}) {
   const { snsAdjustment, simpleWorkMatches, clientRisk, industryMismatchMatches } = extra;
   const cautions = [];
   if (industryMismatchMatches && industryMismatchMatches.length > 0) {
@@ -654,17 +597,14 @@ function buildCaution(text, technicalMatches, aiFriendlyMatches, categoryInfo, p
   if (experiencePreferredMatches.length > 0) {
     cautions.push('「経験者歓迎」の記載があります。未経験可否や案件との適合度と合わせて判断してください');
   }
-  if (categoryInfo.tier === 'low') {
-    cautions.push('優先度の低いジャンル（動画編集・撮影・音声系）の案件です。他に良い案件がない場合のみ検討してください');
-  }
   if (simpleWorkMatches && simpleWorkMatches.length > 0) {
     cautions.push('単純作業（データ入力・リスト作成・情報転記等）の比重が高い案件です');
   }
   if (snsAdjustment && snsAdjustment.operationalMatches.length > 0 && snsAdjustment.proposalMatches.length === 0) {
     cautions.push(`テンプレート・素材支給への流し込み中心の作業型案件の可能性があります（${snsAdjustment.operationalMatches[0]}）`);
   }
-  if (!PORTFOLIO_BACKED_TIERS.includes(categoryInfo.tier) && categoryInfo.tier !== 'low') {
-    cautions.push('ライティング・画像制作・AI活用の営業資料ページと直接一致しない案件です');
+  if (capability.capabilityStatus === 'チャレンジ可能') {
+    cautions.push('Sales Knowledgeの「対応可能業務（主戦場）」ではなく「チャレンジ可能業務（成長領域）」に該当する案件です。実績獲得目的として、代替証明・転用方法を具体的に説明してから応募してください');
   }
   if (technicalMatches.length > 0 && aiFriendlyMatches.length === 0) {
     cautions.push('本格的なエンジニアリング経験を求められる可能性があります（優先度低）');
@@ -789,17 +729,14 @@ function classifyJobs(jobs, appliedMap = {}, seenMap = {}, rejectedMap = {}) {
     }
 
     if (job.rank === 'B') {
-      // 成長候補（不足資産を補えば今後狙える案件）は最低条件ゲートを満たす場合のみ。
-      // 満たさない場合（証明不足・単純作業・視聴/アンケート/紹介のみ等）は保留に回す
-      if (job.meetsGrowthGate) {
-        growthCandidates.push(job);
-      } else {
-        holds.push(job);
-      }
+      // Bランク（チャレンジ可能、または応募可能だが経済条件が弱い案件）は常に成長候補へ。
+      // 対応不可はevaluateJob側で既に除外済みのため、ここでの追加ゲートは行わない
+      // （固定キーワード不一致だけを理由にBランクを保留へ落とさない）。
+      growthCandidates.push(job);
     } else if (!job.priceUnverified && (job.rank === 'S' || job.rank === 'A')) {
       candidates.push(job);
     } else {
-      // 単価未確認のS/A、およびCランクは保留
+      // 単価未確認のS/Aのみ保留（＝情報不足で判断できない案件に限定）
       holds.push(job);
     }
   }
