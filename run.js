@@ -18,6 +18,14 @@ const { loadSeenJobs, saveSeenJobs, loadAppliedJobs, loadJobStatus, filterJobSta
 const { syncAppliedFromSheet } = require('./sheet-sync');
 const { MIN_RAW_JOBS, CURRENT_PHASE, CURRENT_PHASE_KEY } = require('./config');
 
+// ブラウザが1ページでクラッシュした後、Playwright内部の非同期処理（再接続試行等）が
+// 少し遅れてrejectし、呼び出し元のtry/catchで捕まえられないままプロセス全体を
+// 落とすことがある。個別キーワードのエラーは既にログ済みのため、ここで握りつぶして
+// スクレイピングループを継続させる。
+process.on('unhandledRejection', (err) => {
+  console.log(`⚠️  未処理のPromiseエラー（無視して続行）: ${err && err.message ? err.message.split('\n')[0] : err}`);
+});
+
 const IS_CI = process.env.CI === 'true';
 const REPO_OWNER = 'YUHKI-013274';
 const REPO_NAME = 'ai-job-finder';

@@ -100,12 +100,41 @@ function extractJobsFromPage(baseUrl) {
   return results;
 }
 
-async function scrapeJobs() {
+const CONTEXT_OPTIONS = {
+  userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  viewport: { width: 1280, height: 800 },
+};
+
+// 長時間起動したままのheadless_shellがページ数十枚を開いたあたりで
+// クラッシュ／応答不能になることがあるため、定期的にブラウザごと再起動する。
+const RECYCLE_EVERY_PAGES = 15;
+
+async function launchBrowserContext() {
   const browser = await chromium.launch({ headless: true });
-  const context = await browser.newContext({
-    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    viewport: { width: 1280, height: 800 },
-  });
+  const context = await browser.newContext(CONTEXT_OPTIONS);
+  return { browser, context };
+}
+
+async function scrapeJobs() {
+  let { browser, context } = await launchBrowserContext();
+  let pagesOpened = 0;
+
+  // ブラウザ/コンテキストが死んでいたら再起動してから新しいページを返す。
+  // 一定ページ数ごとにも予防的に再起動する（リソースリーク対策）。
+  async function getPage() {
+    pagesOpened++;
+    if (pagesOpened > 1 && pagesOpened % RECYCLE_EVERY_PAGES === 1) {
+      await browser.close().catch(() => null);
+      ({ browser, context } = await launchBrowserContext());
+    }
+    try {
+      return await context.newPage();
+    } catch {
+      await browser.close().catch(() => null);
+      ({ browser, context } = await launchBrowserContext());
+      return await context.newPage();
+    }
+  }
 
   const allJobs = [];
   // id -> job（同一案件が複数キーワード／カテゴリに一致した場合の追跡に使う）
@@ -116,7 +145,16 @@ async function scrapeJobs() {
 
   for (const keyword of SEARCH_KEYWORDS) {
     process.stdout.write(`  検索: "${keyword}" ... `);
-    const page = await context.newPage();
+
+    let page;
+    try {
+      page = await getPage();
+    } catch (err) {
+      keywordStats.push({ keyword, found: 0, newCount: 0, dupCount: 0, error: err.message.split('\n')[0] });
+      console.log(`エラー: ${err.message.split('\n')[0]}`);
+      await sleep(SEARCH_DELAY_MS);
+      continue;
+    }
 
     try {
       const url = `${SEARCH_URL}?keyword=${encodeURIComponent(keyword)}&order=new`;
@@ -153,7 +191,7 @@ async function scrapeJobs() {
       keywordStats.push({ keyword, found: 0, newCount: 0, dupCount: 0, error: err.message.split('\n')[0] });
       console.log(`エラー: ${err.message.split('\n')[0]}`);
     } finally {
-      await page.close();
+      await page.close().catch(() => null);
     }
 
     await sleep(SEARCH_DELAY_MS);
@@ -163,7 +201,16 @@ async function scrapeJobs() {
   // キーワード検索では拾えない案件を補う目的。既存のカード抽出処理をそのまま使う。
   for (const category of CATEGORY_SOURCES) {
     process.stdout.write(`  カテゴリ: "${category.label}" ... `);
-    const page = await context.newPage();
+
+    let page;
+    try {
+      page = await getPage();
+    } catch (err) {
+      keywordStats.push({ keyword: `[カテゴリ] ${category.label}`, found: 0, newCount: 0, dupCount: 0, error: err.message.split('\n')[0] });
+      console.log(`エラー: ${err.message.split('\n')[0]}`);
+      await sleep(SEARCH_DELAY_MS);
+      continue;
+    }
 
     try {
       const url = `${BASE_URL}${category.path}?order=new`;
@@ -198,13 +245,13 @@ async function scrapeJobs() {
       keywordStats.push({ keyword: `[カテゴリ] ${category.label}`, found: 0, newCount: 0, dupCount: 0, error: err.message.split('\n')[0] });
       console.log(`エラー: ${err.message.split('\n')[0]}`);
     } finally {
-      await page.close();
+      await page.close().catch(() => null);
     }
 
     await sleep(SEARCH_DELAY_MS);
   }
 
-  await browser.close();
+  await browser.close().catch(() => null);
   console.log(`\n合計 ${allJobs.length} 件取得`);
   return { jobs: allJobs, keywordStats };
 }
