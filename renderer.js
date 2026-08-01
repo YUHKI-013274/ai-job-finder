@@ -170,7 +170,7 @@ function renderRankSections(jobs, startIndex) {
 }
 
 function renderHTML({ candidates, growthCandidates = [], holds, excluded }, date, pageUrl) {
-  const dateStr = date.toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
+  const dateStr = date.toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo', year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
   const sJobs = candidates.filter(j => j.rank === 'S');
   const aJobs = candidates.filter(j => j.rank === 'A');
 
@@ -1144,7 +1144,7 @@ function renderHTML({ candidates, growthCandidates = [], holds, excluded }, date
 }
 
 function renderMarkdown({ candidates, growthCandidates = [], holds, excluded }, date) {
-  const dateStr = date.toLocaleDateString('ja-JP');
+  const dateStr = date.toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo' });
   const todayTop = candidates.slice(0, 5);
   const gateRejectedCount = excluded.filter(j => !['応募済み', '見送り', '既出'].includes(j.excludeReason)).length;
   const missingAssetCounts = growthCandidates.reduce((acc, j) => {

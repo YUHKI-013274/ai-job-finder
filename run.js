@@ -26,13 +26,13 @@ const PAGE_URL = process.env.PAGES_URL
 
 async function main() {
   const now = new Date();
-  const dateLabel = now.toISOString().slice(0, 10);
+  const dateLabel = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Tokyo' }).format(now);
 
   const outputDir = path.join(__dirname, 'output');
   if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir);
 
   console.log('=== AI案件獲得システム Ver3.0 ===');
-  console.log(`実行日時: ${now.toLocaleString('ja-JP')}`);
+  console.log(`実行日時: ${now.toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })}`);
   console.log(`公開URL: ${PAGE_URL}\n`);
 
   // 1. スクレイピング

@@ -11,7 +11,7 @@ async function sendGmailNotification({ jobs, growthCount = 0, pageUrl, date }) {
 
   const sCount = jobs.filter(j => j.rank === 'S').length;
   const aCount = jobs.filter(j => j.rank === 'A').length;
-  const dateStr = date.toLocaleDateString('ja-JP', { month: 'long', day: 'numeric', weekday: 'short' });
+  const dateStr = date.toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo', month: 'long', day: 'numeric', weekday: 'short' });
   const todayTop = jobs.slice(0, 5);
 
   const todayTopHtml = todayTop.map((job, i) => `
