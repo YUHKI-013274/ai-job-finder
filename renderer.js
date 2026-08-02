@@ -62,6 +62,7 @@ function renderJobCard(job, i, isTop3 = false) {
         ${tierBadge ? `<span class="tier-badge" style="background:${tierBadge.bg}; color:${tierBadge.color}">${tierBadge.text}</span>` : ''}
         ${job.priceUnverified ? '<span class="promoted-badge">💰 金額確認待ち</span>' : ''}
         ${job.capabilityStatus ? `<span class="capability-badge" style="background:${getCapabilityColor(job.capabilityStatus)}">${escapeHtml(job.capabilityStatus)}</span>` : ''}
+        ${job.jobStatus === '継続候補' ? `<span class="jobstatus-badge continuing">🔁 継続候補${job.firstSeen ? `（初回${escapeHtml(job.firstSeen)}）` : ''}</span>` : (job.jobStatus === '新着' ? '<span class="jobstatus-badge new">🆕 新着</span>' : '')}
         <span class="genre-tag">${escapeHtml(job.genre)}</span>
       </div>
 
@@ -436,6 +437,14 @@ function renderHTML({ nowApply, highValueChallenge = [], normalChallenge = [], c
       font-size: 0.72rem;
       font-weight: 700;
     }
+    .jobstatus-badge {
+      padding: 2px 8px;
+      border-radius: 20px;
+      font-size: 0.7rem;
+      font-weight: 600;
+    }
+    .jobstatus-badge.new { background: #fff3cd; color: #856404; }
+    .jobstatus-badge.continuing { background: #e0e7ff; color: #3949ab; }
     .genre-tag {
       background: #ecf0f1;
       color: #555;

@@ -1,5 +1,5 @@
 const { chromium } = require('playwright');
-const { SEARCH_KEYWORDS, CATEGORY_SOURCES, SEARCH_DELAY_MS } = require('./config');
+const { SEARCH_KEYWORDS, CATEGORY_SOURCES, SEARCH_DELAY_MS, PAGES_PER_KEYWORD } = require('./config');
 
 const BASE_URL = 'https://crowdworks.jp';
 const SEARCH_URL = `${BASE_URL}/public/jobs/search`;
@@ -144,57 +144,76 @@ async function scrapeJobs() {
   console.log('クラウドワークス案件を取得中...');
 
   for (const keyword of SEARCH_KEYWORDS) {
-    process.stdout.write(`  検索: "${keyword}" ... `);
+    let totalFound = 0, newCount = 0, dupCount = 0;
+    let keywordError = null;
 
-    let page;
-    try {
-      page = await getPage();
-    } catch (err) {
-      keywordStats.push({ keyword, found: 0, newCount: 0, dupCount: 0, error: err.message.split('\n')[0] });
-      console.log(`エラー: ${err.message.split('\n')[0]}`);
-      await sleep(SEARCH_DELAY_MS);
-      continue;
-    }
+    for (let pageNum = 1; pageNum <= PAGES_PER_KEYWORD; pageNum++) {
+      process.stdout.write(`  検索: "${keyword}"${PAGES_PER_KEYWORD > 1 ? ` (p${pageNum})` : ''} ... `);
 
-    try {
-      const url = `${SEARCH_URL}?keyword=${encodeURIComponent(keyword)}&order=new`;
-      await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 });
-
-      // ジョブリストが読み込まれるまで待機
-      await page.waitForSelector('[data-testid="job-offer-card"], .job_offer_detail, article', {
-        timeout: 15000
-      }).catch(() => null);
-
-      const jobs = await page.evaluate(extractJobsFromPage, BASE_URL);
-
-      let newCount = 0;
-      let dupCount = 0;
-      for (const job of jobs) {
-        if (!job.title) continue;
-        const existing = seenIds.get(job.id);
-        if (existing) {
-          // 既に別のキーワードで見つかっている案件。可能な範囲で一致した検索語を配列で保持する
-          dupCount++;
-          if (!existing.matchedKeywords.includes(keyword)) existing.matchedKeywords.push(keyword);
-        } else {
-          job.matchedKeyword = keyword; // 後方互換：単一キーワード表示用（renderer.js等）
-          job.matchedKeywords = [keyword];
-          job.matchedCategories = [];
-          seenIds.set(job.id, job);
-          allJobs.push(job);
-          newCount++;
-        }
+      let page;
+      try {
+        page = await getPage();
+      } catch (err) {
+        keywordError = err.message.split('\n')[0];
+        console.log(`エラー: ${keywordError}`);
+        await sleep(SEARCH_DELAY_MS);
+        break; // このキーワードは以降のページも諦める
       }
-      keywordStats.push({ keyword, found: jobs.length, newCount, dupCount });
-      console.log(`${newCount}件取得${dupCount > 0 ? `（重複${dupCount}件除外）` : ''}`);
-    } catch (err) {
-      keywordStats.push({ keyword, found: 0, newCount: 0, dupCount: 0, error: err.message.split('\n')[0] });
-      console.log(`エラー: ${err.message.split('\n')[0]}`);
-    } finally {
-      await page.close().catch(() => null);
+
+      try {
+        const url = `${SEARCH_URL}?keyword=${encodeURIComponent(keyword)}&order=new&page=${pageNum}`;
+        await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 });
+
+        // ジョブリストが読み込まれるまで待機
+        await page.waitForSelector('[data-testid="job-offer-card"], .job_offer_detail, article', {
+          timeout: 15000
+        }).catch(() => null);
+
+        const jobs = await page.evaluate(extractJobsFromPage, BASE_URL);
+        totalFound += jobs.length;
+
+        // 2ページ目以降で結果が0件（＝1ページ目で結果が尽きた）なら、それ以上のページ取得は無駄なので打ち切る
+        if (jobs.length === 0 && pageNum > 1) {
+          console.log('0件（これ以上のページなし）');
+          await page.close().catch(() => null);
+          break;
+        }
+
+        for (const job of jobs) {
+          if (!job.title) continue;
+          const existing = seenIds.get(job.id);
+          if (existing) {
+            // 既に別のキーワード／同キーワードの別ページで見つかっている案件
+            dupCount++;
+            if (!existing.matchedKeywords.includes(keyword)) existing.matchedKeywords.push(keyword);
+          } else {
+            job.matchedKeyword = keyword; // 後方互換：単一キーワード表示用（renderer.js等）
+            job.matchedKeywords = [keyword];
+            job.matchedCategories = [];
+            seenIds.set(job.id, job);
+            allJobs.push(job);
+            newCount++;
+          }
+        }
+        console.log(`${jobs.length}件取得`);
+      } catch (err) {
+        keywordError = err.message.split('\n')[0];
+        console.log(`エラー: ${keywordError}`);
+        await page.close().catch(() => null);
+        break; // このページでエラーが出たら、それ以上のページ取得は諦める
+      } finally {
+        await page.close().catch(() => null);
+      }
+
+      await sleep(SEARCH_DELAY_MS);
     }
 
-    await sleep(SEARCH_DELAY_MS);
+    if (keywordError && totalFound === 0) {
+      keywordStats.push({ keyword, found: 0, newCount: 0, dupCount: 0, error: keywordError });
+    } else {
+      keywordStats.push({ keyword, found: totalFound, newCount, dupCount });
+      console.log(`    → "${keyword}" 合計${totalFound}件中 新規${newCount}件（重複${dupCount}件除外）`);
+    }
   }
 
   // 公式カテゴリ経由の取得（第1弾：資料作成・マニュアル作成のみ）。

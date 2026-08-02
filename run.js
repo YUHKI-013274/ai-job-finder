@@ -14,7 +14,7 @@ const { scrapeJobs } = require('./scraper');
 const { classifyJobs } = require('./evaluator');
 const { renderHTML, renderMarkdown } = require('./renderer');
 const { sendGmailNotification } = require('./notifier');
-const { loadSeenJobs, saveSeenJobs, loadAppliedJobs, loadJobStatus, filterJobStatus, JOB_STATUS } = require('./store');
+const { loadSeenJobs, saveSeenJobs, loadAppliedJobs, loadJobStatus, filterJobStatus, JOB_STATUS, updateJobHistoryEntry } = require('./store');
 const { syncAppliedFromSheet } = require('./sheet-sync');
 const { MIN_RAW_JOBS, CURRENT_PHASE, CURRENT_PHASE_KEY } = require('./config');
 
@@ -73,13 +73,23 @@ async function main() {
     console.log(`ℹ️  今日の「今すぐ応募」案件は${nowApply.length}件です（無理な枠埋めはしていません）`);
   }
 
-  // 3. 既出リストを更新（今回取得した全案件を記録し、翌回以降は重複表示しない）
+  // 3. 案件履歴を更新（seen_jobs.jsonは除外リストではなく履歴として使う）。
+  // 今回評価した全案件（allEvaluated＝新着＋継続候補＋除外）の最終確認日・表示区分・
+  // 最終表示日を記録する。「一度取得した」ことは翌回以降の除外理由にはならない。
+  const shownIds = new Set([
+    ...nowApply.map(j => j.id),
+    ...highValueChallenge.map(j => j.id),
+    ...normalChallenge.map(j => j.id),
+    ...confirmCandidates.map(j => j.id),
+  ]);
   let newlySeenCount = 0;
-  for (const job of rawJobs) {
-    if (!seenMap[job.id]) {
-      seenMap[job.id] = { firstSeen: dateLabel, title: job.title, url: job.url };
-      newlySeenCount++;
-    }
+  let continuingCount = 0;
+  for (const job of allEvaluated) {
+    const isNew = !seenMap[job.id];
+    if (isNew) newlySeenCount++; else continuingCount++;
+    seenMap[job.id] = updateJobHistoryEntry(seenMap[job.id], {
+      job, dateLabel, wasShown: shownIds.has(job.id),
+    });
   }
   saveSeenJobs(seenMap);
 
@@ -90,7 +100,11 @@ async function main() {
 
   console.log(`今すぐ応募 ${nowApply.length}件 / 高単価チャレンジ ${highValueChallenge.length}件 / 通常チャレンジ ${normalChallenge.length}件 / 確認候補 ${confirmCandidates.length}件 / 保留 ${holds.length}件 / 除外 ${excluded.length}件`);
   console.log('除外内訳:', JSON.stringify(excludeReasonCounts));
-  console.log(`(新規に既出登録: ${newlySeenCount}件)`);
+  console.log(`(新着: ${newlySeenCount}件 / 継続候補: ${continuingCount}件)`);
+  const candidateJobs = [...nowApply, ...highValueChallenge, ...normalChallenge, ...confirmCandidates];
+  const newInCandidates = candidateJobs.filter(j => j.jobStatus === '新着').length;
+  const continuingInCandidates = candidateJobs.filter(j => j.jobStatus === '継続候補').length;
+  console.log(`(応募検討候補の内訳: 新着${newInCandidates}件 / 継続候補${continuingInCandidates}件)`);
 
   // キーワード・カテゴリ別内訳（取得件数・新規/重複・S/A/B/C/除外への振り分け結果）
   // 注意1：job.matchedKeyword はevaluator.js側で表示用に「実際に一致した業務内容の代表語」へ

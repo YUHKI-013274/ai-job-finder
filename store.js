@@ -77,6 +77,27 @@ function extractJobId(idOrUrl) {
   return m ? m[1] : null;
 }
 
+// seen_jobs.json（案件履歴）のエントリを最新の評価結果で更新する。
+// 「既出」は除外リストではなく履歴として使うため、ここでは各案件の最終確認日・
+// 前回/今回の表示区分・最終表示日を記録するだけで、除外判定には一切使わない。
+// 応募期限・掲載日・募集状態は、取得できる場合にのみ埋める（取得できない項目は
+// 存在しない値として保存し、確認候補側の判断に委ねる。存在しないデータを補完しない）。
+function updateJobHistoryEntry(entry, { job, dateLabel, wasShown }) {
+  const base = entry || { firstSeen: dateLabel, title: job.title, url: job.url };
+  return {
+    firstSeen: base.firstSeen || dateLabel,
+    title: job.title,
+    url: job.url,
+    lastChecked: dateLabel,
+    postedDate: job.postedDate || base.postedDate || null,
+    deadline: job.deadline || base.deadline || null,
+    listingStatus: base.listingStatus || 'unknown', // 'unknown'|'open'|'closed'（期限抽出が機能するまでは常にunknown）
+    previousTier: base.currentTier || null,
+    currentTier: job.displayTier || null,
+    lastShownDate: wasShown ? dateLabel : (base.lastShownDate || null),
+  };
+}
+
 module.exports = {
   DATA_DIR,
   SEEN_PATH,
@@ -92,4 +113,5 @@ module.exports = {
   setJobStatus,
   filterJobStatus,
   extractJobId,
+  updateJobHistoryEntry,
 };

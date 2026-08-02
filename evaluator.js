@@ -730,13 +730,7 @@ function byRankThenScore(a, b) {
   return b.totalScore - a.totalScore;
 }
 
-// 案件一覧を「応募候補」「成長候補」「保留」「除外」の4分類に振り分ける。
-// appliedMap / seenMap / rejectedMap は { [jobId]: {...} } の形（値の有無だけを見る）。
-//
-// 応募数を埋めるための枠埋め（保留からの昇格）は廃止した。応募候補は必ずS/Aランクかつ
-// 単価確認済みの案件のみとし、5件に満たない日があっても低品質案件で埋めない。
-// Bランクは「今後の営業資産づくりにつながる成長候補」として別バケットに分離する。
-// 案件一覧を5区分（今すぐ応募／高単価チャレンジ／通常チャレンジ／保留／除外）に振り分ける。
+// 案件一覧を5区分（今すぐ応募／高単価チャレンジ／通常チャレンジ／確認候補／保留／除外）に振り分ける。
 // 表示順もこの順序を優先度として使う（renderer.js側のタブ順もこれに合わせる）。
 //
 // - 今すぐ応募（nowApply）：capabilityStatus=応募可能・直接証明または強い代替証明。
@@ -744,7 +738,14 @@ function byRankThenScore(a, b) {
 // - 高単価チャレンジ（highValueChallenge）：capabilityStatus=チャレンジ可能・強い代替証明以上・かつ
 //   単価/継続性/長期資産性のいずれかが高い案件（既存スコアの組み合わせのみで判定。新しい条件は追加しない）。
 // - 通常チャレンジ（normalChallenge）：上記以外のチャレンジ可能案件、および応募可能だが経済条件が弱い案件。
+// - 確認候補（confirmCandidates）：Knowledgeだけでは応募可能・対応不可のどちらとも断定できない案件。
 // - 保留（holds）：単価不明等の情報不足で、今すぐ応募にも各チャレンジ枠にも分類できない案件のみ。
+//
+// appliedMap / rejectedMap は { [jobId]: {...} } の形（値の有無だけを見る）。
+// seenMap（案件履歴。data/seen_jobs.json）は「除外リスト」ではなく「過去に取得したことがある
+// という履歴」として扱う。一度取得しただけの案件を理由に候補から外すことはしない。
+// 過去に取得済みの案件は job.jobStatus='継続候補'、初めて取得した案件は job.jobStatus='新着' として
+// 区別し、どちらも通常どおり評価パイプラインへ通す（判定ロジック自体は変更しない）。
 function classifyJobs(jobs, appliedMap = {}, seenMap = {}, rejectedMap = {}) {
   const nowApply = [];
   const highValueChallenge = [];
@@ -767,12 +768,11 @@ function classifyJobs(jobs, appliedMap = {}, seenMap = {}, rejectedMap = {}) {
       });
       continue;
     }
-    if (seenMap[raw.id]) {
-      excluded.push({ ...raw, excluded: true, excludeReason: '既出' });
-      continue;
-    }
 
+    const priorHistory = seenMap[raw.id] || null;
     const job = evaluateJob(raw);
+    job.jobStatus = priorHistory ? '継続候補' : '新着';
+    job.firstSeen = priorHistory ? (priorHistory.firstSeen || null) : null;
     if (job.excluded) {
       excluded.push(job);
       continue;
