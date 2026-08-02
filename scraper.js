@@ -1,8 +1,27 @@
 const { chromium } = require('playwright');
 const { SEARCH_KEYWORDS, CATEGORY_SOURCES, SEARCH_DELAY_MS, PAGES_PER_KEYWORD } = require('./config');
+const { todayJST, resolveDeadline, normalizeDateString } = require('./date-utils');
 
 const BASE_URL = 'https://crowdworks.jp';
 const SEARCH_URL = `${BASE_URL}/public/jobs/search`;
+
+// ブラウザ側（extractJobsFromPage）で抽出した生の応募期限情報（deadlineRaw）を、
+// 日本時間基準で実際の日付・状態（open/expired/unknown）に変換する。
+// タイムゾーンに依存する計算はすべてここ（Node側）で行う。
+function applyDeadlineInfo(jobs) {
+  const today = todayJST();
+  const checkedAt = new Date().toISOString();
+  for (const job of jobs) {
+    const raw = job.deadlineRaw || { daysLeft: null, monthDayText: null, expiredMarker: false, postedDateRaw: null };
+    const { deadline, deadlineStatus } = resolveDeadline(raw, today);
+    job.deadline = deadline;
+    job.deadlineStatus = deadlineStatus;
+    job.deadlineCheckedAt = checkedAt;
+    job.postedDate = normalizeDateString(raw.postedDateRaw) || null;
+    delete job.deadlineRaw;
+  }
+  return jobs;
+}
 
 async function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -11,8 +30,27 @@ async function sleep(ms) {
 // 案件一覧ページ（キーワード検索・カテゴリ一覧のどちらも同じカード形式）から案件情報を抽出する。
 // カテゴリページは主要セレクターに一致しないことが多いため、その場合はリンクベースの
 // フォールバック抽出を使う（動作確認済み）。
+//
+// 応募期限について：実際のCrowdWorksカードを確認したところ、募集中の案件は
+// 「あと3日（8月5日まで）」のような相対表示で、募集終了した案件は同じ位置に
+// 「募集終了」という文字列がそのまま表示される（相対表示は出ない）。
+// この関数はpage.evaluate内（ブラウザ側）で実行されるため、日付の計算（タイムゾーン依存）は
+// 行わず、生の文字列情報（あと何日か／募集終了の文字列があるか／掲載日）だけを抽出する。
+// 実際の日付計算・判定はNode側（scrapeJobs内、date-utils.js）で日本時間基準で行う。
 function extractJobsFromPage(baseUrl) {
   const results = [];
+
+  function extractDeadlineRaw(text) {
+    const daysMatch = text.match(/あと\s*(-?\d+)\s*日/);
+    const daysLeft = daysMatch ? parseInt(daysMatch[1], 10) : null;
+    const monthDayMatch = text.match(/[（(]\s*(\d{1,2}月\d{1,2}日)\s*まで\s*[）)]/);
+    const monthDayText = monthDayMatch ? monthDayMatch[1] : null;
+    // 「募集終了」は相対表示（あと◯日）の代わりに表示されるため、相対表示が無い場合のみ有効な信号として扱う
+    const expiredMarker = /募集終了/.test(text) && daysLeft === null;
+    const postedMatch = text.match(/掲載日[:：]\s*(\d{4}年\d{1,2}月\d{1,2}日)/);
+    const postedDateRaw = postedMatch ? postedMatch[1] : null;
+    return { daysLeft, monthDayText, expiredMarker, postedDateRaw };
+  }
 
   const selectors = [
     '[data-testid="job-offer-card"]',
@@ -56,7 +94,7 @@ function extractJobsFromPage(baseUrl) {
         url: `${baseUrl}/public/jobs/${idMatch[1]}`,
         price,
         applicants,
-        deadline: null,
+        deadlineRaw: extractDeadlineRaw(text),
         description: text.substring(0, 500),
       });
     });
@@ -83,16 +121,13 @@ function extractJobsFromPage(baseUrl) {
     const appMatch = text.match(/(\d+)\s*人が応募/);
     const applicants = appMatch ? parseInt(appMatch[1]) : null;
 
-    const deadlineMatch = text.match(/(\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2}|\d{1,2}月\d{1,2}日)/);
-    const deadline = deadlineMatch ? deadlineMatch[1] : null;
-
     results.push({
       id: idMatch[1],
       title,
       url: `${baseUrl}/public/jobs/${idMatch[1]}`,
       price,
       applicants,
-      deadline,
+      deadlineRaw: extractDeadlineRaw(text),
       description: text.substring(0, 600),
     });
   });
@@ -169,7 +204,7 @@ async function scrapeJobs() {
           timeout: 15000
         }).catch(() => null);
 
-        const jobs = await page.evaluate(extractJobsFromPage, BASE_URL);
+        const jobs = applyDeadlineInfo(await page.evaluate(extractJobsFromPage, BASE_URL));
         totalFound += jobs.length;
 
         // 2ページ目以降で結果が0件（＝1ページ目で結果が尽きた）なら、それ以上のページ取得は無駄なので打ち切る
@@ -239,7 +274,7 @@ async function scrapeJobs() {
         timeout: 15000
       }).catch(() => null);
 
-      const jobs = await page.evaluate(extractJobsFromPage, BASE_URL);
+      const jobs = applyDeadlineInfo(await page.evaluate(extractJobsFromPage, BASE_URL));
 
       let newCount = 0;
       let dupCount = 0;

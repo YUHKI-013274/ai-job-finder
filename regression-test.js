@@ -8,9 +8,10 @@
 
 const evaluator = require('./evaluator');
 const config = require('./config');
+const dateUtils = require('./date-utils');
 
 let idCounter = 1;
-function job(title, description, price = '3,000円') {
+function job(title, description, price = '3,000円', deadlineFields = {}) {
   return {
     id: String(idCounter++),
     title,
@@ -18,7 +19,9 @@ function job(title, description, price = '3,000円') {
     price,
     url: 'https://crowdworks.jp/public/jobs/' + idCounter,
     applicants: null,
-    deadline: null,
+    deadline: deadlineFields.deadline !== undefined ? deadlineFields.deadline : null,
+    deadlineStatus: deadlineFields.deadlineStatus !== undefined ? deadlineFields.deadlineStatus : 'unknown',
+    deadlineCheckedAt: deadlineFields.deadlineCheckedAt || new Date().toISOString(),
     matchedKeyword: '(テスト)',
   };
 }
@@ -141,6 +144,71 @@ console.log('='.repeat(100) + '\n');
   console.log('除外理由内訳:', JSON.stringify(reasonCounts));
   const total400 = nowApply.length + highValueChallenge.length + normalChallenge.length + confirmCandidates.length;
   console.log(`継続候補400件サンプルのうち応募検討候補になった数: ${total400}件（${(total400/400*100).toFixed(1)}%）`);
+}
+
+console.log('\n' + '='.repeat(100));
+console.log('■ 応募期限の正規化・判定（date-utils.js）');
+console.log('='.repeat(100) + '\n');
+
+record('日付表記4形式を正しく解析できる：2026年07月28日', dateUtils.normalizeDateString('2026年07月28日') === '2026-07-28');
+record('日付表記4形式を正しく解析できる：2026年7月28日', dateUtils.normalizeDateString('2026年7月28日') === '2026-07-28');
+record('日付表記4形式を正しく解析できる：2026/07/28', dateUtils.normalizeDateString('2026/07/28') === '2026-07-28');
+record('日付表記4形式を正しく解析できる：2026-07-28', dateUtils.normalizeDateString('2026-07-28') === '2026-07-28');
+
+{
+  // ご指摘のPowerPoint案件を再現：2026年7月28日が応募期限、判定基準日が2026年8月2日 → 募集終了
+  const r = dateUtils.resolveDeadline({ daysLeft: null, monthDayText: null, expiredMarker: true, postedDateRaw: null }, '2026-08-02');
+  record('2026年7月28日期限の案件が、2026年8月2日時点で募集終了になる（募集終了マーカー検出）', r.deadlineStatus === 'expired', JSON.stringify(r));
+}
+{
+  // 「あと0日」＝本日が期限 → 応募候補に残る（募集終了ではない）
+  const r = dateUtils.resolveDeadline({ daysLeft: 0, monthDayText: null, expiredMarker: false, postedDateRaw: null }, '2026-08-02');
+  record('本日期限（あと0日）の案件は応募候補に残る（open）', r.deadlineStatus === 'open' && r.deadline === '2026-08-02', JSON.stringify(r));
+}
+{
+  // 「あと5日」＝明日以降 → 応募候補に残る
+  const r = dateUtils.resolveDeadline({ daysLeft: 5, monthDayText: null, expiredMarker: false, postedDateRaw: null }, '2026-08-02');
+  record('明日以降期限（あと5日）の案件は応募候補に残る（open）', r.deadlineStatus === 'open' && r.deadline === '2026-08-07', JSON.stringify(r));
+}
+{
+  // 期限情報が一切取得できない場合 → unknown（自動除外しない）
+  const r = dateUtils.resolveDeadline({ daysLeft: null, monthDayText: null, expiredMarker: false, postedDateRaw: null }, '2026-08-02');
+  record('期限情報が取得できない案件はunknownになる（expiredにしない）', r.deadlineStatus === 'unknown' && r.deadline === null, JSON.stringify(r));
+}
+
+console.log('\n' + '='.repeat(100));
+console.log('■ 応募期限判定のclassifyJobs統合確認');
+console.log('='.repeat(100) + '\n');
+
+{
+  const expiredJob = job('【高単価案件！】会社紹介のPowerPoint・PDF資料作成をご依頼いたします', 'PowerPoint・PDF資料を作成していただきます。', '30,000円', { deadline: null, deadlineStatus: 'expired' });
+  const { excluded } = evaluator.classifyJobs([expiredJob], {}, {}, {});
+  record('募集終了の案件は今すぐ応募/高単価/通常/確認候補から除外される', excluded.length === 1 && excluded[0].excludeReason === '募集終了');
+}
+{
+  const openJob = job('BtoB向けサービス紹介資料の作成', '企業向けサービス紹介資料を作成していただきます。', '8,000円', { deadline: '2026-08-10', deadlineStatus: 'open' });
+  const { nowApply, highValueChallenge, normalChallenge, confirmCandidates, excluded } = evaluator.classifyJobs([openJob], {}, {}, {});
+  const found = [...nowApply, ...highValueChallenge, ...normalChallenge, ...confirmCandidates].length === 1;
+  record('期限内（open）の案件は通常どおり評価される', found && excluded.length === 0);
+}
+{
+  const unknownJob = job('BtoB向けサービス紹介資料の作成', '企業向けサービス紹介資料を作成していただきます。', '8,000円', { deadline: null, deadlineStatus: 'unknown' });
+  const j = evaluator.evaluateJob(unknownJob);
+  record('期限不明の案件は自動除外されず「⚠️ 応募期限未取得・応募前に確認」が表示される',
+    !j.excluded && j.confirmBeforeApply.includes('⚠️ 応募期限未取得・応募前に確認'));
+}
+{
+  // 新着・継続候補の両方へ期限判定が適用されることの確認
+  const expiredContinuing = job('継続候補だが期限切れの案件', '説明文', '10,000円', { deadline: null, deadlineStatus: 'expired' });
+  const seenMap = { [expiredContinuing.id]: { firstSeen: '2026-07-01', title: expiredContinuing.title, url: expiredContinuing.url } };
+  const { excluded } = evaluator.classifyJobs([expiredContinuing], {}, seenMap, {});
+  record('継続候補でも期限切れなら除外される（新着・継続候補どちらにも期限判定が適用される）',
+    excluded.length === 1 && excluded[0].excludeReason === '募集終了');
+}
+{
+  const testJob = job('生成AI活用による業務改善支援', 'プロジェクトマネジメント経験を活かして業務改善を支援します。', '1,000,000円', { deadline: '2026-08-10', deadlineStatus: 'open' });
+  const { excluded } = evaluator.classifyJobs([testJob], { [testJob.id]: {} }, {}, {});
+  record('応募済み・見送り済みの既存処理は期限判定の追加後も壊れない（応募済み）', excluded.length === 1 && excluded[0].excludeReason === '応募済み');
 }
 
 console.log('\n' + '='.repeat(100));

@@ -79,9 +79,9 @@ function extractJobId(idOrUrl) {
 
 // seen_jobs.json（案件履歴）のエントリを最新の評価結果で更新する。
 // 「既出」は除外リストではなく履歴として使うため、ここでは各案件の最終確認日・
-// 前回/今回の表示区分・最終表示日を記録するだけで、除外判定には一切使わない。
-// 応募期限・掲載日・募集状態は、取得できる場合にのみ埋める（取得できない項目は
-// 存在しない値として保存し、確認候補側の判断に委ねる。存在しないデータを補完しない）。
+// 前回/今回の表示区分・最終表示日を記録するだけで、除外判定には（応募期限を除き）使わない。
+// 応募期限（deadline/deadlineStatus/deadlineCheckedAt）は今回のスクレイピングで取得できた
+// 最新の値を優先し、取得できなかった場合のみ前回値を保持する（存在しないデータを捏造しない）。
 function updateJobHistoryEntry(entry, { job, dateLabel, wasShown }) {
   const base = entry || { firstSeen: dateLabel, title: job.title, url: job.url };
   return {
@@ -91,7 +91,8 @@ function updateJobHistoryEntry(entry, { job, dateLabel, wasShown }) {
     lastChecked: dateLabel,
     postedDate: job.postedDate || base.postedDate || null,
     deadline: job.deadline || base.deadline || null,
-    listingStatus: base.listingStatus || 'unknown', // 'unknown'|'open'|'closed'（期限抽出が機能するまでは常にunknown）
+    deadlineStatus: job.deadlineStatus || base.deadlineStatus || 'unknown', // 'open'|'expired'|'unknown'
+    deadlineCheckedAt: job.deadlineCheckedAt || base.deadlineCheckedAt || null,
     previousTier: base.currentTier || null,
     currentTier: job.displayTier || null,
     lastShownDate: wasShown ? dateLabel : (base.lastShownDate || null),

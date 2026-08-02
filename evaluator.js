@@ -514,6 +514,8 @@ function evaluateJob(job) {
   if (priceUnverified) confirmBeforeApply.push('報酬額（案件詳細で確認）');
   if (industryMismatchMatches.length > 0) confirmBeforeApply.push(`業界の一致度（${industryMismatchMatches[0]}）`);
   if (capability.undecidedReason) confirmBeforeApply.push(capability.undecidedReason);
+  // 応募期限を取得できなかった案件は、自動除外はせず応募前の確認事項として明示する
+  if (job.deadlineStatus === 'unknown') confirmBeforeApply.push('⚠️ 応募期限未取得・応募前に確認');
 
   // 高評価の理由（★の数で重要度が分かる形式で可視化）
   const matchedSignals = buildWeightedSignals({
@@ -766,6 +768,13 @@ function classifyJobs(jobs, appliedMap = {}, seenMap = {}, rejectedMap = {}) {
         excludeReason: '見送り',
         skipReason: rejectedMap[raw.id].reason || '理由未記入',
       });
+      continue;
+    }
+    // 応募期限切れ（今回のスクレイピング時点でCrowdWorks側が「募集終了」と表示している案件）。
+    // 期限を取得できない場合（deadlineStatus==='unknown'）は自動除外せず、通常どおり評価する
+    // （評価結果のconfirmBeforeApplyに「応募期限未取得・応募前に確認」を表示する）。
+    if (raw.deadlineStatus === 'expired') {
+      excluded.push({ ...raw, excluded: true, excludeReason: '募集終了' });
       continue;
     }
 
