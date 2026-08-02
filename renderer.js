@@ -25,13 +25,14 @@ function getReasonColor(reason) {
 }
 
 function getCapabilityColor(status) {
-  return { '応募可能': '#27ae60', 'チャレンジ可能': '#2980b9' }[status] || '#7f8c8d';
+  return { '応募可能': '#27ae60', 'チャレンジ可能': '#2980b9', '確認候補': '#8e44ad' }[status] || '#7f8c8d';
 }
 
 function getTierBadge(displayTier) {
   if (displayTier === 'now_pending') return { text: '⏳ 条件確認後に応募', bg: '#e0e0e0', color: '#555' };
   if (displayTier === 'high_value_challenge') return { text: '🔥 高単価チャレンジ', bg: '#d35400', color: '#fff' };
   if (displayTier === 'normal_challenge') return { text: '🌱 通常チャレンジ', bg: '#27ae60', color: '#fff' };
+  if (displayTier === 'confirm_candidate') return { text: '❓ 確認候補', bg: '#8e44ad', color: '#fff' };
   return null;
 }
 
@@ -203,7 +204,7 @@ function renderRankSections(jobs, startIndex) {
   return html;
 }
 
-function renderHTML({ nowApply, highValueChallenge = [], normalChallenge = [], holds, excluded }, date, pageUrl) {
+function renderHTML({ nowApply, highValueChallenge = [], normalChallenge = [], confirmCandidates = [], holds, excluded }, date, pageUrl) {
   const dateStr = date.toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo', year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
   const sJobs = nowApply.filter(j => j.rank === 'S');
   const aJobs = nowApply.filter(j => j.rank === 'A');
@@ -217,6 +218,7 @@ function renderHTML({ nowApply, highValueChallenge = [], normalChallenge = [], h
   const holdCards = renderRankSections(holds, 0);
   const highValueCards = renderRankSections(highValueChallenge, 0);
   const normalChallengeCards = renderRankSections(normalChallenge, 0);
+  const confirmCards = renderRankSections(confirmCandidates, 0);
 
   // チャレンジ枠（高単価・通常）に共通する不足資産を集計（重複をまとめて一覧化）
   const challengeJobs = [...highValueChallenge, ...normalChallenge];
@@ -806,6 +808,7 @@ function renderHTML({ nowApply, highValueChallenge = [], normalChallenge = [], h
       <span class="stat-chip a">🟠 優先応募(A) ${aJobs.length}件</span>
       <span class="stat-chip" style="background:rgba(211,84,0,0.55)">🔥 高単価チャレンジ ${highValueChallenge.length}件</span>
       <span class="stat-chip">🌱 通常チャレンジ ${normalChallenge.length}件</span>
+      <span class="stat-chip" style="background:rgba(142,68,173,0.55)">❓ 確認候補 ${confirmCandidates.length}件</span>
       <span class="stat-chip">🚫 見送り ${gateRejectedCount}件</span>
       <span class="stat-chip">🧩 不足資産 ${missingAssetList.length}件</span>
       <span class="stat-chip">保留 ${holds.length}件</span>
@@ -818,6 +821,7 @@ function renderHTML({ nowApply, highValueChallenge = [], normalChallenge = [], h
     <div class="tab active" onclick="switchTab('now', this)">📋 今すぐ応募</div>
     <div class="tab" onclick="switchTab('highvalue', this)">🔥 高単価チャレンジ</div>
     <div class="tab" onclick="switchTab('normal', this)">🌱 通常チャレンジ</div>
+    <div class="tab" onclick="switchTab('confirm', this)">❓ 確認候補</div>
     <div class="tab" onclick="switchTab('holds', this)">⏸ 保留</div>
     <div class="tab" onclick="switchTab('excluded', this)">🚫 除外</div>
     <div class="tab" onclick="switchTab('saved', this)">🔖 候補リスト</div>
@@ -861,6 +865,12 @@ function renderHTML({ nowApply, highValueChallenge = [], normalChallenge = [], h
     ${normalChallengeCards || '<div class="saved-empty">通常チャレンジ候補はありません</div>'}
   </div>
 
+  <!-- 確認候補タブ -->
+  <div id="tab-confirm" class="tab-content">
+    <div class="update-info">❓ 案件辞典・能力辞典のいずれでも応募可能／対応不可と断定できない案件。除外せず、永峯勇気本人の確認に委ねる枠</div>
+    ${confirmCards || '<div class="saved-empty">確認候補はありません</div>'}
+  </div>
+
   <!-- 保留タブ -->
   <div id="tab-holds" class="tab-content">
     <div class="update-info">単価不明等、情報不足で判断できない案件のみ（今後の参考用）</div>
@@ -897,7 +907,7 @@ function renderHTML({ nowApply, highValueChallenge = [], normalChallenge = [], h
 
   <script>
     // ===== タブ切り替え =====
-    const TAB_NAMES = ['now', 'highvalue', 'normal', 'holds', 'excluded', 'saved'];
+    const TAB_NAMES = ['now', 'highvalue', 'normal', 'confirm', 'holds', 'excluded', 'saved'];
     function switchTab(name, el) {
       document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
       document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -1209,7 +1219,7 @@ function renderHTML({ nowApply, highValueChallenge = [], normalChallenge = [], h
 </html>`;
 }
 
-function renderMarkdown({ nowApply, highValueChallenge = [], normalChallenge = [], holds, excluded }, date) {
+function renderMarkdown({ nowApply, highValueChallenge = [], normalChallenge = [], confirmCandidates = [], holds, excluded }, date) {
   const dateStr = date.toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo' });
   const todayTop = nowApply.slice(0, 5);
   const gateRejectedCount = excluded.filter(j => !['応募済み', '見送り', '既出'].includes(j.excludeReason)).length;
@@ -1223,7 +1233,7 @@ function renderMarkdown({ nowApply, highValueChallenge = [], normalChallenge = [
   let md = `# 今日の応募候補\n\n**日付**: ${dateStr}\n\n`;
   md += `今日の最優先応募(S) ${nowApply.filter(j => j.rank === 'S').length}件 / `;
   md += `優先応募(A) ${nowApply.filter(j => j.rank === 'A').length}件 / `;
-  md += `🔥高単価チャレンジ ${highValueChallenge.length}件 / 🌱通常チャレンジ ${normalChallenge.length}件 / 見送り ${gateRejectedCount}件 / 不足資産 ${missingAssetList.length}件\n\n`;
+  md += `🔥高単価チャレンジ ${highValueChallenge.length}件 / 🌱通常チャレンジ ${normalChallenge.length}件 / ❓確認候補 ${confirmCandidates.length}件 / 見送り ${gateRejectedCount}件 / 不足資産 ${missingAssetList.length}件\n\n`;
   md += `保留 ${holds.length}件 / 除外 ${excluded.length}件\n\n`;
 
   md += `## 🎯 今日応募すべき案件（今すぐ応募、最大5件。無理な枠埋めはしません）\n\n`;
@@ -1259,6 +1269,12 @@ function renderMarkdown({ nowApply, highValueChallenge = [], normalChallenge = [
   }
   normalChallenge.forEach((job, i) => {
     md += `${i + 1}. ${job.title}\n   URL: ${job.url}\n   報酬: ${job.price || '要確認'}\n   不足資産: ${(job.missingAssets || []).join('、') || 'なし'}\n\n`;
+  });
+
+  md += `## ❓ 確認候補（全${confirmCandidates.length}件）\n\n`;
+  md += `案件辞典・能力辞典のいずれでも応募可能／対応不可と断定できない案件。除外していません。\n\n`;
+  confirmCandidates.forEach((job, i) => {
+    md += `${i + 1}. ${job.title}\n   URL: ${job.url}\n   報酬: ${job.price || '要確認'}\n   確認候補になった理由: ${job.capabilityReason}\n   応募前に確認すべき条件: ${(job.confirmBeforeApply || []).join('、') || 'なし'}\n\n`;
   });
 
   md += `## ⏸ 保留（全${holds.length}件）\n\n`;

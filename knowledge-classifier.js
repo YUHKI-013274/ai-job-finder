@@ -35,14 +35,34 @@ function findFirstMatch(text, list, patternsKey = 'patterns') {
   return null;
 }
 
-// 案件テキストが能力辞典の各能力の「代替証明として使える案件」と緩やかに関連するかを見る
-// （タスクカテゴリーのいずれにも一致しなかった場合の最終フォールバック判定用）
-function findLooseCapabilityHint(text, capabilities) {
-  const hints = [];
+// 案件テキストが能力辞典の各能力の「依頼される作業・成果物」を表す語（signals）と
+// 一致するかを見る（タスクカテゴリーのいずれにも一致しなかった場合の救済判定用）。
+// 修正前は def.substituteFor（人が読むための説明文）をそのまま案件文と部分一致させて
+// いたため実質的に一致することがなかった（監査で発見・0件稼働の不具合）。
+// signalsは実際の求人語彙（デザイナー募集／投稿制作／リサーチャー等）を保持する
+// 独立フィールドとして能力辞典側に追加し、単語・複合語レベルで判定する。
+function findCapabilityConnections(text, capabilities) {
+  const connections = [];
   for (const [name, def] of Object.entries(capabilities)) {
-    if (def.substituteFor && text.includes(def.substituteFor)) hints.push(name);
+    const matched = matchPatternList(text, def.signals);
+    if (matched.length > 0) connections.push({ name, def, matchedPatterns: matched });
   }
-  return hints;
+  return connections;
+}
+
+// 能力接続が、既存タスクカテゴリー（TASK_CATEGORIES）のいずれかの必須能力群と
+// 複数一致する場合、そのカテゴリーを「構造的に強い接続」とみなして証拠を借用できるようにする。
+// 1能力のみの接続は、単独のタスクカテゴリーへ断定せず確認候補として扱う（過剰な自動昇格を避ける）。
+function findStronglyConnectedCategory(connections, taskCategories) {
+  const connectedNames = new Set(connections.map(c => c.name));
+  let best = null;
+  for (const category of taskCategories) {
+    const overlap = category.requiredCapabilities.filter(c => connectedNames.has(c));
+    if (overlap.length >= 2 && (!best || overlap.length > best.overlap.length)) {
+      best = { category, overlap };
+    }
+  }
+  return best;
 }
 
 // テーマ・業界経験（ドメイン）の一致を判定する。トリガー語が実際に含まれる場合のみ返す。
@@ -110,7 +130,7 @@ function buildMissingEvidence({ category, capabilityStatus }) {
 /**
  * 案件テキスト（タイトル+本文、正規化・否定表現除去済み）を分類する。
  * @returns {{
- *   capabilityStatus: '応募可能'|'チャレンジ可能'|'対応不可',
+ *   capabilityStatus: '応募可能'|'チャレンジ可能'|'確認候補'|'対応不可',
  *   evidenceType: '直接証明'|'強い代替証明'|'弱い代替証明'|'証明不足',
  *   capabilityReason: string,
  *   matchedCapabilities: string[],
@@ -118,6 +138,7 @@ function buildMissingEvidence({ category, capabilityStatus }) {
  *   decisionSource: string,
  *   matchedCategory: object|null,
  *   domainExperience: string|null,
+ *   undecidedReason: string|null,
  * }}
  */
 function classifyCapability(text, profile) {
@@ -137,6 +158,7 @@ function classifyCapability(text, profile) {
         decisionSource: area.decisionSource,
         matchedCategory: null,
         domainExperience: null,
+        undecidedReason: null,
       };
     }
   }
@@ -173,22 +195,52 @@ function classifyCapability(text, profile) {
         : category.decisionSource,
       matchedCategory: category,
       domainExperience: domainMatch ? domainMatch.domain.text : null,
+      undecidedReason: null,
     };
   }
 
-  // 4. どのタスクカテゴリーにも一致しなかった場合のみ、能力辞典レベルの緩やかな一致を見る。
-  //    （テーマ一致だけでは対応可能業務にしない＝発見1の再発防止）
-  const looseHints = findLooseCapabilityHint(text, profile.capabilities);
-  if (looseHints.length > 0) {
+  // 4. どのタスクカテゴリーにも一致しなかった場合、能力辞典の救済判定を行う。
+  //    案件文に含まれる「依頼される作業・成果物」語（signals）から接続する能力を洗い出し、
+  //    その能力群が既存タスクカテゴリーの必須能力と複数一致する場合のみ、そのカテゴリーの
+  //    証拠を借用して応募可能／チャレンジ可能とする（過剰な自動昇格を避けるため、
+  //    単一能力のみの接続は断定せず確認候補に回す）。
+  const connections = findCapabilityConnections(text, profile.capabilities);
+  if (connections.length > 0) {
+    const strong = findStronglyConnectedCategory(connections, profile.taskCategories);
+    if (strong) {
+      const category = strong.category;
+      const capabilityStatus = category.tier === 'available' ? '応募可能' : 'チャレンジ可能';
+      const industryMismatchMatches = matchPatternList(text, INDUSTRY_MISMATCH_PATTERNS);
+      // 能力辞典経由の救済は、タスクカテゴリーのpatternsに直接一致した場合より1段階弱い証拠として扱う
+      // （案件文の言い回しからの推定であり、案件の中心業務そのものと確認できたわけではないため）。
+      const evidenceType = industryMismatchMatches.length > 0 ? '弱い代替証明' : '強い代替証明';
+      const missingEvidence = buildMissingEvidence({ category, capabilityStatus });
+      missingEvidence.push(`「${category.label}」の案件辞典パターンとは直接一致せず、能力辞典（${strong.overlap.join('・')}）からの推定のため、案件詳細で業務内容を確認すること`);
+      return {
+        capabilityStatus,
+        evidenceType,
+        capabilityReason: `案件辞典の主要カテゴリーには直接一致しないが、案件文から接続する能力（${strong.overlap.join('・')}）が「${category.label}」の必須能力と複数一致するため、能力辞典フォールバックにより${capabilityStatus}と判定`,
+        matchedCapabilities: strong.overlap,
+        missingEvidence,
+        decisionSource: `Sales Knowledge 4章（能力辞典フォールバック）→ ${category.decisionSource}`,
+        matchedCategory: category,
+        domainExperience: domainMatch ? domainMatch.domain.text : null,
+        undecidedReason: null,
+      };
+    }
+
+    // 能力接続は1つ以上あるが、既存タスクカテゴリーへ複数一致で断定できない＝確認候補。
+    const connectedNames = connections.map(c => c.name);
     return {
-      capabilityStatus: 'チャレンジ可能',
-      evidenceType: '弱い代替証明',
-      capabilityReason: `案件辞典の主要カテゴリーには一致しないが、転用可能な能力（${looseHints.join('・')}）が能力辞典の代替証明範囲に該当するため、チャレンジ可能と判定`,
-      matchedCapabilities: looseHints,
-      missingEvidence: ['この案件テーマに直結する案件辞典カテゴリーがSales Knowledgeにないため、応募文で転用方法を具体的に説明する必要がある'],
-      decisionSource: 'Sales Knowledge 4章（能力辞典）',
+      capabilityStatus: '確認候補',
+      evidenceType: '証明不足',
+      capabilityReason: `案件辞典の主要カテゴリーには一致しないが、案件文に転用可能な能力（${connectedNames.join('・')}）に関連する語（${connections.map(c => c.matchedPatterns[0]).join('・')}）が含まれており、対応可能とも対応不可とも断定できないため確認候補と判定`,
+      matchedCapabilities: connectedNames,
+      missingEvidence: ['この案件テーマに直結する案件辞典カテゴリーがSales Knowledgeになく、依頼される作業内容・成果物の詳細が案件本文からしか確認できない'],
+      decisionSource: 'Sales Knowledge 4章（能力辞典）※単一能力接続のため断定せず確認候補',
       matchedCategory: null,
       domainExperience: domainMatch ? domainMatch.domain.text : null,
+      undecidedReason: `転用可能な能力（${connectedNames.join('・')}）との関連語は見つかったが、案件の中心業務・必須条件が案件文だけでは確定できない`,
     };
   }
 
@@ -201,6 +253,7 @@ function classifyCapability(text, profile) {
     decisionSource: 'Sales Knowledge 1-4（証明できない案件の判断方法）',
     matchedCategory: null,
     domainExperience: null,
+    undecidedReason: null,
   };
 }
 

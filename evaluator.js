@@ -461,6 +461,11 @@ function evaluateJob(job) {
   if (capability.capabilityStatus === 'チャレンジ可能' && (rank === 'S' || rank === 'A')) {
     rank = 'B';
   }
+  // 「確認候補」は証拠・条件が断定できないため、生スコアに関わらずB相当の表示にとどめる
+  // （表示区分＝displayTierは別途'confirm_candidate'に固定されるため、ここはランクバッジの整合のみの調整）。
+  if (capability.capabilityStatus === '確認候補' && (rank === 'S' || rank === 'A')) {
+    rank = 'B';
+  }
   // Sランクは対応可能業務に該当し、証拠が強く、高単価または継続時の収益性・長期資産性・受注可能性が高い場合のみ
   if (rank === 'S' && !meetsSRankConditions({ capability, priceScore, continuityMatches, longTermAssetScore, winScore, priceYen })) {
     rank = 'A';
@@ -496,6 +501,10 @@ function evaluateJob(job) {
     displayTier = 'high_value_challenge';
   } else if (capability.capabilityStatus === 'チャレンジ可能' || capability.capabilityStatus === '応募可能') {
     displayTier = 'normal_challenge';
+  } else if (capability.capabilityStatus === '確認候補') {
+    // タスクカテゴリー・能力辞典フォールバックのいずれでも断定できない案件。
+    // 対応不可（除外）とは区別し、人が最終判断できるよう保留せず確認候補として残す。
+    displayTier = 'confirm_candidate';
   } else {
     displayTier = 'hold';
   }
@@ -504,6 +513,7 @@ function evaluateJob(job) {
   const confirmBeforeApply = [];
   if (priceUnverified) confirmBeforeApply.push('報酬額（案件詳細で確認）');
   if (industryMismatchMatches.length > 0) confirmBeforeApply.push(`業界の一致度（${industryMismatchMatches[0]}）`);
+  if (capability.undecidedReason) confirmBeforeApply.push(capability.undecidedReason);
 
   // 高評価の理由（★の数で重要度が分かる形式で可視化）
   const matchedSignals = buildWeightedSignals({
@@ -739,6 +749,7 @@ function classifyJobs(jobs, appliedMap = {}, seenMap = {}, rejectedMap = {}) {
   const nowApply = [];
   const highValueChallenge = [];
   const normalChallenge = [];
+  const confirmCandidates = [];
   const holds = [];
   const excluded = [];
 
@@ -778,6 +789,11 @@ function classifyJobs(jobs, appliedMap = {}, seenMap = {}, rejectedMap = {}) {
       case 'normal_challenge':
         normalChallenge.push(job);
         break;
+      case 'confirm_candidate':
+        // Knowledge（TASK_CATEGORIES・能力辞典フォールバック）だけでは応募可能・対応不可の
+        // どちらとも断定できない案件。除外せず、人が最終確認できる形でここに残す。
+        confirmCandidates.push(job);
+        break;
       default:
         // 情報不足（単価不明等）で上記いずれにも分類できない案件のみ保留に回す
         holds.push(job);
@@ -787,15 +803,17 @@ function classifyJobs(jobs, appliedMap = {}, seenMap = {}, rejectedMap = {}) {
   nowApply.sort(byRankThenScore);
   highValueChallenge.sort(byRankThenScore);
   normalChallenge.sort(byRankThenScore);
+  confirmCandidates.sort(byRankThenScore);
   holds.sort(byRankThenScore);
 
   // 表示件数の上限で切り詰める前の全評価済み案件（キーワード別集計等の統計用）
-  const allEvaluated = [...nowApply, ...highValueChallenge, ...normalChallenge, ...holds, ...excluded];
+  const allEvaluated = [...nowApply, ...highValueChallenge, ...normalChallenge, ...confirmCandidates, ...holds, ...excluded];
 
   return {
     nowApply: nowApply.slice(0, MAX_JOBS),
     highValueChallenge: highValueChallenge.slice(0, MAX_GROWTH),
     normalChallenge: normalChallenge.slice(0, MAX_GROWTH),
+    confirmCandidates: confirmCandidates.slice(0, MAX_GROWTH),
     holds: holds.slice(0, MAX_HOLDS),
     excluded,
     allEvaluated,

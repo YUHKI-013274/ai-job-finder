@@ -67,7 +67,7 @@ async function main() {
 
   console.log(`\nフェーズ: ${CURRENT_PHASE_KEY}（${CURRENT_PHASE.label}）`);
   console.log('案件を評価・分類中...');
-  const { nowApply, highValueChallenge, normalChallenge, holds, excluded, allEvaluated } = classifyJobs(rawJobs, appliedMap, seenMap, rejectedMap);
+  const { nowApply, highValueChallenge, normalChallenge, confirmCandidates, holds, excluded, allEvaluated } = classifyJobs(rawJobs, appliedMap, seenMap, rejectedMap);
 
   if (nowApply.length < 5) {
     console.log(`ℹ️  今日の「今すぐ応募」案件は${nowApply.length}件です（無理な枠埋めはしていません）`);
@@ -88,7 +88,7 @@ async function main() {
     return acc;
   }, {});
 
-  console.log(`今すぐ応募 ${nowApply.length}件 / 高単価チャレンジ ${highValueChallenge.length}件 / 通常チャレンジ ${normalChallenge.length}件 / 保留 ${holds.length}件 / 除外 ${excluded.length}件`);
+  console.log(`今すぐ応募 ${nowApply.length}件 / 高単価チャレンジ ${highValueChallenge.length}件 / 通常チャレンジ ${normalChallenge.length}件 / 確認候補 ${confirmCandidates.length}件 / 保留 ${holds.length}件 / 除外 ${excluded.length}件`);
   console.log('除外内訳:', JSON.stringify(excludeReasonCounts));
   console.log(`(新規に既出登録: ${newlySeenCount}件)`);
 
@@ -124,12 +124,12 @@ async function main() {
   }
 
   // 4. HTML / Markdown 出力
-  const htmlContent = renderHTML({ nowApply, highValueChallenge, normalChallenge, holds, excluded }, now, PAGE_URL);
+  const htmlContent = renderHTML({ nowApply, highValueChallenge, normalChallenge, confirmCandidates, holds, excluded }, now, PAGE_URL);
   fs.writeFileSync(path.join(outputDir, `jobs_${dateLabel}.html`), htmlContent, 'utf8');
   fs.writeFileSync(path.join(outputDir, 'index.html'), htmlContent, 'utf8');
   fs.writeFileSync(path.join(outputDir, 'latest.html'), htmlContent, 'utf8');
 
-  const mdContent = renderMarkdown({ nowApply, highValueChallenge, normalChallenge, holds, excluded }, now);
+  const mdContent = renderMarkdown({ nowApply, highValueChallenge, normalChallenge, confirmCandidates, holds, excluded }, now);
   fs.writeFileSync(path.join(outputDir, `jobs_${dateLabel}.md`), mdContent, 'utf8');
   fs.writeFileSync(path.join(outputDir, 'latest.md'), mdContent, 'utf8');
 
@@ -165,7 +165,7 @@ async function main() {
       execSync('git add output/ data/', { cwd: repoDir, stdio: 'inherit' });
 
       // gh-pages ブランチへ直接コミット&プッシュ
-      const msg = `📋 案件更新 ${dateLabel} (今すぐ応募:${nowApply.length} 高単価チャレンジ:${highValueChallenge.length} 通常チャレンジ:${normalChallenge.length} 保留:${holds.length} 除外:${excluded.length})`;
+      const msg = `📋 案件更新 ${dateLabel} (今すぐ応募:${nowApply.length} 高単価チャレンジ:${highValueChallenge.length} 通常チャレンジ:${normalChallenge.length} 確認候補:${confirmCandidates.length} 保留:${holds.length} 除外:${excluded.length})`;
       execSync(`git commit -m "${msg}" --allow-empty`, { cwd: repoDir, stdio: 'inherit' });
       execSync('git push origin master', { cwd: repoDir, stdio: 'inherit' });
       console.log('✅ masterへpush完了');

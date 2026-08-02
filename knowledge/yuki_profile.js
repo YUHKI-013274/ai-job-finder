@@ -231,22 +231,74 @@ const EXCLUDED_AREAS = [
 ];
 
 // ===== 能力辞典（Sales Knowledge 4章） =====
-// タスクカテゴリーのいずれにも一致しない場合の、能力レベルでの緩やかな一致判定に使う。
+// タスクカテゴリー（TASK_CATEGORIES）のパターンに一致しない場合の、能力レベルでの
+// 救済判定に使う。
+//
+// signals: 案件文に実際に含まれるかを判定する語（単語・複合語の部分一致）。
+// substituteFor/insufficientForはSales Knowledge 4章の「代替証明として使える案件」
+// 「証明不足になる案件」列の説明文（人が読むための文章）であり、この2つは表示・説明用
+// にのみ使う。signalsは、それとは別に「依頼される作業・成果物」を表す実際の求人語彙
+// （TASK_CATEGORIES.patternsではカバーしきれていない表記ゆれを含む）として新設した。
+// 監査で発見された取りこぼし語彙（デザイナー募集／投稿制作／画像制作／リサーチャー等）
+// を含む。存在しない実績・経験の追加ではなく、既存の確認済み能力・証拠への
+// 「入口（案件文の言い回し）」を広げるものであり、証拠そのものは変更していない。
 const CAPABILITIES = {
-  課題発見力: { substituteFor: '他業界の業務改善、提案資料', insufficientFor: '高度な専門診断・監査が必須の案件' },
-  課題整理力: { substituteFor: '他業界の提案資料、営業資料、AI活用整理', insufficientFor: '専門資格・高度な技術判断が中核の案件' },
-  情報整理力: { substituteFor: 'マニュアル、ホワイトペーパー、他業界の資料', insufficientFor: '高度な専門知識の正確性自体が中核の案件' },
-  業務改善力: { substituteFor: '他業界の小規模業務改善、マニュアル、AI活用整理', insufficientFor: '大規模組織改革、専門システム開発を伴う案件' },
-  改善提案力: { substituteFor: '他業界の営業資料、BtoBライティング', insufficientFor: '成果保証や高度な業界専門性が必須の提案' },
-  数値管理力: { substituteFor: '他業界のレポート・リサーチ整理', insufficientFor: '会計・財務・税務の専門判断、大規模データ分析' },
-  人材育成力: { substituteFor: '他業界のマニュアル、研修資料、教育コンテンツ', insufficientFor: '専門資格教育や登壇実績が必須の研修' },
-  相手目線: { substituteFor: 'ライティング、Canva、サービス紹介', insufficientFor: '特定専門職の深い顧客理解が必須の案件' },
-  構成力: { substituteFor: 'ホワイトペーパー、サービス紹介資料', insufficientFor: '高度な専門知識や大規模実績が必須の制作' },
-  仕組み化力: { substituteFor: '他業界の小規模マニュアル、AI活用整理', insufficientFor: '大規模システム開発、全社基幹業務の設計' },
-  現場理解力: { substituteFor: '他業界の現場業務改善', insufficientFor: '未経験業界の専門実務経験が必須の案件' },
-  AI活用力: { substituteFor: '小規模なAI活用整理、業務フロー改善', insufficientFor: '大規模AIシステム開発、企業導入実績が必須の案件' },
-  継続運用力: { substituteFor: '他業界のマニュアル、運用設計', insufficientFor: '大規模組織・システムの保守運用' },
-  品質管理力: { substituteFor: 'マニュアル、サービス紹介資料', insufficientFor: '法務・医療・会計など専門監修が必須の品質保証' },
+  課題発見力: {
+    substituteFor: '他業界の業務改善、提案資料', insufficientFor: '高度な専門診断・監査が必須の案件',
+    signals: ['課題発見', '現状分析', '課題抽出'],
+  },
+  課題整理力: {
+    substituteFor: '他業界の提案資料、営業資料、AI活用整理', insufficientFor: '専門資格・高度な技術判断が中核の案件',
+    signals: ['課題整理', 'PMO', 'プロジェクトマネジメント', 'PM支援', 'プロジェクト管理'],
+  },
+  情報整理力: {
+    substituteFor: 'マニュアル、ホワイトペーパー、他業界の資料', insufficientFor: '高度な専門知識の正確性自体が中核の案件',
+    signals: ['情報整理', 'リサーチャー', 'データ整理', '情報収集', '情報発信サポート'],
+  },
+  業務改善力: {
+    substituteFor: '他業界の小規模業務改善、マニュアル、AI活用整理', insufficientFor: '大規模組織改革、専門システム開発を伴う案件',
+    signals: ['業務改善支援', '効率化支援'],
+  },
+  改善提案力: {
+    substituteFor: '他業界の営業資料、BtoBライティング', insufficientFor: '成果保証や高度な業界専門性が必須の提案',
+    signals: ['改善提案', '企画提案'],
+  },
+  数値管理力: {
+    substituteFor: '他業界のレポート・リサーチ整理', insufficientFor: '会計・財務・税務の専門判断、大規模データ分析',
+    signals: ['数値管理', 'レポート作成', 'データ集計'],
+  },
+  人材育成力: {
+    substituteFor: '他業界のマニュアル、研修資料、教育コンテンツ', insufficientFor: '専門資格教育や登壇実績が必須の研修',
+    signals: ['人材育成', '教育コンテンツ', '研修支援'],
+  },
+  相手目線: {
+    substituteFor: 'ライティング、Canva、サービス紹介', insufficientFor: '特定専門職の深い顧客理解が必須の案件',
+    signals: ['デザイナー募集', '投稿デザイン', '投稿制作', 'コンテンツ制作', 'フィード投稿', '画像制作'],
+  },
+  構成力: {
+    substituteFor: 'ホワイトペーパー、サービス紹介資料', insufficientFor: '高度な専門知識や大規模実績が必須の制作',
+    signals: ['構成作成', 'ページ制作', 'サイト制作'],
+  },
+  仕組み化力: {
+    substituteFor: '他業界の小規模マニュアル、AI活用整理', insufficientFor: '大規模システム開発、全社基幹業務の設計',
+    signals: ['仕組み化支援', 'フロー整理'],
+  },
+  現場理解力: {
+    substituteFor: '他業界の現場業務改善', insufficientFor: '未経験業界の専門実務経験が必須の案件',
+    signals: ['現場業務改善', '現場支援'],
+  },
+  AI活用力: {
+    substituteFor: '小規模なAI活用整理、業務フロー改善', insufficientFor: '大規模AIシステム開発、企業導入実績が必須の案件',
+    signals: ['AI活用整理', 'AIツール活用', 'AI業務支援'],
+  },
+  継続運用力: {
+    substituteFor: '他業界のマニュアル、運用設計', insufficientFor: '大規模組織・システムの保守運用',
+    signals: ['運用設計支援'],
+  },
+  品質管理力: {
+    substituteFor: 'マニュアル、サービス紹介資料', insufficientFor: '法務・医療・会計など専門監修が必須の品質保証',
+    signals: ['品質管理', '品質チェック'],
+  },
 };
 
 const TRANSFERABLE_SKILLS = Object.keys(CAPABILITIES);
