@@ -9,6 +9,7 @@
 const evaluator = require('./evaluator');
 const config = require('./config');
 const dateUtils = require('./date-utils');
+const detailScraper = require('./detail-scraper');
 
 let idCounter = 1;
 function job(title, description, price = '3,000円', deadlineFields = {}) {
@@ -209,6 +210,198 @@ console.log('='.repeat(100) + '\n');
   const testJob = job('生成AI活用による業務改善支援', 'プロジェクトマネジメント経験を活かして業務改善を支援します。', '1,000,000円', { deadline: '2026-08-10', deadlineStatus: 'open' });
   const { excluded } = evaluator.classifyJobs([testJob], { [testJob.id]: {} }, {}, {});
   record('応募済み・見送り済みの既存処理は期限判定の追加後も壊れない（応募済み）', excluded.length === 1 && excluded[0].excludeReason === '応募済み');
+}
+
+console.log('\n' + '='.repeat(100));
+console.log('■ 案件詳細取得（Stage0）の回帰確認');
+console.log('='.repeat(100) + '\n');
+
+{
+  // 今すぐ応募→高単価チャレンジ→通常チャレンジの順で最大10件選ばれ、確認候補は不足時のみ追加されることを確認
+  const mk = (n, tier) => Array.from({ length: n }, (_, i) => ({ id: `${tier}-${i}`, title: `${tier}案件${i}`, displayTier: tier }));
+  const classified = {
+    nowApply: mk(4, 'now'),
+    highValueChallenge: mk(3, 'high_value_challenge'),
+    normalChallenge: mk(5, 'normal_challenge'),
+    confirmCandidates: mk(5, 'confirm_candidate'),
+  };
+  const selected = detailScraper.selectCandidatesForDetailFetch(classified, 10);
+  const buckets = selected.map(j => j.detailFetchBucket);
+  const expectedOrder = [
+    'now', 'now', 'now', 'now',
+    'high_value_challenge', 'high_value_challenge', 'high_value_challenge',
+    'normal_challenge', 'normal_challenge', 'normal_challenge',
+  ];
+  record('詳細取得候補の選定順序（今すぐ応募→高単価→通常、10件で打ち切り）',
+    selected.length === 10 && JSON.stringify(buckets) === JSON.stringify(expectedOrder),
+    `件数=${selected.length} / 内訳=${JSON.stringify(buckets)}`);
+}
+{
+  // 4バケット合計が10件未満のときのみ確認候補が使われることを確認
+  const mk = (n, tier) => Array.from({ length: n }, (_, i) => ({ id: `${tier}-${i}`, title: `${tier}案件${i}`, displayTier: tier }));
+  const classified = {
+    nowApply: mk(2, 'now'),
+    highValueChallenge: mk(1, 'high_value_challenge'),
+    normalChallenge: mk(1, 'normal_challenge'),
+    confirmCandidates: mk(10, 'confirm_candidate'),
+  };
+  const selected = detailScraper.selectCandidatesForDetailFetch(classified, 10);
+  const confirmCount = selected.filter(j => j.detailFetchBucket === 'confirm_candidate').length;
+  record('今すぐ応募/高単価/通常の合計が10件未満の場合のみ確認候補で補充される',
+    selected.length === 10 && confirmCount === 6, `確認候補から補充=${confirmCount}件`);
+}
+{
+  const classified = { nowApply: [], highValueChallenge: [], normalChallenge: [], confirmCandidates: [] };
+  const selected = detailScraper.selectCandidatesForDetailFetch(classified, 10);
+  record('候補が0件の場合は空配列を返す（存在しないデータを作らない）', Array.isArray(selected) && selected.length === 0);
+}
+{
+  const price = detailScraper.extractPriceFromSummary({ '固定報酬制': '30,000円 〜 50,000円', '納品希望日': '-', '掲載日': '2026年07月28日', '応募期限': '2026年08月11日' });
+  record('報酬種別・金額の抽出（固定報酬制）', price.type === '固定報酬制' && price.raw === '30,000円 〜 50,000円', JSON.stringify(price));
+}
+{
+  const price = detailScraper.extractPriceFromSummary({ '納品希望日': '-', '掲載日': '2026年07月28日', '応募期限': '2026年08月11日' });
+  record('報酬種別が見つからない場合はnullを返す（推測で補完しない）', price.type === null && price.raw === null);
+}
+{
+  const stats = detailScraper.parseApplicationStats({ '応募した人': '71 人', '契約した人': '0 人', '募集人数': '8 人', '気になる！リスト': '79 人' });
+  record('応募状況（応募/契約/募集/気になる）の数値抽出', stats.applied === 71 && stats.contracted === 0 && stats.recruiting === 8 && stats.watching === 79, JSON.stringify(stats));
+}
+{
+  const stats = detailScraper.parseApplicationStats({});
+  record('応募状況が取得できない場合は全項目nullになる（推測で埋めない）',
+    stats.applied === null && stats.contracted === null && stats.recruiting === null && stats.watching === null);
+}
+{
+  const client = detailScraper.buildClientSummary({
+    userDisplayName: 'yokoiaa1', isCertifiedEmployer: false, isOfficiallyRecognizedAccount: false,
+    isIdentityVerified: false, isEmployerRuleCheckSucceeded: false, userThanksCount: 5,
+    averageScore: 0, jobOfferAchievementCount: 1, projectFinishedRate: 0, isResigned: false,
+  });
+  record('クライアント情報（本人確認・発注ルールチェック等）の構造化',
+    client.name === 'yokoiaa1' && client.isIdentityVerified === false && client.isEmployerRuleCheckSucceeded === false && client.jobOfferAchievementCount === 1,
+    JSON.stringify(client));
+}
+{
+  const client = detailScraper.buildClientSummary(null);
+  record('クライアント情報を取得できない場合はnullを返す（推測で補完しない）', client === null);
+}
+{
+  const today = dateUtils.todayJST();
+  const future = dateUtils.addDaysToDateString(today, 5);
+  const [y, m, d] = future.split('-');
+  const result = detailScraper.resolveDetailDeadlineStatus(`${y}年${parseInt(m, 10)}月${parseInt(d, 10)}日`, false);
+  record('詳細ページの絶対期限（未来日）はopenと判定される', result.status === 'open' && result.normalized === future, JSON.stringify(result));
+}
+{
+  const today = dateUtils.todayJST();
+  const past = dateUtils.addDaysToDateString(today, -5);
+  const [y, m, d] = past.split('-');
+  const result = detailScraper.resolveDetailDeadlineStatus(`${y}年${parseInt(m, 10)}月${parseInt(d, 10)}日`, false);
+  record('詳細ページの絶対期限（過去日）はexpiredと判定される', result.status === 'expired', JSON.stringify(result));
+}
+{
+  const result = detailScraper.resolveDetailDeadlineStatus(null, true);
+  record('募集終了バナーを検出した場合は期限文字列が無くてもexpiredと判定される（安全側）', result.status === 'expired');
+}
+{
+  const result = detailScraper.resolveDetailDeadlineStatus(null, false);
+  record('期限文字列も終了バナーも無い場合はunknownになる（推測しない）', result.status === 'unknown' && result.normalized === null);
+}
+{
+  const text = '仕事の内容です。\n\n必須条件\n・Webライティング経験1年以上\n・チャットツールでの報連相ができる方\n\n歓迎条件\n・SEOの知識がある方\n\n以上、よろしくお願いします。';
+  const required = detailScraper.extractHeadingSection(text, detailScraper.HEADING_PATTERNS.required);
+  const welcome = detailScraper.extractHeadingSection(text, detailScraper.HEADING_PATTERNS.welcome);
+  record('見出し完全一致による必須条件・歓迎条件の抽出',
+    required.matchedHeading === '必須条件' && required.value.includes('Webライティング経験1年以上')
+    && welcome.matchedHeading === '歓迎条件' && welcome.value.includes('SEOの知識がある方'),
+    JSON.stringify({ required, welcome }));
+}
+{
+  // 「応募用テンプレート」のような、実際のCrowdWorks案件で確認された表記も既知パターンとして拾えることを確認
+  const text = '仕事の詳細です。\n\n応募用テンプレート\n・お名前：\n・稼働時間：\n\nよろしくお願いします。';
+  const items = detailScraper.extractHeadingSection(text, detailScraper.HEADING_PATTERNS.responseItems);
+  record('応募時の指定回答項目（応募用テンプレート表記）の抽出', items.matchedHeading === '応募用テンプレート' && items.value.includes('お名前'));
+}
+{
+  // 見出しが一切存在しない自由記述本文では、value/matchedHeadingともにnullのままであることを確認（推測で埋めない）
+  const text = 'ライティングのお仕事をお願いします。詳細は追ってご連絡します。';
+  const required = detailScraper.extractHeadingSection(text, detailScraper.HEADING_PATTERNS.required);
+  const items = detailScraper.extractHeadingSection(text, detailScraper.HEADING_PATTERNS.responseItems);
+  record('見出しが存在しない本文では必須条件・指定回答項目ともにnullのまま（推測で補完しない）',
+    required.value === null && required.matchedHeading === null && items.value === null && items.matchedHeading === null);
+}
+{
+  const detail = {
+    description: '本文あり', clientSummary: null, price: { type: null, raw: null },
+    deadline: { normalized: null }, applicationStats: { applied: null, contracted: null, recruiting: null, watching: null },
+  };
+  const missing = detailScraper.buildMissingFieldsList(detail);
+  record('取得できなかった項目の一覧化（missingFields）が漏れなく機能する（client/price/deadline/applicationStats）',
+    missing.includes('client') && missing.includes('price') && missing.includes('deadline')
+    && missing.includes('applicationStats') && !missing.includes('description'),
+    JSON.stringify(missing));
+}
+{
+  // 見出しから抽出できた場合は status: 'extracted'
+  const status = detailScraper.buildFieldStatus({ value: 'Webライティング経験1年以上', matchedHeading: '必須条件' }, true);
+  record('見出し抽出できた項目は status=extracted になる', status.status === 'extracted' && status.sourceAvailable === true, JSON.stringify(status));
+}
+{
+  // 本文は取得できているが見出しが一致しない場合は status: 'requires_analysis'（=推測で not_found にはしない）
+  const status = detailScraper.buildFieldStatus({ value: null, matchedHeading: null }, true);
+  record('本文はあるが見出し不一致の項目は status=requires_analysis になる（本文の意味からnot_foundと推測しない）',
+    status.status === 'requires_analysis' && status.sourceAvailable === true, JSON.stringify(status));
+}
+{
+  // 本文自体が取得できていない場合は status: 'unavailable'
+  const status = detailScraper.buildFieldStatus({ value: null, matchedHeading: null }, false);
+  record('本文自体が取得できない場合は status=unavailable になる', status.status === 'unavailable' && status.sourceAvailable === false, JSON.stringify(status));
+}
+{
+  // Stage0では常に extracted/requires_analysis/unavailable の3種類のみを返し、not_foundは付与しないことを確認
+  const cases = [
+    detailScraper.buildFieldStatus({ value: 'x', matchedHeading: '必須条件' }, true),
+    detailScraper.buildFieldStatus({ value: null, matchedHeading: null }, true),
+    detailScraper.buildFieldStatus({ value: null, matchedHeading: null }, false),
+  ];
+  record('Stage0が付与するstatusは extracted/requires_analysis/unavailable の3種類のみ（not_foundは付与しない）',
+    cases.every(c => ['extracted', 'requires_analysis', 'unavailable'].includes(c.status)));
+}
+{
+  const validDetail = {
+    jobId: '1', title: '案件名', url: 'https://crowdworks.jp/public/jobs/1',
+    description: '本文', clientSummary: { name: 'client' }, deadline: { status: 'open' },
+  };
+  record('jobId/案件名/URL/本文/クライアント情報/募集状態が揃っていればisValidDetail=true', detailScraper.isValidDetail(validDetail) === true);
+}
+{
+  const missingClient = {
+    jobId: '1', title: '案件名', url: 'https://crowdworks.jp/public/jobs/1',
+    description: '本文', clientSummary: null, deadline: { status: 'open' },
+  };
+  record('クライアント情報が無い場合はisValidDetail=false', detailScraper.isValidDetail(missingClient) === false);
+}
+{
+  const unknownStatus = {
+    jobId: '1', title: '案件名', url: 'https://crowdworks.jp/public/jobs/1',
+    description: '本文', clientSummary: { name: 'client' }, deadline: { status: 'unknown' },
+  };
+  record('募集状態が未確定(unknown)の場合はisValidDetail=false（不明を有効扱いしない）', detailScraper.isValidDetail(unknownStatus) === false);
+}
+{
+  record('detailオブジェクトが無い場合はisValidDetail=false', detailScraper.isValidDetail(null) === false);
+}
+{
+  // 優先10件のプールに補充用の11〜15番目まで含めて渡せることを確認（バックフィル用プール生成）
+  const mk = (n, tier) => Array.from({ length: n }, (_, i) => ({ id: `${tier}-${i}`, title: `${tier}案件${i}`, displayTier: tier }));
+  const classified = {
+    nowApply: mk(10, 'now'), highValueChallenge: mk(5, 'high_value_challenge'),
+    normalChallenge: [], confirmCandidates: [],
+  };
+  const pool = detailScraper.selectCandidatesForDetailFetch(classified, detailScraper.DETAIL_FETCH_MAX_ATTEMPTS);
+  record('バックフィル用に最大15件のプールを取得できる（10件を超えて11〜15番目も含む）',
+    pool.length === 15 && pool[10].detailFetchBucket === 'high_value_challenge');
 }
 
 console.log('\n' + '='.repeat(100));

@@ -4,3 +4,7 @@ output/jobs_*.md
 .env
 last_run.log
 .gh-pages-worktree/
+
+# 案件詳細（本文・クライアント情報・必須回答項目等）は非公開ローカルデータのため、
+# コミット・push・GitHub Pagesへは一切含めない
+data/private/
