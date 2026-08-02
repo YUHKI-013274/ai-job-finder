@@ -10,6 +10,8 @@ const evaluator = require('./evaluator');
 const config = require('./config');
 const dateUtils = require('./date-utils');
 const detailScraper = require('./detail-scraper');
+const analyzer = require('./analyzer');
+const { verifyKnowledgeSync } = require('./knowledge-sync-check');
 
 let idCounter = 1;
 function job(title, description, price = '3,000円', deadlineFields = {}) {
@@ -402,6 +404,331 @@ console.log('='.repeat(100) + '\n');
   const pool = detailScraper.selectCandidatesForDetailFetch(classified, detailScraper.DETAIL_FETCH_MAX_ATTEMPTS);
   record('バックフィル用に最大15件のプールを取得できる（10件を超えて11〜15番目も含む）',
     pool.length === 15 && pool[10].detailFetchBucket === 'high_value_challenge');
+}
+
+console.log('\n' + '='.repeat(100));
+console.log('■ 案件分析データ生成（Stage1）の回帰確認');
+console.log('='.repeat(100) + '\n');
+
+let detailIdCounter = 1;
+function detailFixture(overrides = {}) {
+  const id = String(1000 + detailIdCounter++);
+  return {
+    jobId: id,
+    title: overrides.title || 'PowerPointによる提案資料作成のお仕事',
+    url: `https://crowdworks.jp/public/jobs/${id}`,
+    detailFetchBucket: overrides.detailFetchBucket || 'now',
+    price: overrides.price || { type: '固定報酬制', raw: '30,000円 〜 50,000円' },
+    deadline: overrides.deadline || { raw: '2099年08月10日', normalized: '2099-08-10', status: 'open', endedBannerDetected: false },
+    description: overrides.description !== undefined ? overrides.description : '弊社の新規事業提案資料をPowerPointで作成していただける方を募集します。\n\n必須条件\n・PowerPoint操作経験\n\n応募用テンプレート\n・稼働可能時間：',
+    clientSummary: overrides.clientSummary !== undefined ? overrides.clientSummary : { name: 'client', isCertifiedEmployer: false, isOfficiallyRecognizedAccount: false, isIdentityVerified: true, isEmployerRuleCheckSucceeded: true, thanksCount: 1, averageScore: 4, jobOfferAchievementCount: 1, projectFinishedRate: 80, isResigned: false },
+    applicationStats: overrides.applicationStats || { applied: 1, contracted: 0, recruiting: 1, watching: 0 },
+    requiredConditions: overrides.requiredConditions || { value: 'PowerPoint操作経験', status: 'extracted', matchedHeading: '必須条件', sourceAvailable: true },
+    welcomeConditions: overrides.welcomeConditions || { value: null, status: 'requires_analysis', matchedHeading: null, sourceAvailable: true },
+    responseItems: overrides.responseItems || { value: '稼働可能時間：', status: 'extracted', matchedHeading: '応募用テンプレート', sourceAvailable: true },
+    featureTags: [],
+    attachmentsOrLinks: { hasLinkInDescription: false, linkCount: 0, hasAttachmentSection: false },
+    fetch: overrides.fetch || { fetchedAt: new Date().toISOString(), attempts: 1, status: 'success', missingFields: [], error: null },
+  };
+}
+
+{
+  const analysis = analyzer.analyzeJobDetail(detailFixture());
+  record('有効な案件（応募可能・直接証明）にjobIdで分析JSONが生成される',
+    analysis.jobId && analysis.jobSummary.jobId === analysis.jobId && analysis.analysisVersion === analyzer.ANALYSIS_VERSION);
+}
+{
+  const detail = detailFixture();
+  const before = JSON.stringify(detail);
+  analyzer.analyzeJobDetail(detail);
+  record('分析処理が案件詳細JSON（元オブジェクト）を変更しない（上書きしない）', JSON.stringify(detail) === before);
+}
+{
+  // 対応不可（動画編集）案件ではKnowledgeにない経験・実績が生成されないことを確認
+  const analysis = analyzer.analyzeJobDetail(detailFixture({
+    title: 'YouTube動画編集者募集', description: 'YouTube動画のカット編集・テロップ入れをお願いします。経験者歓迎です。',
+    requiredConditions: { value: null, status: 'requires_analysis', matchedHeading: null, sourceAvailable: true },
+    responseItems: { value: null, status: 'requires_analysis', matchedHeading: null, sourceAvailable: true },
+  }));
+  record('対応不可（Knowledge判定）の案件ではusableExperienceが空になる（存在しない経験を作らない）',
+    analysis.searchSystemReevaluation.capabilityStatus === '対応不可' && analysis.usableExperience.length === 0);
+}
+{
+  // 使用禁止情報（Sales Knowledge 9-1〜9-3）が応募材料（avoidExpressions/prohibitedClaims）に
+  // 「使わないよう警告する側」として含まれることを確認し、逆にusableExperienceの文言が
+  // 使用禁止リストの表現とそのまま一致しないことを確認する
+  const analysis = analyzer.analyzeJobDetail(detailFixture());
+  const prohibitedExpr = analysis.proposalMaterials.avoidExpressions;
+  const usableTexts = analysis.usableExperience.map(e => e.knowledgeText);
+  const overlap = usableTexts.filter(t => prohibitedExpr.includes(t));
+  record('使用禁止表現リストが応募材料に含まれ、使用可能経験の文言と重複しない（誇張表現が混入しない）',
+    prohibitedExpr.length > 0 && overlap.length === 0);
+}
+{
+  const analysis = analyzer.analyzeJobDetail(detailFixture({
+    title: 'YouTube動画編集者募集', description: 'YouTube動画のカット編集をお願いします。経験者歓迎です。',
+  }));
+  const experienceFit = analysis.fitAssessment.find(f => f.condition === '必須経験（経験者歓迎等の記載）');
+  record('明確な条件不一致（対応不可×経験者歓迎の明示）はnot_metになる', experienceFit && experienceFit.status === 'not_met');
+}
+{
+  const analysis = analyzer.analyzeJobDetail(detailFixture({
+    requiredConditions: { value: null, status: 'requires_analysis', matchedHeading: null, sourceAvailable: true },
+  }));
+  const requiredFit = analysis.fitAssessment.find(f => f.condition === '必須条件（本文抽出）');
+  record('本文から条件を抽出できていない場合はunknownになる（判断不能を誤ってmet/not_metにしない）',
+    requiredFit && requiredFit.status === 'unknown');
+}
+{
+  const analysis = analyzer.analyzeJobDetail(detailFixture());
+  record('クライアントの本質的な目的（deeperGoal）は常にrequires_ai_analysisとして保存される（断定しない）',
+    analysis.clientPurpose.deeperGoal.status === 'requires_ai_analysis' && analysis.clientPurpose.deeperGoal.value === null);
+  record('個別化ポイント（personalizationPoints）は常にrequires_ai_analysisとして保存される（断定しない）',
+    analysis.proposalMaterials.personalizationPoints.status === 'requires_ai_analysis');
+}
+{
+  const analysis = analyzer.analyzeJobDetail(detailFixture({
+    responseItems: { value: '稼働可能時間：\n自己紹介：', status: 'extracted', matchedHeading: '応募用テンプレート', sourceAvailable: true },
+  }));
+  record('抽出済みの必須回答項目（responseItems）が応募文生成材料（requiredAnswers）へ引き継がれる',
+    analysis.proposalMaterials.requiredAnswers.includes('稼働可能時間：\n自己紹介：'));
+  record('抽出済みの必須回答項目がAI引き継ぎデータ（aiHandoff.input.extractedConditions）へ引き継がれる',
+    analysis.aiHandoff.input.extractedConditions.responseItems === '稼働可能時間：\n自己紹介：');
+}
+{
+  const analysis = analyzer.analyzeJobDetail(detailFixture());
+  record('requires_analysisの項目（deliverable等）はフィールド自体が消失せず残る（valueはnullでもキーは存在）',
+    Object.prototype.hasOwnProperty.call(analysis.requestSummary, 'deliverable')
+    && analysis.requestSummary.deliverable.status === 'requires_analysis');
+}
+{
+  const analysis = analyzer.analyzeJobDetail(detailFixture());
+  const hasToolQuestion = analysis.missingInformation.some(m => /使用可能ツール|使えるツール/.test(m.item));
+  record('Knowledgeに既に記載済みの使用可能ツールは不足情報として再度質問されない', !hasToolQuestion);
+}
+{
+  const detail = detailFixture({ fetch: { fetchedAt: new Date().toISOString(), attempts: 2, status: 'failed', missingFields: ['description'], error: 'timeout' }, description: null, clientSummary: null });
+  const result = analyzer.isEligibleForAnalysis(detail, {});
+  record('取得失敗案件はStage1の対象から除外される', result.eligible === false && result.reason.includes('取得'));
+}
+{
+  const detail = detailFixture({ deadline: { raw: '2020年01月01日', normalized: '2020-01-01', status: 'expired', endedBannerDetected: true } });
+  const result = analyzer.isEligibleForAnalysis(detail, {});
+  record('募集終了案件はStage1の対象から除外される', result.eligible === false && result.reason === '募集終了');
+}
+{
+  const detail = detailFixture();
+  const result = analyzer.isEligibleForAnalysis(detail, { appliedMap: { [detail.jobId]: {} } });
+  record('応募済み案件はStage1の対象から除外される', result.eligible === false && result.reason === '応募済み');
+}
+{
+  const detail = detailFixture();
+  const result = analyzer.isEligibleForAnalysis(detail, { rejectedMap: { [detail.jobId]: { reason: 'x' } } });
+  record('見送り済み案件はStage1の対象から除外される', result.eligible === false && result.reason === '見送り済み');
+}
+{
+  const detailA = detailFixture();
+  const detailB = detailFixture();
+  const analysisA = analyzer.analyzeJobDetail(detailA);
+  const analysisB = analyzer.analyzeJobDetail(detailB);
+  record('各案件の分析結果がjobIdで分離される（別案件のデータが混入しない）',
+    analysisA.jobId !== analysisB.jobId && analysisA.jobSummary.url !== analysisB.jobSummary.url);
+}
+{
+  const check = analyzer.checkKnowledgeConsistency();
+  record('Sales Knowledge / Common Knowledgeの矛盾チェックが正常に実行できる（現状データでは矛盾なし）',
+    typeof check.hasConflict === 'boolean' && Array.isArray(check.conflicts) && check.hasConflict === false);
+}
+{
+  const analysis = analyzer.analyzeJobDetail(detailFixture());
+  const nonUsableLevel = analysis.usableExperience.some(e => e.evidenceLevel !== '使用可能');
+  record('usableExperienceには「使用可能」区分以外（要確認・未証明・使用禁止）が混入しない', !nonUsableLevel);
+}
+{
+  const analysis = analyzer.analyzeJobDetail(detailFixture({
+    title: 'デザイナー募集（詳細は応相談）', description: 'デザイナー募集です。詳細は応相談。',
+    requiredConditions: { value: null, status: 'requires_analysis', matchedHeading: null, sourceAvailable: true },
+    responseItems: { value: null, status: 'requires_analysis', matchedHeading: null, sourceAvailable: true },
+  }));
+  record('Knowledgeだけで断定できない案件（確認候補）の応募推奨度はholdになる',
+    analysis.searchSystemReevaluation.capabilityStatus === '確認候補' && analysis.recommendation.value === 'hold');
+}
+
+console.log('\n' + '='.repeat(100));
+console.log('■ Stage1安全性・精度修正（品質監査対応）の回帰確認');
+console.log('='.repeat(100) + '\n');
+
+{
+  // 修正1：stop案件は応募材料が完全に空になり、proposalGenerationAllowed=falseになる
+  const analysis = analyzer.analyzeJobDetail(detailFixture({
+    title: '動画編集者募集', description: 'YouTube動画のカット編集・テロップ入れをお願いします。経験者歓迎です。',
+    requiredConditions: { value: null, status: 'requires_analysis', matchedHeading: null, sourceAvailable: true },
+    responseItems: { value: null, status: 'requires_analysis', matchedHeading: null, sourceAvailable: true },
+  }));
+  record('stop案件はproposalGenerationAllowed=falseになる', analysis.recommendation.value === 'stop' && analysis.proposalGenerationAllowed === false);
+  record('stop案件はusableExperience/evidence/clientValue/portfolioCandidatesがすべて空になる',
+    analysis.usableExperience.length === 0 && analysis.evidence.direct.length === 0 && analysis.evidence.alternative.length === 0
+    && analysis.clientValue.length === 0 && analysis.portfolioCandidates.length === 0);
+  record('stop案件はproposalMaterialsの応募材料系フィールドがすべて空になる',
+    analysis.proposalMaterials.centralMessage === null && analysis.proposalMaterials.usableExperienceIds.length === 0
+    && analysis.proposalMaterials.usableEvidenceIds.length === 0 && analysis.proposalMaterials.portfolioIds.length === 0
+    && analysis.proposalMaterials.personalizationPoints.status === 'not_applicable');
+}
+{
+  // 修正2：Illustrator必須（大文字小文字を問わず）かつKnowledgeに使用実績がない場合はtool fit=not_met、recommendation=stop
+  const analysis = analyzer.analyzeJobDetail(detailFixture({
+    title: 'illustratorでスライド作成', description: 'YouTube台本をスライド化する仕事です。\n\n応募条件\n・illustratorが使える方\n・報連相ができる方',
+    requiredConditions: { value: '・illustratorが使える方\n・報連相ができる方', status: 'extracted', matchedHeading: '応募条件', sourceAvailable: true },
+    responseItems: { value: null, status: 'requires_analysis', matchedHeading: null, sourceAvailable: true },
+  }));
+  record('小文字illustratorでも大文字Illustratorと同一視してtool fit=not_metになる',
+    analysis.toolFit.hasHardBlock === true && analysis.toolFit.perTool[0].tool === 'Illustrator' && analysis.toolFit.perTool[0].status === 'not_met');
+  record('Illustrator必須ツール不一致によりrecommendation=stopになる', analysis.recommendation.value === 'stop');
+  record('Illustrator必須ツール不一致によりusableExperienceが生成されない（ライティング実績等を根拠にしない）', analysis.usableExperience.length === 0);
+}
+{
+  // 修正2：Notion等、使用不可リストにはないが使用実績も無いツールはunknown扱いになる（stopにはしない）
+  const analysis = analyzer.analyzeJobDetail(detailFixture({
+    title: 'Notionでマニュアル作成', description: 'Notion上に弊社ツールのマニュアルを作成してください。',
+    requiredConditions: { value: null, status: 'requires_analysis', matchedHeading: null, sourceAvailable: true },
+    responseItems: { value: null, status: 'requires_analysis', matchedHeading: null, sourceAvailable: true },
+  }));
+  record('Notionのように使用実績未確認のツールはtool fit=unknownになる（not_metにはしない）',
+    analysis.toolFit.hasUnknown === true && analysis.toolFit.hasHardBlock === false
+    && analysis.toolFit.perTool.some(t => t.tool === 'Notion' && t.status === 'unknown'));
+  record('未確認ツールはmissingInformationへ追加される', analysis.missingInformation.some(m => m.item.includes('Notion') && m.item.includes('確認')));
+  record('未確認ツールがあってもrecommendationはstopにならない（proceed_after_confirmation/hold等）', analysis.recommendation.value !== 'stop');
+}
+{
+  // 修正3：要求ツール（Canva）とカテゴリー既定ツール（PowerPoint）が食い違う場合、ツールを直接証拠にせず、
+  // 証拠区分を格下げする（直接証明→強い代替証明）。能力証拠（deliverable等）は引き続き使う。
+  // 「資料作成実績の有無」（proposal_documentへ一致させる語）を質問文に含めつつ、実際の作業指示は
+  // Canva使用を明記する、jobId 13318382と同型のテキスト（既存カテゴリーを維持したままツール不一致を検証する）。
+  const analysis = analyzer.analyzeJobDetail(detailFixture({
+    title: 'セミナー資料をCanvaで作成', description: '① Canvaを活用して資料を作製してください。セミナー動画をもとに視覚資料へ落とし込みます。\n\n【応募・選考について】\n・資料作成実績の有無\n・ポートフォリオ',
+    requiredConditions: { value: null, status: 'requires_analysis', matchedHeading: null, sourceAvailable: true },
+    responseItems: { value: null, status: 'requires_analysis', matchedHeading: null, sourceAvailable: true },
+  }));
+  const toolEntry = analysis.usableExperience.find(e => e.evidenceKind === 'tool');
+  record('要求ツール（Canva）とカテゴリー既定ツール（PowerPoint）が不一致の場合、ツールを直接証拠として提示しない', !toolEntry);
+  record('ツール不一致時、能力証拠（制作実績・自主制作等）は引き続き使用可能な経験として残る',
+    analysis.usableExperience.some(e => e.evidenceKind === 'deliverable' || e.evidenceKind === 'self_produced'));
+  record('ツール不一致によりtoolMismatchNoteが記録される', typeof analysis.toolMismatchNote === 'string' && analysis.toolMismatchNote.includes('Canva'));
+}
+{
+  // 修正4：「商品開発」等の汎用語のみでは飲食テーマに接続しない
+  const analysis = analyzer.analyzeJobDetail(detailFixture({
+    title: '歩行器の取扱説明書デザイン', description: '弊社では現在、歩行器の商品開発を進めております。取扱説明書のデザインを作成いただける方を募集します。',
+    requiredConditions: { value: null, status: 'requires_analysis', matchedHeading: null, sourceAvailable: true },
+    responseItems: { value: null, status: 'requires_analysis', matchedHeading: null, sourceAvailable: true },
+  }));
+  record('「商品開発」単独では飲食カテゴリー・飲食テーマに接続しない（医療機器等の無関係な案件へ誤接続しない）',
+    analysis.searchSystemReevaluation.categoryMatchOverridden === true
+    && analysis.usableExperience.every(e => !e.knowledgeText.includes('飲食')));
+  record('「商品開発」単独での誤接続防止時、飲食業22年・飲食事業改善提案資料が出力されない', analysis.usableExperience.length === 0 && analysis.portfolioCandidates.length === 0);
+}
+{
+  // 修正4：飲食関連語が併記されている場合は正しく飲食テーマに接続する（過剰除外していないことの確認）
+  const analysis = analyzer.analyzeJobDetail(detailFixture({
+    title: 'カフェの新メニュー商品開発資料', description: 'カフェで提供する新メニューの商品開発について、店舗運営の観点から提案資料を作成してください。',
+    requiredConditions: { value: null, status: 'requires_analysis', matchedHeading: null, sourceAvailable: true },
+    responseItems: { value: null, status: 'requires_analysis', matchedHeading: null, sourceAvailable: true },
+  }));
+  record('飲食関連語（カフェ・店舗運営等）が併記されている場合は飲食テーマ接続を維持する（過剰除外しない）',
+    analysis.searchSystemReevaluation.categoryMatchOverridden === false);
+}
+{
+  // 修正5：禁止事項の中にしか出現しない語でカテゴリー誤判定しない（「ブログへのアップロード禁止」の「ブログ」）
+  const analysis = analyzer.analyzeJobDetail(detailFixture({
+    title: 'illustratorでスライド作成', description: 'YouTube台本をスライド化する仕事です。\n\n応募条件\n・illustratorが使える方\n\n【禁止事項】\n著作権は当方に譲渡されますので、動画サイトやブログへのアップロード等の再利用は禁止です。',
+    requiredConditions: { value: '・illustratorが使える方', status: 'extracted', matchedHeading: '応募条件', sourceAvailable: true },
+    responseItems: { value: null, status: 'requires_analysis', matchedHeading: null, sourceAvailable: true },
+  }));
+  record('禁止事項の中にしか出現しない語（ブログ）でライティング案件と誤判定しない',
+    analysis.searchSystemReevaluation.categoryMatchOverridden === true
+    && analysis.searchSystemReevaluation.categoryMatchNotes.some(n => n.includes('ブログ')));
+}
+{
+  // 修正5：業務内容として書かれた語は、質問文の近くにあっても正しく使う（過剰除外の確認）
+  const analysis = analyzer.analyzeJobDetail(detailFixture({
+    title: 'セミナー音声に合わせた資料作成', description: '① Canvaを活用して資料を作製してください。\n\n【応募・選考について】\n・ビジネス資料の作成実績の有無\n・その他ポートフォリオ',
+    requiredConditions: { value: null, status: 'requires_analysis', matchedHeading: null, sourceAvailable: true },
+    responseItems: { value: null, status: 'requires_analysis', matchedHeading: null, sourceAvailable: true },
+  }));
+  record('質問文中の語（資料作成実績の有無）だけでは却下せず、業務内容に関係する場合はカテゴリーを維持する',
+    analysis.searchSystemReevaluation.categoryMatchOverridden === false);
+}
+{
+  // 修正6：SNS運用代行の除外を、制作/運用の文脈で再判定する（写真・構成提供・Canva単発制作は解除対象）
+  const analysis = analyzer.analyzeJobDetail(detailFixture({
+    title: 'カフェ紹介Instagram投稿制作', description: '写真や素材はこちらでご用意します。カフェ紹介Instagramアカウントのフィード投稿作成をお願いします。Canva等を使用したデザイン制作です。デザインやSNS運用に興味がある方も歓迎です。',
+    requiredConditions: { value: null, status: 'requires_analysis', matchedHeading: null, sourceAvailable: true },
+    responseItems: { value: null, status: 'requires_analysis', matchedHeading: null, sourceAvailable: true },
+  }));
+  record('運用代行の記載がなく制作のみのSNS案件はstop解除される', analysis.searchSystemReevaluation.excluded === false && analysis.recommendation.value !== 'stop');
+  record('SNS除外解除の根拠（本文記載）が保存される', analysis.searchSystemReevaluation.snsExclusionReassessment && analysis.searchSystemReevaluation.snsExclusionReassessment.overridden === true);
+}
+{
+  // 修正6：運用代行（コメント対応・アカウント管理等）を含む場合はstopを維持する
+  const analysis = analyzer.analyzeJobDetail(detailFixture({
+    title: 'SNS運用スタッフ募集', description: 'Instagramアカウントの投稿企画・コメント対応・DM対応を含む継続的な運用をお願いします。SNS運用に興味がある方歓迎です。',
+    requiredConditions: { value: null, status: 'requires_analysis', matchedHeading: null, sourceAvailable: true },
+    responseItems: { value: null, status: 'requires_analysis', matchedHeading: null, sourceAvailable: true },
+  }));
+  record('運用代行を示す記載（コメント対応等）がある場合はSNS除外を維持する（stopのまま）',
+    analysis.searchSystemReevaluation.excluded === true && analysis.recommendation.value === 'stop' && analysis.proposalGenerationAllowed === false);
+}
+{
+  // 修正7：同一資産（deliverableEvidenceとselfProducedEvidenceの表記違い）はassetIdで1件に統合される
+  const analysis = analyzer.analyzeJobDetail(detailFixture({
+    title: 'SEO記事のライティング', description: 'SEO記事のライティングをお願いします。',
+    requiredConditions: { value: null, status: 'requires_analysis', matchedHeading: null, sourceAvailable: true },
+    responseItems: { value: null, status: 'requires_analysis', matchedHeading: null, sourceAvailable: true },
+  }));
+  const assetIds = analysis.portfolioCandidates.map(p => p.assetId);
+  record('表記の異なる同一資産（AIライティング5記事の2表記）がportfolioCandidatesで1件に統合される',
+    new Set(assetIds).size === assetIds.length, JSON.stringify(analysis.portfolioCandidates.map(p => p.assetName)));
+  const cvAssetIds = analysis.clientValue.map(c => c.assetId).filter(Boolean);
+  record('同一資産がclientValueでも重複しない', new Set(cvAssetIds).size === cvAssetIds.length);
+}
+{
+  // 修正8：正規Knowledge（Markdown）とJSキャッシュのハッシュが一致することを確認する
+  const sync = verifyKnowledgeSync();
+  record('正規Knowledge（Markdown）とJSキャッシュのハッシュが現状一致している（Stage1が正常実行できる状態）', sync.allInSync === true, JSON.stringify(sync.results.map(r => ({ cache: r.cacheName, inSync: r.inSync }))));
+}
+{
+  // 修正8：ハッシュが不一致の場合はStage1処理を停止する（KnowledgeOutOfSyncError）
+  const yukiProfile = require('./knowledge/yuki_profile');
+  const originalHash = yukiProfile.sourceContentHash;
+  yukiProfile.sourceContentHash = 'wrong_hash_for_test';
+  let threw = false;
+  let errorIsCorrectType = false;
+  try {
+    analyzer.assertKnowledgeInSync();
+  } catch (err) {
+    threw = true;
+    errorIsCorrectType = err instanceof analyzer.KnowledgeOutOfSyncError;
+  } finally {
+    yukiProfile.sourceContentHash = originalHash; // 必ず元に戻す
+  }
+  record('Markdownとキャッシュのハッシュが不一致の場合、Stage1処理を例外で停止する（黙って古いキャッシュを使わない）', threw && errorIsCorrectType);
+  // 復元後、正常に動作することも確認（テストの副作用が残らないことの確認）
+  const syncAfterRestore = verifyKnowledgeSync();
+  record('テスト用に書き換えたハッシュを復元後、同期チェックが正常に戻る', syncAfterRestore.allInSync === true);
+}
+{
+  // 修正9：見出しが完全一致しなくても、応募時の回答を求める記載を「存在しないと断定せず」保持する
+  const analysis = analyzer.analyzeJobDetail(detailFixture({
+    title: 'セミナー資料作成', description: '① Canvaを活用して資料を作製してください。\n\n【応募・選考について】\nご応募頂く際は、以下ご質問の回答を頂けますと幸いです。\n\n・資料作成実績の有無\n・ポートフォリオ',
+    requiredConditions: { value: null, status: 'requires_analysis', matchedHeading: null, sourceAvailable: true },
+    responseItems: { value: null, status: 'requires_analysis', matchedHeading: null, sourceAvailable: true }, // Stage0の見出し完全一致では抽出されない想定
+  }));
+  record('見出し不一致でも「応募・選考について」等の緩やかな記載を検知しrequires_ai_analysisとして保持する（消失させない）',
+    analysis.conditions.responseItems.status === 'requires_ai_analysis' && analysis.conditions.responseItems.evidenceText.includes('資料作成実績の有無'));
+  record('緩やかに検知した回答項目候補がAI引き継ぎデータへ残る',
+    analysis.aiHandoff.input.extractedConditions.responseItemsCandidateExcerpt && analysis.aiHandoff.input.extractedConditions.responseItemsCandidateExcerpt.includes('ポートフォリオ'));
+  record('緩やかに検知した回答項目候補がaiHandoff.tasksへ引き継ぎタスクとして追加される',
+    analysis.aiHandoff.tasks.some(t => t.includes('conditions.responseItems')));
 }
 
 console.log('\n' + '='.repeat(100));

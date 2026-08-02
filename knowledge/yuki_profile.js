@@ -366,6 +366,10 @@ module.exports = {
     sales: 'yuki_sales_knowledge_v1.md (Version 1.0, 2026-07-26)',
     common: 'yuki_common_knowledge.md (最終更新 2026-07-11)',
   },
+  // knowledge/yuki_sales_knowledge_v1.md の内容から算出したsha256ハッシュ（転記時点）。
+  // knowledge-sync-check.js がStage1実行前にMarkdownの現在のハッシュと照合し、
+  // 不一致（＝Markdownがこのキャッシュより新しい）の場合は処理を止める。
+  sourceContentHash: '1d49b008525e0332564d7d9b2376de2b4df175db39c09e32408cb3b22e71cbbb',
   tools: { available: AVAILABLE_TOOLS },
   domainExperiences: DOMAIN_EXPERIENCES,
   taskCategories: TASK_CATEGORIES,
