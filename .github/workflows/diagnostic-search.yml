@@ -1,0 +1,31 @@
+name: 【診断専用】GitHub Actions検索0件調査
+
+on:
+  workflow_dispatch:
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: リポジトリをチェックアウト
+        uses: actions/checkout@v4
+
+      - name: Node.js セットアップ
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: 依存パッケージをインストール
+        run: npm ci
+
+      - name: Playwright Chromium をインストール
+        run: npx playwright install chromium --with-deps
+
+      - name: 診断実行（キーワード「ライティング」1ページのみ・出力は診断ログのみ）
+        run: node diagnostic-search-check.js
