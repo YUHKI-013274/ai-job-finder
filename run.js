@@ -17,6 +17,10 @@ const { sendGmailNotification } = require('./notifier');
 const { loadSeenJobs, saveSeenJobs, loadAppliedJobs, loadJobStatus, filterJobStatus, JOB_STATUS, updateJobHistoryEntry } = require('./store');
 const { syncAppliedFromSheet } = require('./sheet-sync');
 const { MIN_RAW_JOBS, CURRENT_PHASE, CURRENT_PHASE_KEY } = require('./config');
+const detailScraper = require('./detail-scraper');
+const detailStore = require('./detail-store');
+const analyzer = require('./analyzer');
+const aiAnalyzer = require('./ai-analyzer');
 
 // ブラウザが1ページでクラッシュした後、Playwright内部の非同期処理（再接続試行等）が
 // 少し遅れてrejectし、呼び出し元のtry/catchで捕まえられないままプロセス全体を
@@ -31,6 +35,55 @@ const REPO_OWNER = 'YUHKI-013274';
 const REPO_NAME = 'ai-job-finder';
 const PAGE_URL = process.env.PAGES_URL
   || `https://${REPO_OWNER}.github.io/${REPO_NAME}/`;
+
+// Stage0（詳細取得）→Stage1（ルールベース分析・外部API不要）→Stage2（AI分析・Anthropic APIが
+// 正常な場合のみ）をこの順で接続する。各段は独立して失敗を許容し、案件取得・出力・通知・デプロイという
+// 既存の本番フローを止めない。Stage2の成否はStage1が確定させたランキング・除外判定・分析結果
+// （別ファイルに保存済み）を一切変更しない。
+async function runAnalysisPipeline(classified) {
+  console.log('\n=== 案件分析パイプライン（Stage0→Stage1→Stage2） ===');
+
+  // Stage0: 優先候補（今すぐ応募→高単価チャレンジ→通常チャレンジ→確認候補）の詳細取得
+  let validDetails = [];
+  try {
+    const candidatePool = detailScraper.selectCandidatesForDetailFetch(classified, detailScraper.DETAIL_FETCH_MAX_ATTEMPTS);
+    const stage0Result = await detailScraper.fetchJobDetailsWithBackfill(candidatePool);
+    validDetails = stage0Result.validDetails;
+    detailStore.saveJobDetails(validDetails);
+    console.log(`Stage0: 詳細取得 ${stage0Result.stats.validCount}件（試行${stage0Result.stats.attemptedCandidateCount}件中）`);
+  } catch (err) {
+    console.log(`⚠️  Stage0スキップ（詳細取得に失敗）: ${err.message}`);
+  }
+
+  // Stage1: ルールベース分析（外部API不要のため、Anthropicの状態に関わらず必ず実行を試みる）
+  try {
+    const stage1Results = analyzer.analyzeAllPendingJobDetails();
+    const analyzedCount = stage1Results.filter(r => r.analyzed).length;
+    console.log(`Stage1: 分析完了 ${analyzedCount}件（対象外${stage1Results.length - analyzedCount}件）`);
+  } catch (err) {
+    console.log(`⚠️  Stage1スキップ（分析処理に失敗）: ${err.message}`);
+  }
+
+  // Stage2: AI分析（Anthropic APIが正常な場合のみ実行。401/429/5xx・キー未設定・その他例外の
+  // いずれが起きてもここで吸収し、Stage1までの結果（別ファイル保存済み）を変更せず後続処理を継続する）。
+  try {
+    // Stage0の優先順位（今すぐ応募が先頭）をそのまま踏襲し、先頭3件のみ対象にする
+    // （費用管理のための固定件数。ai-analyzer.js自体が「3件固定で呼び出す想定」として設計済み）。
+    const stage2Candidates = validDetails.map(d => d.jobId).slice(0, 3);
+
+    if (stage2Candidates.length === 0) {
+      console.log('Stage2: 対象案件なし（スキップ）');
+    } else {
+      const stage2Summary = await aiAnalyzer.runStage2ForJobIds(stage2Candidates);
+      const successCount = stage2Summary.results.filter(r => r.outcome === 'success').length;
+      const failedCount = stage2Summary.results.filter(r => r.outcome === 'failed').length;
+      const skippedCount = stage2Summary.results.filter(r => r.outcome === 'skipped').length;
+      console.log(`Stage2: 成功${successCount}件 / 失敗${failedCount}件 / スキップ${skippedCount}件（費用$${stage2Summary.cumulativeCostUsd.toFixed(4)}）`);
+    }
+  } catch (err) {
+    console.log(`💡 Stage2スキップ（AI分析を利用できないため、Stage1までの結果で継続）: ${err.message}`);
+  }
+}
 
 async function main() {
   const now = new Date();
@@ -136,6 +189,9 @@ async function main() {
     }
     console.log(`  ${stat.keyword}: 取得${stat.found}件 新規${stat.newCount}件 重複${stat.dupCount}件 → S:${r.S} A:${r.A} B:${r.B} C:${r.C} 除外:${r['除外']}`);
   }
+
+  // 3.5. 案件分析パイプライン（Stage0→Stage1→Stage2）。失敗しても以降の出力・通知・デプロイは止めない。
+  await runAnalysisPipeline({ nowApply, highValueChallenge, normalChallenge, confirmCandidates });
 
   // 4. HTML / Markdown 出力
   const htmlContent = renderHTML({ nowApply, highValueChallenge, normalChallenge, confirmCandidates, holds, excluded }, now, PAGE_URL);
@@ -258,7 +314,12 @@ function pushToGhPages(outputDir, repoDir, commitMsg) {
   }
 }
 
-main().catch(err => {
-  console.error('エラー:', err.message);
-  process.exit(1);
-});
+module.exports = { runAnalysisPipeline };
+
+// requireされた場合（テスト等）はmain()を自動実行しない。`node run.js`で直接実行された場合のみ動く。
+if (require.main === module) {
+  main().catch(err => {
+    console.error('エラー:', err.message);
+    process.exit(1);
+  });
+}
