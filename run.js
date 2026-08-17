@@ -13,7 +13,8 @@ if (fs.existsSync(envPath)) {
 const { scrapeJobs } = require('./scraper');
 const { classifyJobs } = require('./evaluator');
 const { renderHTML, renderMarkdown } = require('./renderer');
-const { sendGmailNotification } = require('./notifier');
+const { sendGmailNotification, sendSystemAlert } = require('./notifier');
+const { ensureBrowserAvailable } = require('./browser-check');
 const { loadSeenJobs, saveSeenJobs, loadAppliedJobs, loadJobStatus, filterJobStatus, JOB_STATUS, updateJobHistoryEntry } = require('./store');
 const { syncAppliedFromSheet } = require('./sheet-sync');
 const { MIN_RAW_JOBS, CURRENT_PHASE, CURRENT_PHASE_KEY } = require('./config');
@@ -95,6 +96,25 @@ async function main() {
   console.log('=== AI案件獲得システム Ver3.0 ===');
   console.log(`実行日時: ${now.toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })}`);
   console.log(`公開URL: ${PAGE_URL}\n`);
+
+  // 0. Playwrightブラウザの起動確認（不足時は自動復旧を試み、それでも失敗したら
+  //    案件取得を試みる前に異常通知を送って明示的に停止する。無言で失敗させない）。
+  const browserCheck = await ensureBrowserAvailable();
+  if (!browserCheck.ok) {
+    console.log(`\n❌ Playwrightブラウザが利用できないため案件取得を中止しました: ${browserCheck.error}`);
+    try {
+      await sendSystemAlert({
+        title: 'Playwrightブラウザ起動失敗（案件取得を中止しました）',
+        message: `自動復旧を試みましたが失敗しました。\n\n${browserCheck.error}\n\nPCで以下を手動実行して復旧してください:\nnpx playwright install chromium`,
+      });
+    } catch (alertErr) {
+      console.log(`⚠️  異常通知メールの送信にも失敗しました: ${alertErr.message}`);
+    }
+    process.exit(1);
+  }
+  if (browserCheck.recovered) {
+    console.log('（Playwrightブラウザを自動復旧してから続行します）\n');
+  }
 
   // 1. スクレイピング
   const { jobs: rawJobs, keywordStats } = await scrapeJobs();

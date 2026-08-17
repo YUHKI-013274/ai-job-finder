@@ -85,4 +85,31 @@ function escHtml(str) {
   return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-module.exports = { sendGmailNotification };
+// システム異常（案件取得そのものが実行できない等）を「今日は良い案件がなかった」とは
+// 区別できる件名・本文で通知する。候補メールと同じGmail設定を再利用する。
+async function sendSystemAlert({ title, message }) {
+  const email = process.env.GMAIL_USER;
+  const appPassword = process.env.GMAIL_APP_PASSWORD;
+
+  if (!email || !appPassword) {
+    console.log('Gmail設定なし（GMAIL_USER / GMAIL_APP_PASSWORD が未設定）のため異常通知は送信できません');
+    return;
+  }
+
+  const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: { user: email, pass: appPassword },
+    tls: { rejectUnauthorized: false },
+  });
+
+  await transporter.sendMail({
+    from: `"AI案件システム" <${email}>`,
+    to: email,
+    subject: `【要確認】${title}`,
+    text: message,
+  });
+
+  console.log(`✅ 異常通知メール送信完了 → ${email}`);
+}
+
+module.exports = { sendGmailNotification, sendSystemAlert };
