@@ -1,10 +1,9 @@
 name: 毎朝AI案件取得
 
 on:
-  schedule:
-    # 毎朝6:00 JST = 21:00 UTC（前日）
-    - cron: '0 21 * * *'
-  # 手動実行ボタン（テスト用）
+  # 毎朝の自動cron実行は停止済み（CrowdWorks側の403によりGitHub Actionsからの
+  # 直接アクセスが機能しないため。ローカルPC実行に一本化。データ破損リスク回避のため
+  # 自動トリガーはこのワークフローから撤去した。手動実行のみ残す）。
   workflow_dispatch:
 
 jobs:
