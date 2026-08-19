@@ -46,7 +46,7 @@ $Trigger = New-ScheduledTaskTrigger -Daily -At "5:50AM"
 $Settings = New-ScheduledTaskSettingsSet `
   -WakeToRun `
   -StartWhenAvailable `
-  -ExecutionTimeLimit (New-TimeSpan -Minutes 20) `
+  -ExecutionTimeLimit (New-TimeSpan -Minutes 60) `
   -MultipleInstances IgnoreNew
 
 # プリンシパル：現在のユーザーで実行
