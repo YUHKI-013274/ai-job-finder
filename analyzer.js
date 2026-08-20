@@ -474,6 +474,7 @@ function conditionEntry(value, status, evidenceText, source) {
 // 存在しないと断定せず、requires_ai_analysisとして前後の本文とともに保持する。
 const SOFT_RESPONSE_ITEM_SIGNALS = [
   '応募時に以下', '応募・選考について', '応募用テンプレート', '以下の質問へご回答', '応募の際は', 'ご回答ください', 'ご質問の回答', '以下ご質問', '応募方法',
+  '質問にお答えください', '下記の質問',
 ];
 function detectSoftResponseItemsSignal(description) {
   if (!description) return null;

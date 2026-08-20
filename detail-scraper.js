@@ -25,7 +25,7 @@ const CONTEXT_OPTIONS = {
 const HEADING_PATTERNS = {
   required: ['必須条件', '必須スキル', '応募条件', 'ご応募条件', '応募資格', '必須要件'],
   welcome: ['歓迎条件', '歓迎スキル', '尚可条件', '歓迎する経験・スキル', '歓迎するスキル', 'こういった方を歓迎します', 'こういった方を歓迎します！', 'こんな方を歓迎'],
-  responseItems: ['応募時にご提示いただきたい内容', '応募時にご記入いただきたい内容', '応募時にご回答いただきたい内容', '応募用テンプレート', '応募時にご提出いただきたい内容', '応募時のご質問'],
+  responseItems: ['応募時にご提示いただきたい内容', '応募時にご記入いただきたい内容', '応募時にご回答いただきたい内容', '応募用テンプレート', '応募時にご提出いただきたい内容', '応募時のご質問', '応募時の質問'],
 };
 
 // 優先候補（今すぐ応募 → 高単価チャレンジ → 通常チャレンジ → 確認候補は不足時のみ）から
@@ -66,7 +66,7 @@ function extractHeadingSection(text, headingList) {
   if (!text) return { value: null, matchedHeading: null };
   const lines = text.split('\n');
   for (let i = 0; i < lines.length; i++) {
-    const cleaned = lines[i].trim().replace(/^[【■★#◆▼]+|[】]+$/g, '').replace(/[:：]\s*$/, '');
+    const cleaned = lines[i].trim().replace(/^[【■★#◆▼「]+|[】」]+$/g, '').replace(/[:：]\s*$/, '');
     const matched = headingList.find(p => cleaned === p);
     if (!matched) continue;
     const collected = [];
@@ -138,7 +138,7 @@ function extractJobDetailFromPage(patterns) {
     if (!text) return { value: null, matchedHeading: null };
     const lines = text.split('\n');
     for (let i = 0; i < lines.length; i++) {
-      const cleaned = lines[i].trim().replace(/^[【■★#◆▼]+|[】]+$/g, '').replace(/[:：]\s*$/, '');
+      const cleaned = lines[i].trim().replace(/^[【■★#◆▼「]+|[】」]+$/g, '').replace(/[:：]\s*$/, '');
       const matched = headingList.find(p => cleaned === p);
       if (!matched) continue;
       const collected = [];

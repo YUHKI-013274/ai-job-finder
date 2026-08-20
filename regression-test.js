@@ -334,6 +334,22 @@ console.log('='.repeat(100) + '\n');
   record('応募時の指定回答項目（応募用テンプレート表記）の抽出', items.matchedHeading === '応募用テンプレート' && items.value.includes('お名前'));
 }
 {
+  // 実案件（13392611）で確認：鉤括弧「」で囲まれた見出し（「応募時の質問」）は、従来の括弧除去
+  // （【】のみ対応）では見出し扱いされず、直後の質問リストごと取りこぼしていた。鉤括弧にも対応する。
+  const text = '仕事の内容です。\n\n「応募時の質問」\n1.稼働可能な曜日・時間帯を教えてください。\n2.関連経験の有無を教えてください。\n\n以上、よろしくお願いします。';
+  const items = detailScraper.extractHeadingSection(text, detailScraper.HEADING_PATTERNS.responseItems);
+  record('鉤括弧「」で囲まれた見出し（「応募時の質問」）も見出しとして認識される（実案件13392611で確認された表記）',
+    items.matchedHeading === '応募時の質問' && items.value.includes('稼働可能な曜日・時間帯') && items.value.includes('関連経験の有無'),
+    JSON.stringify(items));
+}
+{
+  // 既存パターン（【】＋「ご」あり表記）が今回の変更後も引き続き機能することを確認（非退行）
+  const text = '仕事の内容です。\n\n【応募時のご質問】\n・稼働可能時間を教えてください。\n\nよろしくお願いします。';
+  const items = detailScraper.extractHeadingSection(text, detailScraper.HEADING_PATTERNS.responseItems);
+  record('既存の見出しパターン（【応募時のご質問】）は今回の修正後も引き続き認識される（非退行）',
+    items.matchedHeading === '応募時のご質問' && items.value.includes('稼働可能時間'));
+}
+{
   // 見出しが一切存在しない自由記述本文では、value/matchedHeadingともにnullのままであることを確認（推測で埋めない）
   const text = 'ライティングのお仕事をお願いします。詳細は追ってご連絡します。';
   const required = detailScraper.extractHeadingSection(text, detailScraper.HEADING_PATTERNS.required);
@@ -738,6 +754,21 @@ console.log('='.repeat(100) + '\n');
   record('緩やかに検知した回答項目候補がaiHandoff.tasksへ引き継ぎタスクとして追加される',
     analysis.aiHandoff.tasks.some(t => t.includes('conditions.responseItems')));
 }
+{
+  // 実案件（13257814）で確認：「ご応募の際には、必ず下記の質問にお答えください。①…②…」という
+  // 頻出表現は、従来のソフトシグナル一覧のどれにも一致せず、質問が丸ごと失われていた。
+  const analysis = analyzer.analyzeJobDetail(detailFixture({
+    title: '閉院に向けたタイムスケジュール作成',
+    description: '医療法人の閉院タイムスケジュールを作成してください。\n\nご応募の際には、必ず下記の質問にお答えください。\n①活かせるスキルや経験をお知らせください。\n②類似の課題を検討したご経験はありますか。\n③想定される納品形式を教えてください。',
+    requiredConditions: { value: null, status: 'requires_analysis', matchedHeading: null, sourceAvailable: true },
+    responseItems: { value: null, status: 'requires_analysis', matchedHeading: null, sourceAvailable: true }, // Stage0の見出し完全一致では抽出されない想定
+  }));
+  record('「下記の質問にお答えください」等の頻出表現も緩やかに検知しrequires_ai_analysisとして保持する（実案件13257814で確認された欠落パターン）',
+    analysis.conditions.responseItems.status === 'requires_ai_analysis'
+    && analysis.conditions.responseItems.evidenceText.includes('①活かせるスキルや経験')
+    && analysis.conditions.responseItems.evidenceText.includes('③想定される納品形式'),
+    JSON.stringify(analysis.conditions.responseItems));
+}
 
 // Stage2aのテストは（モッククライアント経由とはいえ）非同期関数を呼ぶため、
 // CommonJSではトップレベルawaitが使えず、この区間だけ即時実行の非同期関数でまとめる。
@@ -1083,6 +1114,56 @@ function cleanupApplicationPacketArtifacts(jobId) {
     result.packet.applicationQuestions.requiredConditions.status === 'requires_analysis'
     && result.packet.client.name === null);
   record('不足情報リスト（missingInformation）がそのまま件数どおり引き継がれる', result.packet.missingInformation.length === 2);
+  cleanupApplicationPacketArtifacts(jobId);
+}
+{
+  // 統合確認（実案件13392611のパターン）：鉤括弧「」・「ご」なしの見出し「応募時の質問」で明記された
+  // 質問が、Stage0の見出し抽出（実関数）→Stage1→Application Packetまで具体的な質問文のまま保持されることを確認する。
+  const jobId = 'TEST_PKT_RESPONSE_ITEMS_HEADING';
+  cleanupApplicationPacketArtifacts(jobId);
+  const description = '事務サポート業務をお願いします。\n\n「応募時の質問」\n1.平日日中の対応可否を教えてください。\n2.類似業務の経験有無を教えてください。';
+  const stage0ResponseItems = detailScraper.buildFieldStatus(
+    detailScraper.extractHeadingSection(description, detailScraper.HEADING_PATTERNS.responseItems), true);
+  const detail = detailFixture({
+    description, responseItems: stage0ResponseItems,
+    requiredConditions: { value: null, status: 'requires_analysis', matchedHeading: null, sourceAvailable: true },
+  });
+  detail.jobId = jobId;
+  detail.url = `https://crowdworks.jp/public/jobs/${jobId}`;
+  const stage1 = analyzer.analyzeJobDetail(detail);
+  saveJobAnalysis(jobId, stage1);
+  const result = applicationPacketBuilder.buildApplicationPacket(jobId);
+  record('見出し「応募時の質問」（鉤括弧・「ご」なし）で明記された質問が、Application Packetに具体的な質問文として保持される（実案件13392611のパターン）',
+    result.built === true
+    && result.packet.applicationQuestions.responseItems.status === 'extracted'
+    && result.packet.applicationQuestions.responseItems.value.includes('平日日中の対応可否')
+    && result.packet.applicationQuestions.responseItems.value.includes('類似業務の経験有無'),
+    JSON.stringify(result.packet && result.packet.applicationQuestions.responseItems));
+  cleanupApplicationPacketArtifacts(jobId);
+}
+{
+  // 統合確認（実案件13257814のパターン）：見出しには一致しないが「下記の質問にお答えください」という
+  // 頻出表現がある場合も、Stage0→Stage1→Application Packetまで質問文の抜粋が保持されることを確認する。
+  const jobId = 'TEST_PKT_RESPONSE_ITEMS_SOFT';
+  cleanupApplicationPacketArtifacts(jobId);
+  const description = '資料作成をお願いします。\n\nご応募の際には、必ず下記の質問にお答えください。\n①活かせる経験を教えてください。\n②想定納期を教えてください。';
+  const stage0ResponseItems = detailScraper.buildFieldStatus(
+    detailScraper.extractHeadingSection(description, detailScraper.HEADING_PATTERNS.responseItems), true);
+  const detail = detailFixture({
+    description, responseItems: stage0ResponseItems,
+    requiredConditions: { value: null, status: 'requires_analysis', matchedHeading: null, sourceAvailable: true },
+  });
+  detail.jobId = jobId;
+  detail.url = `https://crowdworks.jp/public/jobs/${jobId}`;
+  const stage1 = analyzer.analyzeJobDetail(detail);
+  saveJobAnalysis(jobId, stage1);
+  const result = applicationPacketBuilder.buildApplicationPacket(jobId);
+  record('見出し不一致でも頻出表現「下記の質問にお答えください」で明記された質問がApplication Packetに抜粋として保持される（実案件13257814のパターン）',
+    result.built === true
+    && result.packet.applicationQuestions.responseItems.status === 'requires_ai_analysis'
+    && result.packet.applicationQuestions.responseItems.evidenceText.includes('①活かせる経験')
+    && result.packet.applicationQuestions.responseItems.evidenceText.includes('②想定納期'),
+    JSON.stringify(result.packet && result.packet.applicationQuestions.responseItems));
   cleanupApplicationPacketArtifacts(jobId);
 }
 {
