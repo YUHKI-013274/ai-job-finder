@@ -12,6 +12,14 @@ const dateUtils = require('./date-utils');
 const detailScraper = require('./detail-scraper');
 const analyzer = require('./analyzer');
 const { verifyKnowledgeSync } = require('./knowledge-sync-check');
+const fs = require('fs');
+const path = require('path');
+const aiAnalyzer = require('./ai-analyzer');
+const { loadJobAiAnalysis, JOB_AI_ANALYSIS_DIR, JOB_AI_ANALYSIS_FAILED_DIR, saveJobAiAnalysis, saveFailedAttempt } = require('./ai-analysis-store');
+const { createCostTracker, estimateCostUsd } = require('./ai-usage-log');
+const { saveJobAnalysis, JOB_ANALYSIS_DIR } = require('./analysis-store');
+const applicationPacketBuilder = require('./application-packet-builder');
+const { loadApplicationPacket, APPLICATION_PACKETS_DIR } = require('./application-packet-store');
 
 let idCounter = 1;
 function job(title, description, price = '3,000円', deadlineFields = {}) {
@@ -731,7 +739,406 @@ console.log('='.repeat(100) + '\n');
     analysis.aiHandoff.tasks.some(t => t.includes('conditions.responseItems')));
 }
 
+// Stage2aのテストは（モッククライアント経由とはいえ）非同期関数を呼ぶため、
+// CommonJSではトップレベルawaitが使えず、この区間だけ即時実行の非同期関数でまとめる。
+(async () => {
+
+console.log('\n' + '='.repeat(100));
+console.log('■ Stage2a（AI意味解析）の回帰確認：ネットワーク・APIキー不要な範囲');
+console.log('='.repeat(100) + '\n');
+
+// テストにはStage2a対象3件（13318382/13330967/13354051）を使わず、実データを流用できる
+// 別のStage1分析結果（13326710・13330166）を使う。ライブ実行時にStage2a対象案件の結果を
+// 誤って上書きしないため。
+const TEST_JOB_ID = '13326710'; // proceed_after_confirmation（成功系のテストに使う）
+const TEST_STOP_JOB_ID = '13330166'; // stop（送信されないことのテストに使う）
+
+function cleanupAiAnalysisArtifacts(jobId) {
+  const successPath = path.join(JOB_AI_ANALYSIS_DIR, `${jobId}.json`);
+  if (fs.existsSync(successPath)) fs.unlinkSync(successPath);
+  if (fs.existsSync(JOB_AI_ANALYSIS_FAILED_DIR)) {
+    fs.readdirSync(JOB_AI_ANALYSIS_FAILED_DIR)
+      .filter(f => f.startsWith(`${jobId}_`))
+      .forEach(f => fs.unlinkSync(path.join(JOB_AI_ANALYSIS_FAILED_DIR, f)));
+  }
+}
+
+function makeMockClient(responses) {
+  let call = 0;
+  return {
+    messages: {
+      create: async () => {
+        const next = responses[Math.min(call, responses.length - 1)];
+        call++;
+        if (next.throwError) throw next.throwError;
+        return next.response;
+      },
+    },
+  };
+}
+
+function mockResponse(obj, inputTokens = 1000, outputTokens = 300) {
+  return { response: { content: [{ type: 'text', text: JSON.stringify(obj) }], usage: { input_tokens: inputTokens, output_tokens: outputTokens } } };
+}
+
+function buildValidMockOutput(stage1Analysis) {
+  const evidenceSnippet = stage1Analysis.aiHandoff.input.jobDescriptionFull.slice(10, 30); // 本文からそのまま引用
+  const experienceId = stage1Analysis.usableExperience[0].id;
+  return {
+    jobId: stage1Analysis.jobId,
+    clientPurpose: { deeperGoal: '手順を正確に理解してもらうための資料整備', deeperGoalEvidenceText: [evidenceSnippet], confidence: 'medium' },
+    conditionsSupplement: { requiredEmbedded: [], welcomeEmbedded: [], responseItemsResolved: [] },
+    personalizationPoints: [{ point: '画像付きで手順を解説する構成が求められている', evidenceText: evidenceSnippet }],
+    safetyReviewSupplement: [],
+    experienceConnections: [{ usableExperienceId: experienceId, connectionNote: '資料構成の経験を転用できる', fitStrength: 'moderate', limitation: '同一業界（FX）の直接経験はない' }],
+    missingInformationAdditions: [],
+    unresolvedItems: [],
+    stage2Concerns: { found: false, details: [] },
+    selfReport: { usedOnlyProvidedFacts: true, inventedFactsDetected: false },
+  };
+}
+
+{
+  // buildStage2Input：AIへ任せない範囲のフィールド（報酬・期限・recommendation・proposalGenerationAllowed等）を
+  // ペイロードに含めていないことを確認する
+  const stage1Real = require('./data/private/job_analysis/' + TEST_JOB_ID + '.json');
+  const input = aiAnalyzer.buildStage2Input(stage1Real);
+  record('buildStage2Inputはjobデータ本文・Stage1抽出情報を含む', input.jobId === TEST_JOB_ID && typeof input.jobDescriptionFull === 'string' && input.jobDescriptionFull.length > 0);
+  record('buildStage2Inputはrecommendation/proposalGenerationAllowedを含まない（AIへ任せない範囲）',
+    !Object.prototype.hasOwnProperty.call(input, 'recommendation') && !Object.prototype.hasOwnProperty.call(input, 'proposalGenerationAllowed'));
+  record('buildStage2Inputは報酬・応募期限の生データを含まない（AIへ任せない範囲）',
+    !Object.prototype.hasOwnProperty.call(input, 'price') && !Object.prototype.hasOwnProperty.call(input, 'deadline'));
+  record('buildStage2InputはKnowledge全文ではなく該当カテゴリーの抜粋のみを含む',
+    typeof input.salesKnowledgeExcerpt === 'object' && !JSON.stringify(input).includes('yuki_sales_knowledge_v1.md 第'));
+}
+{
+  const stage1Real = require('./data/private/job_analysis/' + TEST_JOB_ID + '.json');
+  const jobDescriptionFull = stage1Real.aiHandoff.input.jobDescriptionFull;
+  const validOutput = buildValidMockOutput(stage1Real);
+
+  const okResult = aiAnalyzer.validateStage2Output(validOutput, stage1Real, jobDescriptionFull);
+  record('正常な出力（実在ID・本文引用のみ）はvalid=trueになる', okResult.valid === true, JSON.stringify(okResult.errors));
+
+  const wrongJobId = { ...validOutput, jobId: 'wrong-id' };
+  const r1 = aiAnalyzer.validateStage2Output(wrongJobId, stage1Real, jobDescriptionFull);
+  record('jobId不一致はvalid=false・retryable=falseになる（再試行させず失敗）', r1.valid === false && r1.retryable === false);
+
+  const withForbiddenKey = { ...validOutput, recommendation: 'proceed' };
+  const r2 = aiAnalyzer.validateStage2Output(withForbiddenKey, stage1Real, jobDescriptionFull);
+  record('Stage1確定フィールド（recommendation）の混入はvalid=false・retryable=falseになる', r2.valid === false && r2.retryable === false);
+
+  const fakeExperienceId = { ...validOutput, experienceConnections: [{ usableExperienceId: 'invented:not_real', connectionNote: 'x', fitStrength: 'strong', limitation: '' }] };
+  const r3 = aiAnalyzer.validateStage2Output(fakeExperienceId, stage1Real, jobDescriptionFull);
+  record('Stage1に存在しないusableExperienceIdの参照はvalid=false・retryable=falseになる（創作扱い）', r3.valid === false && r3.retryable === false);
+
+  const fabricatedEvidence = { ...validOutput, personalizationPoints: [{ point: 'x', evidenceText: 'この文字列は案件本文には存在しません_テスト用' }] };
+  const r4 = aiAnalyzer.validateStage2Output(fabricatedEvidence, stage1Real, jobDescriptionFull);
+  record('案件本文に実在しない根拠テキストはvalid=false・retryable=falseになる', r4.valid === false && r4.retryable === false);
+
+  const bannedExpression = { ...validOutput, clientPurpose: { ...validOutput.clientPurpose, deeperGoal: stage1Real.aiHandoff.input.mustNotUse.prohibitedExpressions[0] } };
+  const r5 = aiAnalyzer.validateStage2Output(bannedExpression, stage1Real, jobDescriptionFull);
+  record('使用禁止表現の混入はvalid=false・retryable=falseになる', r5.valid === false && r5.retryable === false);
+
+  const r6 = aiAnalyzer.validateStage2Output('not-an-object', stage1Real, jobDescriptionFull);
+  record('JSON形式が不正（オブジェクトでない）な場合はvalid=false・retryable=trueになる（再試行対象）', r6.valid === false && r6.retryable === true);
+}
+{
+  // APIキー未設定時は外部送信せず例外で安全停止する（実際にキーが無い状態で確認）
+  const originalKey = process.env.ANTHROPIC_API_KEY;
+  delete process.env.ANTHROPIC_API_KEY;
+  let threw = false, correctType = false;
+  try {
+    aiAnalyzer.assertApiKeyConfigured();
+  } catch (err) {
+    threw = true;
+    correctType = err instanceof aiAnalyzer.ApiKeyNotConfiguredError;
+  } finally {
+    if (originalKey !== undefined) process.env.ANTHROPIC_API_KEY = originalKey;
+  }
+  record('ANTHROPIC_API_KEY未設定時はApiKeyNotConfiguredErrorで安全停止する（外部送信しない）', threw && correctType);
+}
+{
+  // stop案件はAPIへ一切送信しない（呼ばれたら即エラーになるモッククライアントで検証）
+  const poisonedClient = { messages: { create: async () => { throw new Error('APIが呼び出された：stop案件は送信禁止のはずが違反している'); } } };
+  const costTracker = createCostTracker({ costLimitUsd: 100 });
+  const result = await aiAnalyzer.runStage2ForJob(poisonedClient, TEST_STOP_JOB_ID, { model: 'claude-sonnet-5', costTracker });
+  record('stop判定の案件はAPIを呼び出さずskippedになる', result.outcome === 'skipped' && result.reason.includes('stop'));
+}
+{
+  // 正常系：有効な出力を返すモックで成功保存されることを確認し、テスト後に後始末する
+  cleanupAiAnalysisArtifacts(TEST_JOB_ID);
+  const stage1Real = require('./data/private/job_analysis/' + TEST_JOB_ID + '.json');
+  const validOutput = buildValidMockOutput(stage1Real);
+  const client = makeMockClient([mockResponse(validOutput)]);
+  const costTracker = createCostTracker({ costLimitUsd: 100 });
+  const result = await aiAnalyzer.runStage2ForJob(client, TEST_JOB_ID, { model: 'claude-sonnet-5', costTracker });
+  record('有効な出力は1回の試行で成功し、非公開領域へ保存される', result.outcome === 'success' && result.attempts === 1);
+  const saved = loadJobAiAnalysis(TEST_JOB_ID);
+  record('保存されたStage2結果ファイルにStage1の確定フィールド（recommendation等）が含まれない',
+    saved && !Object.prototype.hasOwnProperty.call(saved.output, 'recommendation') && !Object.prototype.hasOwnProperty.call(saved.output, 'proposalGenerationAllowed'));
+  cleanupAiAnalysisArtifacts(TEST_JOB_ID);
+}
+{
+  // 一時的エラー（JSON形式不正）は再試行し、2回目で成功すればattempts=2で保存される
+  cleanupAiAnalysisArtifacts(TEST_JOB_ID);
+  const stage1Real = require('./data/private/job_analysis/' + TEST_JOB_ID + '.json');
+  const validOutput = buildValidMockOutput(stage1Real);
+  const client = makeMockClient([
+    { response: { content: [{ type: 'text', text: '{ this is not valid json' }], usage: { input_tokens: 900, output_tokens: 50 } } },
+    mockResponse(validOutput),
+  ]);
+  const costTracker = createCostTracker({ costLimitUsd: 100 });
+  const result = await aiAnalyzer.runStage2ForJob(client, TEST_JOB_ID, { model: 'claude-sonnet-5', costTracker });
+  record('JSON形式不正は再試行され、2回目で成功する（attempts=2）', result.outcome === 'success' && result.attempts === 2);
+  cleanupAiAnalysisArtifacts(TEST_JOB_ID);
+}
+{
+  // 事実不整合（存在しないID参照）は再試行せず即失敗する
+  cleanupAiAnalysisArtifacts(TEST_JOB_ID);
+  const stage1Real = require('./data/private/job_analysis/' + TEST_JOB_ID + '.json');
+  const invalidOutput = { ...buildValidMockOutput(stage1Real), experienceConnections: [{ usableExperienceId: 'invented:not_real', connectionNote: 'x', fitStrength: 'strong', limitation: '' }] };
+  const client = makeMockClient([mockResponse(invalidOutput), mockResponse(buildValidMockOutput(stage1Real))]); // 2回目は正常だが呼ばれないはず
+  const costTracker = createCostTracker({ costLimitUsd: 100 });
+  const result = await aiAnalyzer.runStage2ForJob(client, TEST_JOB_ID, { model: 'claude-sonnet-5', costTracker });
+  record('存在しないID参照（創作扱い）は再試行せず1回で失敗する（attempts=1）', result.outcome === 'failed' && result.attempts === 1);
+  const savedAfterFailure = loadJobAiAnalysis(TEST_JOB_ID);
+  record('失敗時は正式なStage2結果ファイルを作らない（失敗記録のみ分離保存）', savedAfterFailure === null && !!result.failedRecordPath);
+  cleanupAiAnalysisArtifacts(TEST_JOB_ID);
+}
+{
+  // コスト上限：呼び出し前チェックで到達していればAPIを呼ばずskippedになる
+  const poisonedClient = { messages: { create: async () => { throw new Error('コスト上限到達後にAPIが呼び出された'); } } };
+  const costTracker = createCostTracker({ costLimitUsd: 0.00001 });
+  costTracker.recordCall({ jobId: 'dummy', model: 'claude-sonnet-5', inputTokens: 100000, outputTokens: 100000, success: true, retryCount: 0 });
+  const result = await aiAnalyzer.runStage2ForJob(poisonedClient, TEST_JOB_ID, { model: 'claude-sonnet-5', costTracker });
+  record('累計費用が上限に達している場合、APIを呼び出さずskippedになる', result.outcome === 'skipped' && result.reason.includes('上限'));
+}
+{
+  // 異常なトークン使用の検知（上限未到達でも停止する）
+  cleanupAiAnalysisArtifacts(TEST_JOB_ID);
+  const stage1Real = require('./data/private/job_analysis/' + TEST_JOB_ID + '.json');
+  const client = makeMockClient([{ response: { content: [{ type: 'text', text: JSON.stringify(buildValidMockOutput(stage1Real)) }], usage: { input_tokens: 999999, output_tokens: 100 } } }]);
+  const costTracker = createCostTracker({ costLimitUsd: 100, maxInputTokensPerCall: 20000 });
+  const result = await aiAnalyzer.runStage2ForJob(client, TEST_JOB_ID, { model: 'claude-sonnet-5', costTracker });
+  record('異常に多い入力トークンを検知した場合は再試行せず失敗する', result.outcome === 'failed' && result.attempts === 1 && result.error.type === 'abnormal_usage');
+  cleanupAiAnalysisArtifacts(TEST_JOB_ID);
+}
+{
+  // コストトラッカー単体の動作確認
+  const tracker = createCostTracker({ costLimitUsd: 1 });
+  record('コスト上限未到達時はcanProceed=trueになる', tracker.canProceed().ok === true);
+  const cost = estimateCostUsd('claude-sonnet-5', 1_000_000, 1_000_000);
+  record('claude-sonnet-5の費用計算が公式単価（入力$3・出力$15/1Mトークン）と一致する', Math.abs(cost - 18) < 0.0001, `計算結果=${cost}`);
+}
+
+console.log('\n' + '='.repeat(100));
+console.log('■ Application Packet（応募準備パケット）の回帰確認');
+console.log('='.repeat(100) + '\n');
+
+// Stage1・Stage2の実データ（永峯勇気の実案件）は日次実行のたびに書き換わるため、
+// Application Packetのテストは実データを流用せず、テスト専用の合成jobId（英字を含み実案件IDと
+// 衝突しない）でStage1・Stage2の最小フィクスチャを作り、テスト後に必ず片付ける。
+function makeStage1Analysis(jobId, overrides = {}) {
+  const base = {
+    jobId,
+    proposalGenerationAllowed: true,
+    recommendation: { value: 'proceed', reasons: ['テスト用固定理由'] },
+    sourceFiles: { jobDetail: `data/private/job_details/${jobId}.json` },
+    jobSummary: {
+      jobId,
+      title: 'テスト案件タイトル',
+      url: `https://crowdworks.jp/public/jobs/${jobId}`,
+      price: { type: '固定報酬制', raw: '10,000円' },
+      deadline: { raw: '2026年12月31日', normalized: '2026-12-31', status: 'open', endedBannerDetected: false },
+      currentTier: 'now',
+    },
+    clientInfo: {
+      name: 'テストクライアント', isIdentityVerified: false, isEmployerRuleCheckSucceeded: true,
+      reviewCount: null, reviewCountNote: 'テスト', averageScore: 4.5, thanksCount: 10,
+      jobOfferAchievementCount: 5, applied: 1, contracted: 0, recruiting: 1,
+    },
+    searchSystemReevaluation: { rank: 'A', capabilityStatus: '応募可能', evidenceType: '強い代替証明', matchedCapabilities: ['構成力'] },
+    safetyReview: { unclearCompensation: { status: 'no_signal_detected', evidence: [] } },
+    toolFit: { requiredTools: [], source: null, perTool: [], hasHardBlock: false, hasUnknown: false, overallStatus: 'no_tool_specified' },
+    toolMismatchNote: null,
+    usableExperience: [{
+      id: 'test_category:paid', assetId: 'test_asset_1', name: '受注・実務経験', knowledgeText: 'テスト経験',
+      connectionReason: 'テスト', evidenceKind: 'paid', evidenceLevel: '使用可能', clientValue: 'テスト提供価値', usableInProposal: true,
+    }],
+    clientValue: [{
+      assetId: 'test_asset_1', experience: 'テスト経験', capability: 'テスト能力', rationale: 'テスト理由',
+      evidence: '強い代替証明', clientValue: 'テスト提供価値', status: 'extracted', expressionExample: 'テスト表現例',
+    }],
+    conditions: {
+      required: { value: null, status: 'requires_analysis', evidenceText: null, source: 'job_detail' },
+      responseItems: { value: null, status: 'unavailable', evidenceText: null, source: 'job_detail' },
+    },
+    proposalMaterials: {
+      centralMessage: 'テスト中心メッセージ', usableExperienceIds: ['test_category:paid'], usableEvidenceIds: ['test_asset_1'],
+      portfolioIds: [], requiredAnswers: [], avoidExpressions: [], prohibitedClaims: [],
+    },
+    portfolioCandidates: [],
+    missingInformation: [],
+    aiHandoff: { required: false, tasks: [], input: { jobDescriptionFull: 'これはテスト用の案件本文です。' } },
+  };
+  return { ...base, ...overrides };
+}
+
+function cleanupApplicationPacketArtifacts(jobId) {
+  const stage1Path = path.join(JOB_ANALYSIS_DIR, `${jobId}.json`);
+  if (fs.existsSync(stage1Path)) fs.unlinkSync(stage1Path);
+  const stage2Path = path.join(JOB_AI_ANALYSIS_DIR, `${jobId}.json`);
+  if (fs.existsSync(stage2Path)) fs.unlinkSync(stage2Path);
+  if (fs.existsSync(JOB_AI_ANALYSIS_FAILED_DIR)) {
+    fs.readdirSync(JOB_AI_ANALYSIS_FAILED_DIR)
+      .filter(f => f.startsWith(`${jobId}_`))
+      .forEach(f => fs.unlinkSync(path.join(JOB_AI_ANALYSIS_FAILED_DIR, f)));
+  }
+  const packetPath = path.join(APPLICATION_PACKETS_DIR, `${jobId}.json`);
+  if (fs.existsSync(packetPath)) fs.unlinkSync(packetPath);
+}
+
+{
+  // シナリオ1: Stage2ありの場合、Stage1＋Stage2の両方がパケットへ格納される
+  const jobId = 'TEST_PKT_STAGE2_OK';
+  cleanupApplicationPacketArtifacts(jobId);
+  const stage1 = makeStage1Analysis(jobId);
+  saveJobAnalysis(jobId, stage1);
+  const stage2Output = {
+    clientPurpose: { deeperGoal: 'テスト深掘り目的', deeperGoalEvidenceText: ['テスト用'], confidence: 'medium' },
+    personalizationPoints: [{ point: 'テスト個別化ポイント', evidenceText: 'テスト用' }],
+  };
+  saveJobAiAnalysis(jobId, { jobId, analyzedAt: '2026-08-20T00:00:00.000Z', output: stage2Output });
+
+  const result = applicationPacketBuilder.buildApplicationPacket(jobId);
+  record('Stage2結果がある場合はbuilt=trueでstage2.status=successになる', result.built === true && result.packet.stage2.status === 'success');
+  record('Stage2ありの場合、stage2.outputにStage2の実出力がそのまま格納される',
+    JSON.stringify(result.packet.stage2.output) === JSON.stringify(stage2Output));
+  record('Stage2ありの場合、sourceFiles.stage2Analysisが設定される',
+    result.packet.sourceFiles.stage2Analysis === `data/private/job_ai_analysis/${jobId}.json`);
+  record('Stage1由来の必須項目（タイトル・URL・報酬・ランク・応募区分）もあわせて格納される',
+    result.packet.job.title === stage1.jobSummary.title
+    && result.packet.job.url === stage1.jobSummary.url
+    && result.packet.evaluation.rank === 'A'
+    && result.packet.evaluation.applyCategory === 'now');
+  const saved = loadApplicationPacket(jobId);
+  record('生成したApplication Packetがdata/private/application_packets/へ保存される', saved !== null && saved.jobId === jobId);
+  cleanupApplicationPacketArtifacts(jobId);
+}
+{
+  // シナリオ2: Stage2なしの場合、Stage1だけでパケットが完成し、stage2.status=not_runになる
+  const jobId = 'TEST_PKT_STAGE2_NONE';
+  cleanupApplicationPacketArtifacts(jobId);
+  const stage1 = makeStage1Analysis(jobId);
+  saveJobAnalysis(jobId, stage1);
+
+  const result = applicationPacketBuilder.buildApplicationPacket(jobId);
+  record('Stage2結果がない場合でもStage1だけでbuilt=trueになる（日次パイプラインを止めない）', result.built === true);
+  record('Stage2未実行の場合はstage2.status=not_runになる', result.packet.stage2.status === 'not_run');
+  record('Stage2未実行の場合はsourceFiles.stage2Analysisがnullになる', result.packet.sourceFiles.stage2Analysis === null);
+  cleanupApplicationPacketArtifacts(jobId);
+}
+{
+  // シナリオ3: Stage2が失敗記録のみ残している場合、stage2.status=failedとして状態を明示する
+  const jobId = 'TEST_PKT_STAGE2_FAILED';
+  cleanupApplicationPacketArtifacts(jobId);
+  const stage1 = makeStage1Analysis(jobId);
+  saveJobAnalysis(jobId, stage1);
+  saveFailedAttempt(jobId, {
+    jobId, stage2Version: 'stage2a-v1', attemptedAt: '2026-08-20T00:00:00.000Z', model: 'claude-sonnet-5',
+    attempts: 1, lastError: { type: 'validation_failed', message: 'テスト用失敗理由' }, lastUsage: null,
+  });
+
+  const result = applicationPacketBuilder.buildApplicationPacket(jobId);
+  record('Stage2が失敗のみの場合でもStage1だけでbuilt=trueになる', result.built === true);
+  record('Stage2失敗の場合はstage2.status=failedになり、失敗理由も引き継がれる（存在しない事実を補完しない）',
+    result.packet.stage2.status === 'failed' && result.packet.stage2.error.type === 'validation_failed');
+  cleanupApplicationPacketArtifacts(jobId);
+}
+{
+  // シナリオ4: 必須情報不足（本文から抽出できていない項目・クライアント情報の一部欠落）でも
+  // 推測で埋めず、Stage1の不明ステータス・不足情報リストをそのまま引き継ぐ
+  const jobId = 'TEST_PKT_MISSING_INFO';
+  cleanupApplicationPacketArtifacts(jobId);
+  const stage1 = makeStage1Analysis(jobId, {
+    clientInfo: {
+      name: null, isIdentityVerified: null, isEmployerRuleCheckSucceeded: null, reviewCount: null,
+      reviewCountNote: 'テスト', averageScore: null, thanksCount: null, jobOfferAchievementCount: null,
+      applied: null, contracted: null, recruiting: null,
+    },
+    conditions: {
+      required: { value: null, status: 'requires_analysis', evidenceText: null, source: 'job_detail' },
+      responseItems: { value: null, status: 'requires_ai_analysis', evidenceText: 'テスト抜粋', source: 'rule(soft_signal)' },
+    },
+    missingInformation: [
+      { item: '必須条件の内容確認', detail: null, reason: '本文から見出しで抽出できず、意味解析待ちのため' },
+      { item: 'テスト不足項目2', detail: null, reason: 'テスト理由2' },
+    ],
+  });
+  saveJobAnalysis(jobId, stage1);
+
+  const result = applicationPacketBuilder.buildApplicationPacket(jobId);
+  record('必須情報が不足していてもbuilt=trueになる（欠落を理由に停止しない）', result.built === true);
+  record('不明な項目は推測で埋めず、Stage1のstatus表現（requires_analysis等）をそのまま引き継ぐ',
+    result.packet.applicationQuestions.requiredConditions.status === 'requires_analysis'
+    && result.packet.client.name === null);
+  record('不足情報リスト（missingInformation）がそのまま件数どおり引き継がれる', result.packet.missingInformation.length === 2);
+  cleanupApplicationPacketArtifacts(jobId);
+}
+{
+  // stop案件（応募非推奨）は既存のStage1判定を尊重し、Application Packetを生成しない
+  const jobId = 'TEST_PKT_STOP';
+  cleanupApplicationPacketArtifacts(jobId);
+  const stage1 = makeStage1Analysis(jobId, {
+    proposalGenerationAllowed: false,
+    recommendation: { value: 'stop', reasons: ['テスト用stop理由'] },
+  });
+  saveJobAnalysis(jobId, stage1);
+
+  const result = applicationPacketBuilder.buildApplicationPacket(jobId);
+  record('stop判定の案件はbuilt=falseになり、Application Packetを生成しない', result.built === false && /stop/.test(result.reason));
+  record('stop判定の案件はファイルも保存されない', loadApplicationPacket(jobId) === null);
+  cleanupApplicationPacketArtifacts(jobId);
+}
+{
+  // Stage1分析結果が存在しない案件（未取得・未分析）はbuilt=falseで明示的に理由を返す
+  const result = applicationPacketBuilder.buildApplicationPacket('TEST_PKT_NO_STAGE1_XYZ');
+  record('Stage1分析結果が存在しない場合はbuilt=falseで理由を明示する',
+    result.built === false && /Stage1/.test(result.reason));
+}
+{
+  // シナリオ5: 応募候補0件（stage1Resultsが空配列）でも例外を投げず、0件の集計を返す
+  const summary = applicationPacketBuilder.buildApplicationPacketsFromStage1Results([]);
+  record('応募候補0件（空配列）でも例外を投げず対象0件として処理される',
+    summary.targetCount === 0 && summary.builtCount === 0 && summary.results.length === 0);
+}
+{
+  // buildApplicationPacketsFromStage1Results: analyzed=falseの案件・proposalGenerationAllowed=falseの
+  // 案件（stop・確認候補等）は対象から除外し、対象になる案件のみパケットを生成する
+  const okId = 'TEST_PKT_BATCH_OK';
+  const stopId = 'TEST_PKT_BATCH_STOP';
+  cleanupApplicationPacketArtifacts(okId);
+  cleanupApplicationPacketArtifacts(stopId);
+  saveJobAnalysis(okId, makeStage1Analysis(okId));
+  saveJobAnalysis(stopId, makeStage1Analysis(stopId, { proposalGenerationAllowed: false, recommendation: { value: 'stop', reasons: ['テスト'] } }));
+
+  const stage1Results = [
+    { jobId: okId, analyzed: true, recommendation: 'proceed', proposalGenerationAllowed: true },
+    { jobId: stopId, analyzed: true, recommendation: 'stop', proposalGenerationAllowed: false },
+    { jobId: 'TEST_PKT_BATCH_SKIPPED', analyzed: false, skipReason: '見送り済み' },
+  ];
+  const summary = applicationPacketBuilder.buildApplicationPacketsFromStage1Results(stage1Results);
+  record('分析対象一覧のうちproposalGenerationAllowed=trueの案件のみが対象件数に含まれる（既存の応募判定を尊重）',
+    summary.targetCount === 1 && summary.builtCount === 1);
+  record('stop・未分析の案件はApplication Packetを生成しない', loadApplicationPacket(stopId) === null);
+
+  cleanupApplicationPacketArtifacts(okId);
+  cleanupApplicationPacketArtifacts(stopId);
+}
+
 console.log('\n' + '='.repeat(100));
 console.log(`■ 合計: ${pass}/${total} 件合格`);
 console.log('='.repeat(100));
 console.log(pass === total ? '✅ 全項目合格' : '❌ 不合格項目あり（本番デプロイ不可）');
+
+})();

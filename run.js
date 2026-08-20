@@ -22,6 +22,7 @@ const detailScraper = require('./detail-scraper');
 const detailStore = require('./detail-store');
 const analyzer = require('./analyzer');
 const aiAnalyzer = require('./ai-analyzer');
+const applicationPacketBuilder = require('./application-packet-builder');
 
 // ブラウザが1ページでクラッシュした後、Playwright内部の非同期処理（再接続試行等）が
 // 少し遅れてrejectし、呼び出し元のtry/catchで捕まえられないままプロセス全体を
@@ -57,8 +58,9 @@ async function runAnalysisPipeline(classified) {
   }
 
   // Stage1: ルールベース分析（外部API不要のため、Anthropicの状態に関わらず必ず実行を試みる）
+  let stage1Results = [];
   try {
-    const stage1Results = analyzer.analyzeAllPendingJobDetails();
+    stage1Results = analyzer.analyzeAllPendingJobDetails();
     const analyzedCount = stage1Results.filter(r => r.analyzed).length;
     console.log(`Stage1: 分析完了 ${analyzedCount}件（対象外${stage1Results.length - analyzedCount}件）`);
   } catch (err) {
@@ -83,6 +85,15 @@ async function runAnalysisPipeline(classified) {
     }
   } catch (err) {
     console.log(`💡 Stage2スキップ（AI分析を利用できないため、Stage1までの結果で継続）: ${err.message}`);
+  }
+
+  // Application Packet: Stage1（＋存在すればStage2）の結果を、応募文生成・フォーム入力工程が
+  // そのまま使える1案件1ファイルへまとめる。失敗してもページ生成・通知・デプロイは止めない。
+  try {
+    const packetSummary = applicationPacketBuilder.buildApplicationPacketsFromStage1Results(stage1Results);
+    console.log(`Application Packet: 生成${packetSummary.builtCount}件 / 対象外${packetSummary.skippedCount}件（対象${packetSummary.targetCount}件中）`);
+  } catch (err) {
+    console.log(`⚠️  Application Packet生成をスキップ（失敗）: ${err.message}`);
   }
 }
 
