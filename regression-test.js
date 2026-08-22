@@ -21,7 +21,8 @@ const { saveJobAnalysis, JOB_ANALYSIS_DIR } = require('./analysis-store');
 const applicationPacketBuilder = require('./application-packet-builder');
 const { loadApplicationPacket, saveApplicationPacket, APPLICATION_PACKETS_DIR } = require('./application-packet-store');
 const applicationDraftGenerator = require('./application-draft-generator');
-const { loadApplicationDraft, listSavedApplicationDraftIds, APPLICATION_DRAFTS_DIR, APPLICATION_DRAFTS_FAILED_DIR } = require('./application-draft-store');
+const { loadApplicationDraft, listSavedApplicationDraftIds, saveApplicationDraft, APPLICATION_DRAFTS_DIR, APPLICATION_DRAFTS_FAILED_DIR } = require('./application-draft-store');
+const applicationFormFiller = require('./application-form-filler');
 
 let idCounter = 1;
 function job(title, description, price = '3,000円', deadlineFields = {}) {
@@ -1625,6 +1626,254 @@ function buildValidMockDraftOutput(packet, candidateQuestions, { readyAll = true
     && result.draft.questionAnswers[1].question === candidateQuestions[1]
     && result.draft.questionAnswers[2].question === candidateQuestions[2]);
   cleanupDraftArtifacts(jobId);
+}
+
+console.log('\n' + '='.repeat(100));
+console.log('■ Application Form Filler（CrowdWorks応募フォーム入力）の回帰確認：送信操作なしの機械的保証');
+console.log('='.repeat(100) + '\n');
+
+// モックPlaywright page：呼び出し内容をすべて記録する。click/press/evaluateは実装側から
+// 一切呼ばれてはいけない操作のため、呼ばれた場合は記録した上で例外を投げ、テストの成功パスが
+// 誤って通ってしまうことを防ぐ（＝呼ばれていれば必ずテストが失敗する設計）。
+function makeMockCrowdWorksPage(initialUrl) {
+  const calls = { goto: [], waitForSelector: [], fill: [], selectOption: [], click: [], press: [], evaluate: [] };
+  let currentUrl = initialUrl;
+  const page = {
+    url: () => currentUrl,
+    goto: async (url) => { calls.goto.push(url); currentUrl = url; },
+    waitForSelector: async (selector, opts) => {
+      calls.waitForSelector.push({ selector, opts });
+      if (page.__waitForSelectorImpl) return page.__waitForSelectorImpl();
+      return true;
+    },
+    fill: async (selector, value) => { calls.fill.push({ selector, value }); },
+    selectOption: async (selector, value) => { calls.selectOption.push({ selector, value }); },
+    click: async (...args) => { calls.click.push(args); throw new Error('click()は許可されていない操作です（テスト用モックが検知）'); },
+    press: async (...args) => { calls.press.push(args); throw new Error('press()は許可されていない操作です（テスト用モックが検知）'); },
+    evaluate: async (...args) => { calls.evaluate.push(args); throw new Error('evaluate()は許可されていない操作です（テスト用モックが検知）'); },
+    __calls: calls,
+  };
+  return page;
+}
+
+function makeDraftFixture(jobId, overrides = {}) {
+  return {
+    jobId,
+    status: 'success',
+    applicationText: 'テスト用の応募文です。経験を活かして対応します。',
+    questionAnswers: [],
+    confirmationItems: [],
+    sourcePacket: { path: `data/private/application_packets/${jobId}.json`, packetVersion: 'application-packet-v1', packetGeneratedAt: new Date().toISOString() },
+    generatedAt: new Date().toISOString(),
+    draftVersion: 'application-draft-v1',
+    ...overrides,
+  };
+}
+
+function makePacketFixtureForFiller(jobId, overrides = {}) {
+  return {
+    jobId,
+    packetVersion: 'application-packet-v1',
+    job: { title: 'テスト案件', url: `https://crowdworks.jp/public/jobs/${jobId}`, price: { type: '固定報酬制', raw: '10,000円' }, deadline: {}, description: 'テスト本文' },
+    ...overrides,
+  };
+}
+
+function cleanupFillerArtifacts(jobId) {
+  const draftPath = path.join(APPLICATION_DRAFTS_DIR, `${jobId}.json`);
+  if (fs.existsSync(draftPath)) fs.unlinkSync(draftPath);
+  const packetPath = path.join(APPLICATION_PACKETS_DIR, `${jobId}.json`);
+  if (fs.existsSync(packetPath)) fs.unlinkSync(packetPath);
+}
+
+{
+  // 1. 応募メッセージが正しいtextareaへ入る
+  const draft = makeDraftFixture('X1', { applicationText: 'これはテスト応募文です。' });
+  const plan = applicationFormFiller.buildFillPlan(draft);
+  const page = makeMockCrowdWorksPage('about:blank');
+  await applicationFormFiller.applyFillPlan(page, plan);
+  record('応募メッセージが正しいセレクタ（応募メッセージ欄）へfillされる',
+    page.__calls.fill.some(c => c.selector === applicationFormFiller.SELECTORS.messageBody && c.value.includes('これはテスト応募文です。')));
+}
+{
+  // 2. questionAnswers readyが応募文へ統合される
+  const draft = makeDraftFixture('X2', {
+    applicationText: '中心となる応募文。',
+    questionAnswers: [
+      { question: '稼働可能時間を教えてください。', answer: '平日夜と週末に対応可能です。', status: 'ready' },
+    ],
+  });
+  const plan = applicationFormFiller.buildFillPlan(draft);
+  record('status=readyの質問と回答が応募メッセージへ統合される',
+    plan.messageBody.includes('中心となる応募文。') && plan.messageBody.includes('稼働可能時間を教えてください。') && plan.messageBody.includes('平日夜と週末に対応可能です。'));
+}
+{
+  // 3. needs_confirmationを勝手に回答しない
+  const draft = makeDraftFixture('X3', {
+    applicationText: '中心となる応募文。',
+    questionAnswers: [
+      { question: '経験年数を教えてください。', answer: null, status: 'needs_confirmation' },
+      { question: '得意な作業を教えてください。', answer: null, status: 'cannot_answer' },
+    ],
+  });
+  const plan = applicationFormFiller.buildFillPlan(draft);
+  record('needs_confirmation/cannot_answerの質問は応募メッセージへ含めない（推測回答を書かない）',
+    !plan.messageBody.includes('経験年数を教えてください。') && !plan.messageBody.includes('得意な作業を教えてください。'));
+  record('needs_confirmation/cannot_answerの質問はskippedQuestionsとして確認対象に残る',
+    plan.skippedQuestions.length === 2 && plan.skippedQuestions.includes('経験年数を教えてください。') && plan.skippedQuestions.includes('得意な作業を教えてください。'));
+}
+{
+  // 4. 金額未確定なら金額欄を触らない
+  const draft = makeDraftFixture('X4');
+  const plan = applicationFormFiller.buildFillPlan(draft);
+  record('（前提確認）Application Draftは確定金額を持たないため常にamount=null', plan.amount === null);
+  const page = makeMockCrowdWorksPage('about:blank');
+  await applicationFormFiller.applyFillPlan(page, plan);
+  record('金額が未確定の場合、金額欄（ダミー欄・内部値欄）には一切fillしない',
+    !page.__calls.fill.some(c => c.selector === applicationFormFiller.SELECTORS.amountDummy || c.selector === applicationFormFiller.SELECTORS.amountInternal));
+}
+{
+  // （参考）確定金額が渡された場合は金額欄へfillする実装であることも確認する
+  const page = makeMockCrowdWorksPage('about:blank');
+  await applicationFormFiller.applyFillPlan(page, { messageBody: 'x', amount: 12000, deliveryDate: null, skippedQuestions: [] });
+  record('（将来の拡張確認）確定金額がある場合は金額欄へfillされる',
+    page.__calls.fill.some(c => c.selector === applicationFormFiller.SELECTORS.amountDummy && c.value === '12000')
+    && page.__calls.fill.some(c => c.selector === applicationFormFiller.SELECTORS.amountInternal && c.value === '12000'));
+}
+{
+  // 5. 完了予定日未確定なら触らない
+  const draft = makeDraftFixture('X5');
+  const plan = applicationFormFiller.buildFillPlan(draft);
+  record('（前提確認）Application Draftは確定完了予定日を持たないため常にdeliveryDate=null', plan.deliveryDate === null);
+  const page = makeMockCrowdWorksPage('about:blank');
+  await applicationFormFiller.applyFillPlan(page, plan);
+  record('完了予定日が未確定の場合、完了予定日欄（年月日）には一切selectOptionしない',
+    page.__calls.selectOption.length === 0);
+}
+{
+  // （参考）確定完了予定日が渡された場合は年月日欄へselectOptionする実装であることも確認する
+  const page = makeMockCrowdWorksPage('about:blank');
+  await applicationFormFiller.applyFillPlan(page, { messageBody: 'x', amount: null, deliveryDate: '2026-09-01', skippedQuestions: [] });
+  record('（将来の拡張確認）確定完了予定日がある場合は年月日欄へselectOptionされる',
+    page.__calls.selectOption.some(c => c.selector === applicationFormFiller.SELECTORS.deadlineYear && c.value === '2026')
+    && page.__calls.selectOption.some(c => c.selector === applicationFormFiller.SELECTORS.deadlineMonth && c.value === '9')
+    && page.__calls.selectOption.some(c => c.selector === applicationFormFiller.SELECTORS.deadlineDay && c.value === '1'));
+}
+{
+  // 6・7. 源泉徴収・添付ファイルを触らない（許可セレクタ以外へは一切操作しない）
+  const page = makeMockCrowdWorksPage('about:blank');
+  await applicationFormFiller.applyFillPlan(page, { messageBody: 'x', amount: 1000, deliveryDate: '2026-09-01', skippedQuestions: [] });
+  const allowedSelectors = new Set(Object.values(applicationFormFiller.SELECTORS).filter(v => typeof v === 'string'));
+  const touchedSelectors = [...page.__calls.fill.map(c => c.selector), ...page.__calls.selectOption.map(c => c.selector)];
+  const untouchedOnlyAllowed = touchedSelectors.every(s => allowedSelectors.has(s));
+  record('入力操作は許可されたセレクタ（応募メッセージ・金額・完了予定日）以外へは一切行われない（源泉徴収・添付ファイル欄等は対象外）',
+    untouchedOnlyAllowed, JSON.stringify(touchedSelectors));
+}
+{
+  // 8・9・10. submitボタンをclickしない／form.submitを呼ばない／Enter送信を行わない（モックによる機械的保証）
+  const jobId = 'X_SUCCESS_FLOW';
+  const plan = applicationFormFiller.buildFillPlan(makeDraftFixture(jobId));
+  const page = makeMockCrowdWorksPage('about:blank');
+  const result = await applicationFormFiller.fillCrowdWorksForm(page, { jobId, jobUrl: `https://crowdworks.jp/public/jobs/${jobId}`, fillPlan: plan });
+  record('正常フロー（入力完了まで）でoutcomeがokになる', result.ok === true);
+  record('入力完了までの一連の操作でclick()が一度も呼ばれない', page.__calls.click.length === 0);
+  record('入力完了までの一連の操作でpress()（Enterキー送信含む）が一度も呼ばれない', page.__calls.press.length === 0);
+  record('入力完了までの一連の操作でevaluate()（JS実行によるsubmit等）が一度も呼ばれない', page.__calls.evaluate.length === 0);
+}
+{
+  // 8・9・10（静的保証）：ソースコード自体に送信系操作の記述が一切無いことを走査で確認する
+  // （コード実行を伴わない、最も強い保証。将来誤って追加された場合も即座に検知できる）。
+  const source = fs.readFileSync(path.join(__dirname, 'application-form-filler.js'), 'utf8');
+  const codeOnly = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
+  const forbiddenPatterns = ['.click(', '.submit(', 'form.submit', 'dispatchEvent(', '.press(', 'request.post(', 'fetch('];
+  const found = forbiddenPatterns.filter(p => codeOnly.includes(p));
+  record('application-form-filler.jsのソースコード（コメント除く）に送信・クリック系操作の記述が一切含まれない',
+    found.length === 0, JSON.stringify(found));
+}
+{
+  // 11. セッション切れを検知して停止（案件ページへの遷移直後にログイン画面へ飛ばされたケース）
+  const jobId = 'X_SESSION_EXPIRED_EARLY';
+  const plan = applicationFormFiller.buildFillPlan(makeDraftFixture(jobId));
+  const page = makeMockCrowdWorksPage('about:blank');
+  const result = await applicationFormFiller.fillCrowdWorksForm(page, { jobId, jobUrl: 'https://crowdworks.jp/login?back=1', fillPlan: plan });
+  record('案件ページ遷移直後にログイン画面と判定された場合、入力せず停止する（セッション切れ）',
+    result.ok === false && /セッション切れ/.test(result.reason) && page.__calls.fill.length === 0);
+}
+{
+  // 11. セッション切れを検知して停止（フォーム表示待ち中にログイン画面へ飛ばされたケース）
+  const jobId = 'X_SESSION_EXPIRED_LATE';
+  const plan = applicationFormFiller.buildFillPlan(makeDraftFixture(jobId));
+  const page = makeMockCrowdWorksPage('about:blank');
+  page.__waitForSelectorImpl = () => { page.goto('https://crowdworks.jp/login'); return true; };
+  const result = await applicationFormFiller.fillCrowdWorksForm(page, { jobId, jobUrl: `https://crowdworks.jp/public/jobs/${jobId}`, fillPlan: plan });
+  record('フォーム表示待ち中にログイン画面へ遷移した場合も、入力せず停止する（セッション切れ）',
+    result.ok === false && /セッション切れ/.test(result.reason) && page.__calls.fill.length === 0);
+}
+{
+  // 応募フォームが指定時間内に表示されない場合（「応募する」が押されなかった等）も入力せず停止する
+  const jobId = 'X_FORM_TIMEOUT';
+  const plan = applicationFormFiller.buildFillPlan(makeDraftFixture(jobId));
+  const page = makeMockCrowdWorksPage('about:blank');
+  page.__waitForSelectorImpl = () => { throw new Error('Timeout waiting for selector'); };
+  const result = await applicationFormFiller.fillCrowdWorksForm(page, { jobId, jobUrl: `https://crowdworks.jp/public/jobs/${jobId}`, fillPlan: plan });
+  record('応募フォームが時間内に表示されない場合は入力せず停止する', result.ok === false && /表示されません/.test(result.reason) && page.__calls.fill.length === 0);
+}
+{
+  // 12. Draft不足時は停止（Application Draftが存在しない）
+  const result = applicationFormFiller.loadFillContext('X_NO_DRAFT_AT_ALL');
+  record('Application Draftが存在しない場合はok=falseで明示的に理由が返る（ブラウザを起動しない）',
+    result.ok === false && /Application Draft/.test(result.reason));
+}
+{
+  // 12. Draft不足時は停止（Application Packetが存在しない）
+  const jobId = 'X_NO_PACKET';
+  cleanupFillerArtifacts(jobId);
+  saveApplicationDraft(jobId, makeDraftFixture(jobId));
+  const result = applicationFormFiller.loadFillContext(jobId);
+  record('Application Packetが存在しない場合はok=falseで明示的に理由が返る',
+    result.ok === false && /Application Packet/.test(result.reason));
+  cleanupFillerArtifacts(jobId);
+}
+{
+  // 13. jobId不一致時は停止（Draft内のjobIdと指定jobIdが異なる＝ファイルの取り違え検知）
+  const jobId = 'X_MISMATCH_DRAFT';
+  cleanupFillerArtifacts(jobId);
+  saveApplicationDraft(jobId, makeDraftFixture('別のjobId'));
+  const result = applicationFormFiller.loadFillContext(jobId);
+  record('Draft内のjobIdが指定jobIdと一致しない場合はok=falseで停止する',
+    result.ok === false && /Draft内のjobId/.test(result.reason));
+  cleanupFillerArtifacts(jobId);
+}
+{
+  // 13. jobId不一致時は停止（Packet内のjobIdと指定jobIdが異なる）
+  const jobId = 'X_MISMATCH_PACKET';
+  cleanupFillerArtifacts(jobId);
+  saveApplicationDraft(jobId, makeDraftFixture(jobId));
+  saveApplicationPacket(jobId, makePacketFixtureForFiller('別のjobId'));
+  const result = applicationFormFiller.loadFillContext(jobId);
+  record('Packet内のjobIdが指定jobIdと一致しない場合はok=falseで停止する',
+    result.ok === false && /Packet内のjobId/.test(result.reason));
+  cleanupFillerArtifacts(jobId);
+}
+{
+  // 13. jobId不一致時は停止（案件ページのURLに期待するjobIdが含まれない＝想定外の案件へ来てしまった場合）
+  const jobId = 'X_URL_MISMATCH';
+  const plan = applicationFormFiller.buildFillPlan(makeDraftFixture(jobId));
+  const page = makeMockCrowdWorksPage('about:blank');
+  const result = await applicationFormFiller.fillCrowdWorksForm(page, { jobId, jobUrl: 'https://crowdworks.jp/public/jobs/99999999', fillPlan: plan });
+  record('遷移先URLに期待するjobIdが含まれない場合は入力せず停止する（別案件への誤操作防止）',
+    result.ok === false && /jobId/.test(result.reason) && page.__calls.fill.length === 0);
+}
+{
+  // loadFillContext正常系：Draft・Packetともに揃っている場合はfillPlanまで組み立てて返す
+  const jobId = 'X_CONTEXT_OK';
+  cleanupFillerArtifacts(jobId);
+  saveApplicationDraft(jobId, makeDraftFixture(jobId, { applicationText: '正常系テスト応募文' }));
+  saveApplicationPacket(jobId, makePacketFixtureForFiller(jobId));
+  const result = applicationFormFiller.loadFillContext(jobId);
+  record('Draft・Packetが揃っている場合はok=trueでfillPlanまで組み立てられる',
+    result.ok === true && result.fillPlan.messageBody.includes('正常系テスト応募文') && result.packet.job.url.includes(jobId));
+  cleanupFillerArtifacts(jobId);
 }
 
 console.log('\n' + '='.repeat(100));

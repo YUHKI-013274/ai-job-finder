@@ -8,3 +8,7 @@ last_run.log
 # 案件詳細（本文・クライアント情報・必須回答項目等）は非公開ローカルデータのため、
 # コミット・push・GitHub Pagesへは一切含めない
 data/private/
+
+# CrowdWorksの認証セッション（storageState）。ID・パスワードそのものではないが、
+# ログイン済みセッションを再現できる情報のため、コード・Gitへは絶対に含めない
+auth/
