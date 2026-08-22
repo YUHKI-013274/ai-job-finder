@@ -19,7 +19,9 @@ const { loadJobAiAnalysis, JOB_AI_ANALYSIS_DIR, JOB_AI_ANALYSIS_FAILED_DIR, save
 const { createCostTracker, estimateCostUsd } = require('./ai-usage-log');
 const { saveJobAnalysis, JOB_ANALYSIS_DIR } = require('./analysis-store');
 const applicationPacketBuilder = require('./application-packet-builder');
-const { loadApplicationPacket, APPLICATION_PACKETS_DIR } = require('./application-packet-store');
+const { loadApplicationPacket, saveApplicationPacket, APPLICATION_PACKETS_DIR } = require('./application-packet-store');
+const applicationDraftGenerator = require('./application-draft-generator');
+const { loadApplicationDraft, listSavedApplicationDraftIds, APPLICATION_DRAFTS_DIR, APPLICATION_DRAFTS_FAILED_DIR } = require('./application-draft-store');
 
 let idCounter = 1;
 function job(title, description, price = '3,000円', deadlineFields = {}) {
@@ -1215,6 +1217,414 @@ function cleanupApplicationPacketArtifacts(jobId) {
 
   cleanupApplicationPacketArtifacts(okId);
   cleanupApplicationPacketArtifacts(stopId);
+}
+
+console.log('\n' + '='.repeat(100));
+console.log('■ Application Draft（応募文・応募回答ドラフト）の回帰確認：モックAIによる品質・安全性検証');
+console.log('='.repeat(100) + '\n');
+
+// Application Packetは日次実行のたびに書き換わるため、Application Draftのテストは実データを
+// 流用せず、テスト専用の合成jobId（英字を含み実案件IDと衝突しない）でApplication Packetの
+// 最小フィクスチャを作り、テスト後に必ず片付ける。
+function makeApplicationPacketFixture(jobId, overrides = {}) {
+  const base = {
+    jobId,
+    packetVersion: 'application-packet-v1',
+    generatedAt: new Date().toISOString(),
+    sourceFiles: {
+      jobDetail: `data/private/job_details/${jobId}.json`,
+      stage1Analysis: `data/private/job_analysis/${jobId}.json`,
+      stage2Analysis: null,
+    },
+    job: {
+      title: 'テスト案件タイトル',
+      url: `https://crowdworks.jp/public/jobs/${jobId}`,
+      price: { type: '固定報酬制', raw: '10,000円' },
+      deadline: { raw: '2099年12月31日', normalized: '2099-12-31', status: 'open', endedBannerDetected: false },
+      description: 'これはテスト用の案件本文です。資料作成をお願いします。',
+    },
+    client: {
+      name: 'テストクライアント', isIdentityVerified: false, isEmployerRuleCheckSucceeded: true,
+      reviewCount: null, reviewCountNote: 'テスト', averageScore: 4.5, thanksCount: 10,
+      jobOfferAchievementCount: 5, applied: 1, contracted: 0, recruiting: 1,
+    },
+    evaluation: { rank: 'A', applyCategory: 'now', capabilityStatus: '応募可能', evidenceType: '強い代替証明' },
+    recommendation: { value: 'proceed', reasons: ['テスト用固定理由'] },
+    concerns: { toolMismatchNote: null, toolIssues: [], flaggedSafetyReview: [] },
+    requiredCapabilities: ['構成力'],
+    usableExperience: [{
+      id: 'test_category:paid', assetId: 'test_asset_1', name: '受注・実務経験', knowledgeText: 'テスト経験3年',
+      connectionReason: 'テスト', evidenceKind: 'paid', evidenceLevel: '使用可能', clientValue: 'テスト提供価値', usableInProposal: true,
+    }],
+    clientValue: [{
+      assetId: 'test_asset_1', experience: 'テスト経験3年', capability: 'テスト能力', clientValue: 'テスト提供価値',
+      rationale: 'テスト理由', evidence: '強い代替証明', status: 'extracted', expressionExample: 'テスト経験を活かして対応します',
+    }],
+    applicationQuestions: {
+      requiredConditions: { value: null, status: 'requires_analysis', evidenceText: null, source: 'job_detail' },
+      responseItems: { value: null, status: 'unavailable', evidenceText: null, source: 'job_detail' },
+      requiredAnswers: [],
+    },
+    usableFactsForProposal: {
+      centralMessage: 'テスト中心メッセージ', usableEvidenceIds: ['test_asset_1'], portfolioCandidates: [],
+      avoidExpressions: ['丁寧に対応します'], prohibitedClaims: ['数値「94,900万円」は要確認情報のため使用しない'],
+    },
+    missingInformation: [],
+    stage2: { status: 'not_run' },
+  };
+  return { ...base, ...overrides };
+}
+
+function cleanupDraftArtifacts(jobId) {
+  const packetPath = path.join(APPLICATION_PACKETS_DIR, `${jobId}.json`);
+  if (fs.existsSync(packetPath)) fs.unlinkSync(packetPath);
+  const draftPath = path.join(APPLICATION_DRAFTS_DIR, `${jobId}.json`);
+  if (fs.existsSync(draftPath)) fs.unlinkSync(draftPath);
+  if (fs.existsSync(APPLICATION_DRAFTS_FAILED_DIR)) {
+    fs.readdirSync(APPLICATION_DRAFTS_FAILED_DIR)
+      .filter(f => f.startsWith(`${jobId}_`))
+      .forEach(f => fs.unlinkSync(path.join(APPLICATION_DRAFTS_FAILED_DIR, f)));
+  }
+}
+
+// 妥当なAI出力のモックを組み立てる（候補質問と1:1で対応させる）。
+function buildValidMockDraftOutput(packet, candidateQuestions, { readyAll = true } = {}) {
+  return {
+    jobId: packet.jobId,
+    applicationText: `${packet.usableFactsForProposal.centralMessage}を軸に、${packet.clientValue[0].experience}を活かしてご対応します。`,
+    applicationTextUsedExperienceIds: [packet.clientValue[0].assetId],
+    questionAnswers: candidateQuestions.map(q => ({
+      question: q,
+      answer: readyAll ? `${packet.clientValue[0].experience}の実績があり対応可能です。` : '',
+      status: readyAll ? 'ready' : 'needs_confirmation',
+      reasoning: 'テスト用回答理由',
+      usedExperienceIds: readyAll ? [packet.clientValue[0].assetId] : [],
+    })),
+    confirmationItems: [],
+    selfReport: { usedOnlyPacketFacts: true, inventedFactsDetected: false },
+  };
+}
+
+{
+  // 1. 通常案件（応募質問なし）
+  const jobId = 'TEST_DRAFT_NORMAL';
+  cleanupDraftArtifacts(jobId);
+  const packet = makeApplicationPacketFixture(jobId);
+  saveApplicationPacket(jobId, packet);
+  const mockOutput = buildValidMockDraftOutput(packet, []);
+  const client = makeMockClient([mockResponse(mockOutput)]);
+  const costTracker = applicationDraftGenerator.createDraftCostTracker({ costLimitUsd: 100 });
+  const result = await applicationDraftGenerator.generateApplicationDraft(client, jobId, { model: 'claude-sonnet-5', costTracker });
+  record('通常案件（質問なし）で応募文が生成され保存される',
+    result.outcome === 'success' && result.draft.applicationText.length > 0 && result.draft.questionAnswers.length === 0);
+  const saved = loadApplicationDraft(jobId);
+  record('生成したApplication Draftがdata/private/application_drafts/へ保存される',
+    saved !== null && saved.jobId === jobId && saved.status === 'success');
+  cleanupDraftArtifacts(jobId);
+}
+{
+  // 2. 応募質問1件
+  const jobId = 'TEST_DRAFT_ONE_QUESTION';
+  cleanupDraftArtifacts(jobId);
+  const packet = makeApplicationPacketFixture(jobId, {
+    applicationQuestions: {
+      requiredConditions: { value: null, status: 'requires_analysis', evidenceText: null, source: 'job_detail' },
+      responseItems: { value: '稼働可能な曜日・時間帯を教えてください。', status: 'extracted', evidenceText: null, source: 'job_detail' },
+      requiredAnswers: [],
+    },
+  });
+  saveApplicationPacket(jobId, packet);
+  const candidateQuestions = applicationDraftGenerator.splitQuestionsFromText(packet.applicationQuestions.responseItems.value);
+  record('（前提確認）質問1件は1件のまま分解される', candidateQuestions.length === 1);
+  const mockOutput = buildValidMockDraftOutput(packet, candidateQuestions, { readyAll: false });
+  const client = makeMockClient([mockResponse(mockOutput)]);
+  const costTracker = applicationDraftGenerator.createDraftCostTracker({ costLimitUsd: 100 });
+  const result = await applicationDraftGenerator.generateApplicationDraft(client, jobId, { model: 'claude-sonnet-5', costTracker });
+  record('応募質問1件のケースでquestionAnswersが1件生成される',
+    result.outcome === 'success' && result.draft.questionAnswers.length === 1 && result.draft.questionAnswers[0].question === candidateQuestions[0]);
+  cleanupDraftArtifacts(jobId);
+}
+{
+  // 3. 応募質問複数（実案件13392611パターン、6件）
+  const jobId = 'TEST_DRAFT_MULTI_QUESTION';
+  cleanupDraftArtifacts(jobId);
+  const responseItemsValue = '1.平日の日中（目安：9:00〜18:00）にWeb会議対応できる曜日・時間帯を教えてください。\n2.デジタル化AI導入補助金やIT導入補助金の申請支援経験はありますか？（ある場合：担当範囲／件数／期間）\n3.交付申請・実績報告の経験有無（どちらかでもOK）を教えてください。\n4.週あたり確保できる稼働時間と、月に対応可能な件数目安を教えてください。\n5.稼働条件の都合上、会社員の副業ではないことを確認させてください。（はい／いいえ）\n6.得意な作業（例：書類チェック、進行管理、リマインド、証憑整理など）を教えてください。';
+  const packet = makeApplicationPacketFixture(jobId, {
+    applicationQuestions: {
+      requiredConditions: { value: null, status: 'requires_analysis', evidenceText: null, source: 'job_detail' },
+      responseItems: { value: responseItemsValue, status: 'extracted', evidenceText: null, source: 'job_detail' },
+      requiredAnswers: [],
+    },
+  });
+  saveApplicationPacket(jobId, packet);
+  const candidateQuestions = applicationDraftGenerator.splitQuestionsFromText(packet.applicationQuestions.responseItems.value);
+  record('（前提確認、実案件13392611パターン）テキストブロックから6問へ分解される', candidateQuestions.length === 6);
+  const mockOutput = buildValidMockDraftOutput(packet, candidateQuestions, { readyAll: false });
+  const client = makeMockClient([mockResponse(mockOutput)]);
+  const costTracker = applicationDraftGenerator.createDraftCostTracker({ costLimitUsd: 100 });
+  const result = await applicationDraftGenerator.generateApplicationDraft(client, jobId, { model: 'claude-sonnet-5', costTracker });
+  record('複数質問（6件）でquestionAnswersが6件・元の質問順序どおりに生成される',
+    result.outcome === 'success' && result.draft.questionAnswers.length === 6
+    && result.draft.questionAnswers.every((qa, i) => qa.question === candidateQuestions[i]));
+  cleanupDraftArtifacts(jobId);
+}
+{
+  // 4. テキストブロックから複数質問への分解（純粋関数の単体確認。実案件4件のパターンを網羅）
+  const text13392611 = '1.平日の日中（目安：9:00〜18:00）にWeb会議対応できる曜日・時間帯を教えてください。\n2.デジタル化AI導入補助金やIT導入補助金の申請支援経験はありますか？（ある場合：担当範囲／件数／期間）\n3.交付申請・実績報告の経験有無（どちらかでもOK）を教えてください。\n4.週あたり確保できる稼働時間と、月に対応可能な件数目安を教えてください。\n5.稼働条件の都合上、会社員の副業ではないことを確認させてください。（はい／いいえ）\n6.得意な作業（例：書類チェック、進行管理、リマインド、証憑整理など）を教えてください。';
+  const segments = applicationDraftGenerator.splitQuestionsFromText(text13392611);
+  record('数字マーカー（1.2.3…）のテキストブロックが実案件どおり6問へ分解される（実案件13392611）',
+    segments.length === 6 && segments[0].startsWith('1.平日の日中') && segments[5].startsWith('6.得意な作業'));
+}
+{
+  const text13318382 = '図やグラフ、情報を資料へ落とし込む\n\n【応募・選考について】\nご応募頂く際は、以下ご質問の回答を頂けますと幸いです。\n\n・ビジネス資料の作成実績の有無\n・どのような資料をご作成したか\n・言葉や文字情報から、視覚的な図に落とし込んだ表現の参考事例\n・その他ポートフォリオ\n\n【対象の方】\n・ライターや編集者\n・クライアント提供資料作成経験者\n\n【報酬】\n2.4万円';
+  const segments = applicationDraftGenerator.splitQuestionsFromText(text13318382);
+  record('箇条書き（・）のテキストブロックが4問へ分解され、後続の無関係セクション（対象の方等）は質問として拾わない（実案件13318382）',
+    segments.length === 4 && segments.every(s => s.startsWith('・')) && !segments.some(s => s.includes('ライターや編集者')));
+}
+{
+  const text13257814 = 'ください。\n\nご応募の際には、必ず下記の質問にお答えください。\n①このお仕事に活かせるスキルや経験をお持ちの場合は具体的にお知らせください。\n　医療機関の経営、コンサルティング、あるいは閉院実務に関わったご経験がある場合は、その概要をお答えください。\n②今回の依頼では、従業員への退職勧奨や患者様への治療中断・転院案内など『ソフト面でのリスクや問題点』を重点的に求めています。\n　人事労務や患者対応トラブルに関する知見、または過去に類似の課題を検討したご経験はありますか？\n③どのような納品形式を想定されておられますか。\n④具体的な情報をお知らせしてから、どのくらいで納品可能でしょうか。\n⑤修正にご同意いただけますか。';
+  const segments = applicationDraftGenerator.splitQuestionsFromText(text13257814);
+  record('丸数字（①②③…）＋複数行にまたがる質問（継続行）が正しく5問へ分解される（実案件13257814）',
+    segments.length === 5 && segments[0].includes('①') && segments[0].includes('医療機関の経営') && segments[4].includes('⑤'));
+}
+{
+  const text = '稼働可能な曜日・時間帯を教えてください。';
+  const segments = applicationDraftGenerator.splitQuestionsFromText(text);
+  record('マーカーが全く無い単一の質問文は分割せず1件のまま保持される（推測で分割しない）',
+    segments.length === 1 && segments[0] === text);
+}
+{
+  const segments = applicationDraftGenerator.splitQuestionsFromText(null);
+  record('質問テキストが存在しない場合は空配列になる', Array.isArray(segments) && segments.length === 0);
+}
+{
+  // 5. 要確認情報あり（AIが誤って回答を埋めてしまっても、コード側でnullへ強制する）
+  const jobId = 'TEST_DRAFT_NEEDS_CONFIRMATION';
+  cleanupDraftArtifacts(jobId);
+  const packet = makeApplicationPacketFixture(jobId, {
+    applicationQuestions: {
+      requiredConditions: { value: null, status: 'requires_analysis', evidenceText: null, source: 'job_detail' },
+      responseItems: { value: '稼働可能な曜日・時間帯を教えてください。', status: 'extracted', evidenceText: null, source: 'job_detail' },
+      requiredAnswers: [],
+    },
+    missingInformation: [{ item: 'ポートフォリオの最新URL・提示可否', detail: null, reason: 'テスト理由' }],
+  });
+  saveApplicationPacket(jobId, packet);
+  const candidateQuestions = applicationDraftGenerator.splitQuestionsFromText(packet.applicationQuestions.responseItems.value);
+  const mockOutput = buildValidMockDraftOutput(packet, candidateQuestions, { readyAll: false });
+  mockOutput.questionAnswers[0].answer = '本来は空であるべきだが誤って埋められた回答';
+  const client = makeMockClient([mockResponse(mockOutput)]);
+  const costTracker = applicationDraftGenerator.createDraftCostTracker({ costLimitUsd: 100 });
+  const result = await applicationDraftGenerator.generateApplicationDraft(client, jobId, { model: 'claude-sonnet-5', costTracker });
+  record('要確認情報がある場合でもoutcome=successになる', result.outcome === 'success');
+  record('status=needs_confirmationの回答は、AIが本文を書いていてもanswerが必ずnullへ強制される（推測回答の混入防止）',
+    result.draft.questionAnswers[0].status === 'needs_confirmation' && result.draft.questionAnswers[0].answer === null);
+  record('Packetのmissing Information（ポートフォリオURL等）がconfirmationItemsへ引き継がれる',
+    result.draft.confirmationItems.some(c => c.item === 'ポートフォリオの最新URL・提示可否'));
+  record('未回答の質問（needs_confirmation）自体もconfirmationItemsへ含まれる',
+    result.draft.confirmationItems.some(c => c.item === candidateQuestions[0]));
+  cleanupDraftArtifacts(jobId);
+}
+{
+  // 6. Stage2なし
+  const jobId = 'TEST_DRAFT_NO_STAGE2';
+  cleanupDraftArtifacts(jobId);
+  const packet = makeApplicationPacketFixture(jobId); // stage2: {status:'not_run'} がデフォルト
+  saveApplicationPacket(jobId, packet);
+  const input = applicationDraftGenerator.buildDraftInput(packet, []);
+  record('Stage2未実行のPacketではstage2Insightがnullになる（クラッシュしない）', input.stage2Insight === null);
+  const mockOutput = buildValidMockDraftOutput(packet, []);
+  const client = makeMockClient([mockResponse(mockOutput)]);
+  const costTracker = applicationDraftGenerator.createDraftCostTracker({ costLimitUsd: 100 });
+  const result = await applicationDraftGenerator.generateApplicationDraft(client, jobId, { model: 'claude-sonnet-5', costTracker });
+  record('Stage2なしでもApplication Draftが生成される（Stage1情報のみで完結）', result.outcome === 'success');
+  cleanupDraftArtifacts(jobId);
+}
+{
+  // 7. stop案件（Application Packet自体が生成されていない＝既存のstop判定を尊重）
+  const jobId = 'TEST_DRAFT_STOP_NO_PACKET';
+  cleanupDraftArtifacts(jobId);
+  const client = makeMockClient([]); // 呼ばれないはず
+  const costTracker = applicationDraftGenerator.createDraftCostTracker({ costLimitUsd: 100 });
+  const result = await applicationDraftGenerator.generateApplicationDraft(client, jobId, { model: 'claude-sonnet-5', costTracker });
+  record('stop案件（Application Packetが生成されていない）はAPIを呼ばずskippedになる（既存のstop判定を尊重）',
+    result.outcome === 'skipped' && /Application Packet/.test(result.reason));
+}
+{
+  // 8. Application Packet不足（そもそもPacketファイルが存在しない）
+  const jobId = 'TEST_DRAFT_NO_PACKET_AT_ALL';
+  const client = makeMockClient([]);
+  const costTracker = applicationDraftGenerator.createDraftCostTracker({ costLimitUsd: 100 });
+  const result = await applicationDraftGenerator.generateApplicationDraft(client, jobId, { model: 'claude-sonnet-5', costTracker });
+  record('Application Packet自体が存在しない案件はskippedで明示的に理由が返る（捏造して生成しない）',
+    result.outcome === 'skipped' && result.reason.includes('見つからない'));
+}
+{
+  // 9. prohibitedClaims違反を拒否
+  const jobId = 'TEST_DRAFT_PROHIBITED_NUMBER';
+  cleanupDraftArtifacts(jobId);
+  const packet = makeApplicationPacketFixture(jobId); // prohibitedClaimsに「94,900万円」を含む
+  saveApplicationPacket(jobId, packet);
+  const mockOutput = buildValidMockDraftOutput(packet, []);
+  mockOutput.applicationText += ' 過去に94,900万円の売上管理実績があります。';
+  const client = makeMockClient([mockResponse(mockOutput), mockResponse(mockOutput)]); // 2回目も同じ違反（再試行されないはず）
+  const costTracker = applicationDraftGenerator.createDraftCostTracker({ costLimitUsd: 100 });
+  const result = await applicationDraftGenerator.generateApplicationDraft(client, jobId, { model: 'claude-sonnet-5', costTracker });
+  record('prohibitedClaimsで禁止された数値の使用は再試行せず1回で失敗する（attempts=1）',
+    result.outcome === 'failed' && result.attempts === 1 && result.error.type === 'validation_failed' && /prohibitedClaims/.test(result.error.message));
+  record('禁止表現違反時は正式なDraftファイルを保存しない（失敗記録のみ分離保存、既存データを壊さない）',
+    loadApplicationDraft(jobId) === null && !!result.failedRecordPath);
+  cleanupDraftArtifacts(jobId);
+}
+{
+  // 10. avoidExpressions違反を検知
+  const jobId = 'TEST_DRAFT_AVOID_EXPRESSION';
+  cleanupDraftArtifacts(jobId);
+  const packet = makeApplicationPacketFixture(jobId); // avoidExpressionsに「丁寧に対応します」を含む
+  saveApplicationPacket(jobId, packet);
+  const mockOutput = buildValidMockDraftOutput(packet, []);
+  mockOutput.applicationText += ' 丁寧に対応します。';
+  const client = makeMockClient([mockResponse(mockOutput)]);
+  const costTracker = applicationDraftGenerator.createDraftCostTracker({ costLimitUsd: 100 });
+  const result = await applicationDraftGenerator.generateApplicationDraft(client, jobId, { model: 'claude-sonnet-5', costTracker });
+  record('avoidExpressionsに該当する定型表現の使用を検知し、再試行せず失敗する',
+    result.outcome === 'failed' && result.attempts === 1 && /avoidExpressions/.test(result.error.message));
+  cleanupDraftArtifacts(jobId);
+}
+{
+  // 11. 根拠のない経験を生成しない（a: 存在しない経験IDの参照）
+  const jobId = 'TEST_DRAFT_INVALID_EXPERIENCE_ID';
+  cleanupDraftArtifacts(jobId);
+  const packet = makeApplicationPacketFixture(jobId);
+  saveApplicationPacket(jobId, packet);
+  const mockOutput = buildValidMockDraftOutput(packet, []);
+  mockOutput.applicationTextUsedExperienceIds = ['存在しない経験ID_捏造'];
+  const client = makeMockClient([mockResponse(mockOutput)]);
+  const costTracker = applicationDraftGenerator.createDraftCostTracker({ costLimitUsd: 100 });
+  const result = await applicationDraftGenerator.generateApplicationDraft(client, jobId, { model: 'claude-sonnet-5', costTracker });
+  record('Application Packetに存在しない経験IDの参照（創作扱い）は再試行せず失敗する',
+    result.outcome === 'failed' && /存在しない/.test(result.error.message));
+  cleanupDraftArtifacts(jobId);
+}
+{
+  // 11. 根拠のない経験を生成しない（b: status=readyなのに根拠が空）
+  const jobId = 'TEST_DRAFT_READY_WITHOUT_EVIDENCE';
+  cleanupDraftArtifacts(jobId);
+  const packet = makeApplicationPacketFixture(jobId, {
+    applicationQuestions: {
+      requiredConditions: { value: null, status: 'requires_analysis', evidenceText: null, source: 'job_detail' },
+      responseItems: { value: '経験年数を教えてください。', status: 'extracted', evidenceText: null, source: 'job_detail' },
+      requiredAnswers: [],
+    },
+  });
+  saveApplicationPacket(jobId, packet);
+  const candidateQuestions = applicationDraftGenerator.splitQuestionsFromText(packet.applicationQuestions.responseItems.value);
+  const mockOutput = buildValidMockDraftOutput(packet, candidateQuestions, { readyAll: true });
+  mockOutput.questionAnswers[0].usedExperienceIds = []; // readyなのに根拠なし
+  const client = makeMockClient([mockResponse(mockOutput)]);
+  const costTracker = applicationDraftGenerator.createDraftCostTracker({ costLimitUsd: 100 });
+  const result = await applicationDraftGenerator.generateApplicationDraft(client, jobId, { model: 'claude-sonnet-5', costTracker });
+  record('status=readyなのに根拠（usedExperienceIds）が空の回答は拒否される（推測で経験有無を埋めない）',
+    result.outcome === 'failed' && /根拠/.test(result.error.message));
+  cleanupDraftArtifacts(jobId);
+}
+{
+  // 11. 根拠のない経験を生成しない（c: Packetのどの事実にも無い数値の捏造）
+  const jobId = 'TEST_DRAFT_FABRICATED_NUMBER';
+  cleanupDraftArtifacts(jobId);
+  const packet = makeApplicationPacketFixture(jobId);
+  saveApplicationPacket(jobId, packet);
+  const mockOutput = buildValidMockDraftOutput(packet, []);
+  mockOutput.applicationText += ' 当該分野で15年の経験があります。'; // Packetのどこにも無い数値
+  const client = makeMockClient([mockResponse(mockOutput)]);
+  const costTracker = applicationDraftGenerator.createDraftCostTracker({ costLimitUsd: 100 });
+  const result = await applicationDraftGenerator.generateApplicationDraft(client, jobId, { model: 'claude-sonnet-5', costTracker });
+  record('Application Packet内のどの事実にも無い数値（経験年数の捏造等）は再試行せず失敗する',
+    result.outcome === 'failed' && /数値/.test(result.error.message));
+  cleanupDraftArtifacts(jobId);
+}
+{
+  // 12. API未設定
+  const originalKey = process.env.ANTHROPIC_API_KEY;
+  delete process.env.ANTHROPIC_API_KEY;
+  let threw = false, correctType = false;
+  try {
+    await applicationDraftGenerator.generateApplicationDraftsForJobIds(['dummy']);
+  } catch (err) {
+    threw = true;
+    correctType = err instanceof applicationDraftGenerator.ApiKeyNotConfiguredError;
+  } finally {
+    if (originalKey !== undefined) process.env.ANTHROPIC_API_KEY = originalKey;
+  }
+  record('ANTHROPIC_API_KEY未設定時はApiKeyNotConfiguredErrorで安全停止する（外部送信しない）', threw && correctType);
+}
+{
+  // 13. API認証失敗（401）
+  const jobId = 'TEST_DRAFT_API_401';
+  cleanupDraftArtifacts(jobId);
+  const packet = makeApplicationPacketFixture(jobId);
+  saveApplicationPacket(jobId, packet);
+  const authError = new Error('401 authentication_error: invalid x-api-key');
+  authError.status = 401;
+  const client = { messages: { create: async () => { throw authError; } } };
+  const costTracker = applicationDraftGenerator.createDraftCostTracker({ costLimitUsd: 100 });
+  const result = await applicationDraftGenerator.generateApplicationDraft(client, jobId, { model: 'claude-sonnet-5', costTracker });
+  record('API認証失敗（401）は再試行せず1回で失敗する（429/5xx以外は再試行しない）',
+    result.outcome === 'failed' && result.attempts === 1 && result.error.type === 'api_error');
+  record('API認証失敗時は既存データを壊さず、Draftファイルを保存しない',
+    loadApplicationDraft(jobId) === null && !!result.failedRecordPath);
+  cleanupDraftArtifacts(jobId);
+}
+{
+  // 14. questionAnswersが1問=1要素になる（a: 統合違反の拒否）
+  const jobId = 'TEST_DRAFT_QUESTION_MERGE_VIOLATION';
+  cleanupDraftArtifacts(jobId);
+  const responseItemsValue = '1.稼働可能時間を教えてください。\n2.経験年数を教えてください。';
+  const packet = makeApplicationPacketFixture(jobId, {
+    applicationQuestions: {
+      requiredConditions: { value: null, status: 'requires_analysis', evidenceText: null, source: 'job_detail' },
+      responseItems: { value: responseItemsValue, status: 'extracted', evidenceText: null, source: 'job_detail' },
+      requiredAnswers: [],
+    },
+  });
+  saveApplicationPacket(jobId, packet);
+  const candidateQuestions = applicationDraftGenerator.splitQuestionsFromText(packet.applicationQuestions.responseItems.value);
+  record('（前提確認）2問へ正しく分解される', candidateQuestions.length === 2);
+  const mockOutput = buildValidMockDraftOutput(packet, candidateQuestions, { readyAll: false });
+  mockOutput.questionAnswers = [{ // 2問を1問へ統合してしまった不正な出力
+    question: '稼働可能時間と経験年数を教えてください。', answer: '', status: 'needs_confirmation', reasoning: 'テスト', usedExperienceIds: [],
+  }];
+  const client = makeMockClient([mockResponse(mockOutput)]);
+  const costTracker = applicationDraftGenerator.createDraftCostTracker({ costLimitUsd: 100 });
+  const result = await applicationDraftGenerator.generateApplicationDraft(client, jobId, { model: 'claude-sonnet-5', costTracker });
+  record('質問の統合・件数不一致（2問→1問）は再試行せず失敗する（1問=1要素の構造保証）',
+    result.outcome === 'failed' && result.attempts === 1 && /件数/.test(result.error.message));
+  cleanupDraftArtifacts(jobId);
+}
+{
+  // 14. questionAnswersが1問=1要素になる（b: 正常系での最終確認）
+  const jobId = 'TEST_DRAFT_ONE_TO_ONE_FINAL';
+  cleanupDraftArtifacts(jobId);
+  const responseItemsValue = '①稼働可能な曜日・時間帯を教えてください。\n②補助金申請支援の経験はありますか。\n③得意な作業を教えてください。';
+  const packet = makeApplicationPacketFixture(jobId, {
+    applicationQuestions: {
+      requiredConditions: { value: null, status: 'requires_analysis', evidenceText: null, source: 'job_detail' },
+      responseItems: { value: responseItemsValue, status: 'extracted', evidenceText: null, source: 'job_detail' },
+      requiredAnswers: [],
+    },
+  });
+  saveApplicationPacket(jobId, packet);
+  const candidateQuestions = applicationDraftGenerator.splitQuestionsFromText(packet.applicationQuestions.responseItems.value);
+  const mockOutput = buildValidMockDraftOutput(packet, candidateQuestions, { readyAll: false });
+  const client = makeMockClient([mockResponse(mockOutput)]);
+  const costTracker = applicationDraftGenerator.createDraftCostTracker({ costLimitUsd: 100 });
+  const result = await applicationDraftGenerator.generateApplicationDraft(client, jobId, { model: 'claude-sonnet-5', costTracker });
+  record('保存されたDraftのquestionAnswersが実案件パターン（3問）で1問=1要素になっている（フォーム自動入力工程で質問単位に扱える構造）',
+    result.outcome === 'success' && result.draft.questionAnswers.length === 3
+    && result.draft.questionAnswers[0].question === candidateQuestions[0]
+    && result.draft.questionAnswers[1].question === candidateQuestions[1]
+    && result.draft.questionAnswers[2].question === candidateQuestions[2]);
+  cleanupDraftArtifacts(jobId);
 }
 
 console.log('\n' + '='.repeat(100));
