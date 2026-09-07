@@ -1390,6 +1390,24 @@ function buildValidMockDraftOutput(packet, candidateQuestions, { readyAll = true
     segments.length === 5 && segments[0].includes('①') && segments[0].includes('医療機関の経営') && segments[4].includes('⑤'));
 }
 {
+  // 「選考の流れ」等の手順説明見出しが、本来の質問見出しより前に番号付きリストとして
+  // 出現する場合の境界条件（実案件13406144：Stage1のソフトシグナル抽出が「下記の質問」に
+  // 反応し、その直前にある「選考の流れ」の番号付きリストごと抜粋してしまうパターン）。
+  const text13406144 = 'の予定\n\n■ 選考の流れ\n1. ご応募（下記の質問への回答と、ポートフォリオを添えてください）\n2. 書類選考\n3. Web面談（30分程度）\n\n■ 応募時にご記入いただきたいこと\n1. 過去に制作した提案資料のうち、公開可能なもの（PDFまたはURL）\n2. その資料でご自身が担当した範囲（構成から担当、デザインのみ、など）\n3. 使用ツールと納品形式\n4. 1週間あたりの稼働可能時間と、直近の稼働状況\n5. 生成AIツールを使用される場合は、その範囲（モデル学習される利用方法はお断りいたします）\n\n■ 注意事項\n- 企業名と商材の詳細は、秘密保持契約の締結後にお伝えします。';
+  const segments = applicationDraftGenerator.splitQuestionsFromText(text13406144);
+  record('「選考の流れ」配下の番号付きリスト（1.ご応募／2.書類選考／3.Web面談）が質問として拾われない（実案件13406144）',
+    !segments.some(s => s.includes('書類選考') || s.includes('Web面談') || s.startsWith('1. ご応募')));
+  record('「選考の流れ」の後に続く本来の5項目（ポートフォリオ・担当範囲・使用ツール・稼働時間・生成AI利用範囲）が正しく5問へ分解される（実案件13406144）',
+    segments.length === 5
+    && segments[0].includes('過去に制作した提案資料')
+    && segments[1].includes('担当した範囲')
+    && segments[2].includes('使用ツールと納品形式')
+    && segments[3].includes('稼働可能時間')
+    && segments[4].includes('生成AIツールを使用される場合'));
+  record('「選考の流れ」の後の「■ 注意事項」セクションは質問として拾わない（実案件13406144）',
+    !segments.some(s => s.includes('秘密保持契約')));
+}
+{
   const text = '稼働可能な曜日・時間帯を教えてください。';
   const segments = applicationDraftGenerator.splitQuestionsFromText(text);
   record('マーカーが全く無い単一の質問文は分割せず1件のまま保持される（推測で分割しない）',

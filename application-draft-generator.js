@@ -40,6 +40,10 @@ const MAX_RETRIES = 2; // 一時的エラー・JSON形式不正のみ対象。�
 // ここで丸数字（①②③…）・半角数字（1. 1) 1、）・箇条書き（・）を目印に1問ずつへ分解する。
 const QUESTION_MARKER_RE = /^([①-⑳]|[0-9]{1,2}[.、)）]|・)/;
 const SECTION_HEADING_RE = /^[【■★#◆▼「]/;
+// 「選考の流れ」等、応募者が回答すべき質問ではなく選考手順の説明を示す見出し。
+// 番号付きリストが続いていても、この見出し配下は質問として扱わない（実案件13406144：
+// 「■ 選考の流れ 1.ご応募 2.書類選考 3.Web面談」の後に本来の質問見出しが続くパターン）。
+const NON_QUESTION_SECTION_HEADING_RE = /(選考の流れ|選考フロー|選考プロセス)/;
 
 function splitQuestionsFromText(text) {
   if (!text) return [];
@@ -47,13 +51,24 @@ function splitQuestionsFromText(text) {
   const segments = [];
   let current = null;
   let sawMarker = false;
+  let inNonQuestionSection = false;
 
   for (const rawLine of lines) {
     const line = rawLine.trim();
-    if (SECTION_HEADING_RE.test(line) && sawMarker) {
-      // 質問リストの後に新しいセクション見出しが現れたら、そこで打ち切る
-      // （ソフトシグナル抜粋に含まれる無関係な後続セクションの箇条書きを質問として拾わないため）。
-      break;
+    if (SECTION_HEADING_RE.test(line)) {
+      if (sawMarker) {
+        // 既に質問を収集済みの状態で新しい見出しが現れたら、そこで打ち切る
+        // （ソフトシグナル抜粋に含まれる無関係な後続セクションの箇条書きを質問として拾わないため）。
+        break;
+      }
+      // まだ何も収集していない状態で「選考の流れ」等が現れた場合のみ、
+      // このセクション配下の番号付きリストをスキップする（本来の質問見出しは後続で改めて拾う）。
+      inNonQuestionSection = NON_QUESTION_SECTION_HEADING_RE.test(line);
+      continue;
+    }
+    if (inNonQuestionSection) {
+      // 選考手順セクション配下の行（番号付きリスト含む）は質問として拾わない。
+      continue;
     }
     if (QUESTION_MARKER_RE.test(line)) {
       sawMarker = true;
