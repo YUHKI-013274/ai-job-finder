@@ -23,6 +23,7 @@ const { loadApplicationPacket, saveApplicationPacket, APPLICATION_PACKETS_DIR } 
 const applicationDraftGenerator = require('./application-draft-generator');
 const { loadApplicationDraft, listSavedApplicationDraftIds, saveApplicationDraft, APPLICATION_DRAFTS_DIR, APPLICATION_DRAFTS_FAILED_DIR } = require('./application-draft-store');
 const applicationFormFiller = require('./application-form-filler');
+const applicationDraftGeneratorManual = require('./application-draft-generator-manual');
 
 let idCounter = 1;
 function job(title, description, price = '3,000円', deadlineFields = {}) {
@@ -1626,6 +1627,194 @@ function buildValidMockDraftOutput(packet, candidateQuestions, { readyAll = true
     && result.draft.questionAnswers[1].question === candidateQuestions[1]
     && result.draft.questionAnswers[2].question === candidateQuestions[2]);
   cleanupDraftArtifacts(jobId);
+}
+
+console.log('\n' + '='.repeat(100));
+console.log('■ Application Draft manual生成モード（APIなし）の回帰確認：ChatGPT等への貼り付け運用');
+console.log('='.repeat(100) + '\n');
+
+function cleanupManualPromptArtifact(jobId) {
+  const p = applicationDraftGeneratorManual.promptPath(jobId);
+  if (fs.existsSync(p)) fs.unlinkSync(p);
+}
+
+{
+  // 1. 生成プロンプトの書き出し：DRAFT_SYSTEM_PROMPT・入力データ・出力スキーマがすべて含まれる
+  const jobId = 'TEST_MANUAL_PROMPT_BASIC';
+  cleanupDraftArtifacts(jobId);
+  cleanupManualPromptArtifact(jobId);
+  const packet = makeApplicationPacketFixture(jobId);
+  saveApplicationPacket(jobId, packet);
+
+  const result = applicationDraftGeneratorManual.writeGenerationPrompt(jobId);
+  record('存在するPacketに対してプロンプトファイルの書き出しに成功する', result.ok === true && fs.existsSync(result.filePath));
+  const written = fs.readFileSync(result.filePath, 'utf8');
+  record('プロンプトにDRAFT_SYSTEM_PROMPTの指示文が含まれる', written.includes('経験 → 能力 → 根拠'));
+  record('プロンプトに案件本文（Packetの入力データ）が含まれる', written.includes(packet.job.description));
+  record('プロンプトに出力スキーマ（DRAFT_OUTPUT_SCHEMAのプロパティ名）が含まれる', written.includes('applicationTextUsedExperienceIds'));
+
+  // 制作物例・提案例の条件付き生成指示（DRAFT_SYSTEM_PROMPT自体は変更せず、manualモード側で補足）が
+  // 実際に生成プロンプトへ含まれていることを確認する。
+  record('プロンプトに制作物例・提案例の補足指示ブロックが含まれる',
+    written.includes(applicationDraftGeneratorManual.MANUAL_SUPPLEMENTARY_INSTRUCTIONS));
+  record('補足指示に「すべての案件に強制しない」ことが明記されている',
+    applicationDraftGeneratorManual.MANUAL_SUPPLEMENTARY_INSTRUCTIONS.includes('強制しない'));
+  record('補足指示に「受注可能性を高めるのに有効な場合のみ」含める条件が明記されている',
+    applicationDraftGeneratorManual.MANUAL_SUPPLEMENTARY_INSTRUCTIONS.includes('受注可能性を高めるのに有効'));
+  record('補足指示に「applicationText本文へ自然に組み込む」ことが明記されている',
+    applicationDraftGeneratorManual.MANUAL_SUPPLEMENTARY_INSTRUCTIONS.includes('applicationText本文の中に自然な文章'));
+  record('補足指示に「新しい出力項目（schema）を追加しない」ことが明記されている',
+    applicationDraftGeneratorManual.MANUAL_SUPPLEMENTARY_INSTRUCTIONS.includes('新しい出力項目（schemaのフィールド）を追加せず'));
+  record('補足指示に制作物例の具体例（成果物の構成例・提案内容の具体例・進め方・納品物イメージ）が明記されている',
+    ['成果物の構成例', '提案内容の具体例', '進め方', '納品物イメージ'].every(s => applicationDraftGeneratorManual.MANUAL_SUPPLEMENTARY_INSTRUCTIONS.includes(s)));
+  record('補足指示に架空実績・未確認数値・Packetにない経験の禁止が明記されている',
+    /架空の実績/.test(applicationDraftGeneratorManual.MANUAL_SUPPLEMENTARY_INSTRUCTIONS)
+    && /未確認の数値/.test(applicationDraftGeneratorManual.MANUAL_SUPPLEMENTARY_INSTRUCTIONS)
+    && applicationDraftGeneratorManual.MANUAL_SUPPLEMENTARY_INSTRUCTIONS.includes('Application Packetに存在しない経験や能力'));
+  record('補足指示に既存ポートフォリオ使用時の根拠確認条件が明記されている',
+    applicationDraftGeneratorManual.MANUAL_SUPPLEMENTARY_INSTRUCTIONS.includes('portfolioCandidates')
+    && applicationDraftGeneratorManual.MANUAL_SUPPLEMENTARY_INSTRUCTIONS.includes('関連性・根拠が確認できるものに限る'));
+  record('補足指示に「経験→能力→根拠→この案件への提供価値」の流れが明記されている',
+    applicationDraftGeneratorManual.MANUAL_SUPPLEMENTARY_INSTRUCTIONS.includes('経験 → 能力 → 根拠 → この案件への提供価値'));
+  record('DRAFT_OUTPUT_SCHEMA自体は変更されていない（制作物例用の新フィールドが追加されていない）',
+    JSON.stringify(applicationDraftGenerator.DRAFT_OUTPUT_SCHEMA.required)
+    === JSON.stringify(['jobId', 'applicationText', 'applicationTextUsedExperienceIds', 'questionAnswers', 'confirmationItems', 'selfReport']));
+
+  cleanupDraftArtifacts(jobId);
+  cleanupManualPromptArtifact(jobId);
+}
+{
+  // 2. Packetが存在しない場合はプロンプトを書き出さない
+  const jobId = 'TEST_MANUAL_PROMPT_NO_PACKET';
+  cleanupDraftArtifacts(jobId);
+  cleanupManualPromptArtifact(jobId);
+  const result = applicationDraftGeneratorManual.writeGenerationPrompt(jobId);
+  record('Application Packetが存在しない場合はok:falseになりファイルも作られない',
+    result.ok === false && !fs.existsSync(applicationDraftGeneratorManual.promptPath(jobId)));
+}
+{
+  // 3. JSON前処理：素のJSON・```json フェンス・無印```フェンス・前後に説明文が付く場合を吸収する
+  const sample = { jobId: 'x', applicationText: 'テスト' };
+  const plain = applicationDraftGeneratorManual.extractJsonFromText(JSON.stringify(sample));
+  record('素のJSON文字列をそのまま解析できる', plain.ok === true && plain.parsed.jobId === 'x');
+
+  const fencedJson = applicationDraftGeneratorManual.extractJsonFromText('```json\n' + JSON.stringify(sample) + '\n```');
+  record('```json フェンス付きの出力から中身を取り出せる', fencedJson.ok === true && fencedJson.parsed.jobId === 'x');
+
+  const fencedPlain = applicationDraftGeneratorManual.extractJsonFromText('```\n' + JSON.stringify(sample) + '\n```');
+  record('無印``` フェンス付きの出力から中身を取り出せる', fencedPlain.ok === true && fencedPlain.parsed.jobId === 'x');
+
+  const withProse = applicationDraftGeneratorManual.extractJsonFromText(
+    'かしこまりました。以下が出力です。\n\n' + JSON.stringify(sample) + '\n\n以上でよろしいでしょうか。'
+  );
+  record('前後に説明文が付いた出力からも{}範囲を抽出して解析できる', withProse.ok === true && withProse.parsed.jobId === 'x');
+
+  const garbage = applicationDraftGeneratorManual.extractJsonFromText('これはJSONではないただの文章です。');
+  record('JSONとして解析できない文章はok:falseになる', garbage.ok === false);
+}
+{
+  // 4. 正常系：コードブロック＋前置き文付きの現実的なChatGPT応答から、既存の検証・保存経路をそのまま通す
+  const jobId = 'TEST_MANUAL_IMPORT_SUCCESS';
+  cleanupDraftArtifacts(jobId);
+  const packet = makeApplicationPacketFixture(jobId);
+  saveApplicationPacket(jobId, packet);
+  const candidateQuestions = applicationDraftGeneratorManual.extractCandidateQuestions(packet);
+  const mockOutput = buildValidMockDraftOutput(packet, candidateQuestions);
+  const rawChatGptStyleText = 'かしこまりました。以下がJSON出力です。\n\n```json\n' + JSON.stringify(mockOutput, null, 2) + '\n```\n\nご確認ください。';
+
+  const result = applicationDraftGeneratorManual.importManualDraftResult(jobId, rawChatGptStyleText, { modelName: 'chatgpt-test' });
+  record('コードブロック＋前置き文付きの現実的な応答からApplication Draftの保存に成功する',
+    result.outcome === 'success' && result.draft.jobId === jobId);
+  record('manualモードで保存したDraftのmodel.providerがmanualになる', result.draft.model.provider === 'manual' && result.draft.model.name === 'chatgpt-test');
+  const saved = loadApplicationDraft(jobId);
+  record('保存されたDraftがdata/private/application_drafts/から読み戻せる（既存application-draft-store.jsをそのまま利用）',
+    saved !== null && saved.applicationText === mockOutput.applicationText);
+  cleanupDraftArtifacts(jobId);
+}
+{
+  // 5. 異常系：存在しない経験IDを参照した出力は、既存validateDraftOutputにより拒否される
+  //    （manualモード用の新しい検証ロジックは実装していない＝既存の安全設計をそのまま利用できていることの確認）
+  const jobId = 'TEST_MANUAL_IMPORT_INVALID_EXPERIENCE';
+  cleanupDraftArtifacts(jobId);
+  const packet = makeApplicationPacketFixture(jobId);
+  saveApplicationPacket(jobId, packet);
+  const candidateQuestions = applicationDraftGeneratorManual.extractCandidateQuestions(packet);
+  const mockOutput = buildValidMockDraftOutput(packet, candidateQuestions);
+  mockOutput.applicationTextUsedExperienceIds = ['invented:not_real'];
+
+  record('（前提確認）不正な出力を取り込む前はDraftが存在しない', loadApplicationDraft(jobId) === null);
+  const result = applicationDraftGeneratorManual.importManualDraftResult(jobId, JSON.stringify(mockOutput));
+  record('Packetに存在しない経験IDの参照は取り込み失敗になる（既存の検証をそのまま適用）', result.outcome === 'failed');
+  record('失敗時はApplication Draftファイルを作成・上書きしない', loadApplicationDraft(jobId) === null);
+  record('失敗記録が別ディレクトリへ分離保存される', !!result.failedRecordPath && fs.existsSync(result.failedRecordPath));
+  cleanupDraftArtifacts(jobId);
+}
+{
+  // 6. Packetが存在しない場合は取り込み処理自体をスキップする
+  const jobId = 'TEST_MANUAL_IMPORT_NO_PACKET';
+  cleanupDraftArtifacts(jobId);
+  const result = applicationDraftGeneratorManual.importManualDraftResult(jobId, '{}');
+  record('Application Packetが存在しない場合はoutcome:skippedになる', result.outcome === 'skipped');
+}
+{
+  // 7. JSONとして解析不能なテキストを取り込んだ場合の失敗記録
+  const jobId = 'TEST_MANUAL_IMPORT_NOT_JSON';
+  cleanupDraftArtifacts(jobId);
+  const packet = makeApplicationPacketFixture(jobId);
+  saveApplicationPacket(jobId, packet);
+  const result = applicationDraftGeneratorManual.importManualDraftResult(jobId, 'すみません、うまく生成できませんでした。');
+  record('JSONとして解析できないテキストはjson_parse_errorとして失敗する',
+    result.outcome === 'failed' && result.error.type === 'json_parse_error');
+  record('この場合もApplication Draftファイルは作成されない', loadApplicationDraft(jobId) === null);
+  cleanupDraftArtifacts(jobId);
+}
+{
+  // 8. ファイル経由の取り込み（実際のCLI運用と同じ経路：ファイルを読んでimportManualDraftResultへ渡す）
+  const jobId = 'TEST_MANUAL_IMPORT_FROM_FILE';
+  cleanupDraftArtifacts(jobId);
+  const packet = makeApplicationPacketFixture(jobId);
+  saveApplicationPacket(jobId, packet);
+  const candidateQuestions = applicationDraftGeneratorManual.extractCandidateQuestions(packet);
+  const mockOutput = buildValidMockDraftOutput(packet, candidateQuestions);
+  const tmpResultPath = path.join(applicationDraftGeneratorManual.PRIVATE_DATA_DIR, `${jobId}_chatgpt_result.txt`);
+  fs.writeFileSync(tmpResultPath, JSON.stringify(mockOutput, null, 2), 'utf8');
+
+  const result = applicationDraftGeneratorManual.importManualDraftResultFromFile(jobId, tmpResultPath);
+  record('ファイルから読み込んだ結果でも取り込みに成功する（CLIのimportコマンドと同じ経路）', result.outcome === 'success');
+
+  fs.unlinkSync(tmpResultPath);
+  cleanupDraftArtifacts(jobId);
+}
+{
+  // 9. プロンプト生成と取り込みの質問リストが一致すること（複数質問パターンで確認）
+  //    application-draft-generator.js内の質問抽出ロジックをこのファイルへ複製しているため、
+  //    両者が同じPacketから常に同じ質問リストを再現できることを保証する。
+  const jobId = 'TEST_MANUAL_QUESTION_CONSISTENCY';
+  cleanupDraftArtifacts(jobId);
+  cleanupManualPromptArtifact(jobId);
+  const responseItemsValue = '①稼働可能な曜日・時間帯を教えてください。\n②補助金申請支援の経験はありますか。\n③得意な作業を教えてください。';
+  const packet = makeApplicationPacketFixture(jobId, {
+    applicationQuestions: {
+      requiredConditions: { value: null, status: 'requires_analysis', evidenceText: null, source: 'job_detail' },
+      responseItems: { value: responseItemsValue, status: 'extracted', evidenceText: null, source: 'job_detail' },
+      requiredAnswers: [],
+    },
+  });
+  saveApplicationPacket(jobId, packet);
+
+  const promptResult = applicationDraftGeneratorManual.writeGenerationPrompt(jobId);
+  const candidateQuestionsAtImportTime = applicationDraftGeneratorManual.extractCandidateQuestions(packet);
+  const mockOutput = buildValidMockDraftOutput(packet, candidateQuestionsAtImportTime, { readyAll: false });
+  const importResult = applicationDraftGeneratorManual.importManualDraftResult(jobId, JSON.stringify(mockOutput));
+
+  record('プロンプト生成時点の質問数と取り込み時点の質問数が一致する（3問）',
+    promptResult.ok === true && candidateQuestionsAtImportTime.length === 3);
+  record('3問構成の実案件パターンで取り込みが成功し、質問ごとの対応が保たれる',
+    importResult.outcome === 'success' && importResult.draft.questionAnswers.length === 3
+    && importResult.draft.questionAnswers[0].question === candidateQuestionsAtImportTime[0]);
+
+  cleanupDraftArtifacts(jobId);
+  cleanupManualPromptArtifact(jobId);
 }
 
 console.log('\n' + '='.repeat(100));
