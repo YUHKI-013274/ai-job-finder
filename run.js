@@ -23,6 +23,15 @@ const detailStore = require('./detail-store');
 const analyzer = require('./analyzer');
 const aiAnalyzer = require('./ai-analyzer');
 const applicationPacketBuilder = require('./application-packet-builder');
+const applicationDraftGenerator = require('./application-draft-generator');
+const applicationDraftGeneratorManual = require('./application-draft-generator-manual');
+
+// 応募文生成の方式（環境変数 DRAFT_MODE で切り替え）。
+// 'api'    : Anthropic APIで自動生成（ANTHROPIC_API_KEYが有効な場合のみ）。
+// 'manual' : ChatGPT等への貼り付け用プロンプトをローカルに書き出すのみ（API不要・費用0）。
+// ANTHROPIC_API_KEYの401問題が解消するまでは既定値をmanualにしておき、
+// 解消後は .env に DRAFT_MODE=api を追加するだけでAPI版へ切り替えられる。
+const DRAFT_MODE = (process.env.DRAFT_MODE || 'manual').trim();
 
 // ブラウザが1ページでクラッシュした後、Playwright内部の非同期処理（再接続試行等）が
 // 少し遅れてrejectし、呼び出し元のtry/catchで捕まえられないままプロセス全体を
@@ -89,11 +98,41 @@ async function runAnalysisPipeline(classified) {
 
   // Application Packet: Stage1（＋存在すればStage2）の結果を、応募文生成・フォーム入力工程が
   // そのまま使える1案件1ファイルへまとめる。失敗してもページ生成・通知・デプロイは止めない。
+  let builtPacketJobIds = [];
   try {
     const packetSummary = applicationPacketBuilder.buildApplicationPacketsFromStage1Results(stage1Results);
+    builtPacketJobIds = packetSummary.results.filter(r => r.built).map(r => r.jobId);
     console.log(`Application Packet: 生成${packetSummary.builtCount}件 / 対象外${packetSummary.skippedCount}件（対象${packetSummary.targetCount}件中）`);
   } catch (err) {
     console.log(`⚠️  Application Packet生成をスキップ（失敗）: ${err.message}`);
+  }
+
+  // Application Draft: Packetが生成できた案件について、応募文（案件分析→応募文の2段階目）を
+  // 用意する。DRAFT_MODEでAPI自動生成／manual（ChatGPT貼り付け用プロンプト書き出しのみ）を切り替える。
+  // どちらのモードも失敗を許容し、以降の出力・通知・デプロイは止めない。
+  if (builtPacketJobIds.length === 0) {
+    console.log('Application Draft: 対象案件なし（スキップ）');
+  } else if (DRAFT_MODE === 'api') {
+    try {
+      const draftSummary = await applicationDraftGenerator.generateApplicationDraftsForJobIds(builtPacketJobIds);
+      const successCount = draftSummary.results.filter(r => r.outcome === 'success').length;
+      const failedCount = draftSummary.results.filter(r => r.outcome === 'failed').length;
+      const skippedCount = draftSummary.results.filter(r => r.outcome === 'skipped').length;
+      console.log(`Application Draft（API）: 成功${successCount}件 / 失敗${failedCount}件 / スキップ${skippedCount}件（費用$${draftSummary.cumulativeCostUsd.toFixed(4)}）`);
+    } catch (err) {
+      console.log(`⚠️  Application Draft（API）生成をスキップ（失敗）: ${err.message}`);
+    }
+  } else {
+    let promptCount = 0;
+    for (const jobId of builtPacketJobIds) {
+      try {
+        const result = applicationDraftGeneratorManual.writeGenerationPrompt(jobId);
+        if (result.ok) promptCount++;
+      } catch (err) {
+        console.log(`⚠️  応募文プロンプト書き出し失敗（jobId=${jobId}）: ${err.message}`);
+      }
+    }
+    console.log(`Application Draft（manual）: ChatGPT貼り付け用プロンプトを${promptCount}件書き出し（data/private/application_draft_prompts/）`);
   }
 }
 

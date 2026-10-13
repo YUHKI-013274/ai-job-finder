@@ -13,6 +13,7 @@
 // （ファイルの読み書きと文字列処理のみ）。
 const fs = require('fs');
 const path = require('path');
+const { execFileSync } = require('child_process');
 const {
   DRAFT_VERSION,
   DRAFT_SYSTEM_PROMPT,
@@ -23,7 +24,7 @@ const {
   finalizeDraft,
 } = require('./application-draft-generator');
 const { loadApplicationPacket } = require('./application-packet-store');
-const { saveApplicationDraft, saveFailedDraftAttempt } = require('./application-draft-store');
+const { saveApplicationDraft, saveFailedDraftAttempt, loadApplicationDraft } = require('./application-draft-store');
 
 const PRIVATE_DATA_DIR = path.join(__dirname, 'data', 'private');
 const APPLICATION_DRAFT_PROMPTS_DIR = path.join(PRIVATE_DATA_DIR, 'application_draft_prompts');
@@ -204,6 +205,143 @@ function importManualDraftResultFromFile(jobId, resultFilePath, options = {}) {
   return importManualDraftResult(jobId, rawResultText, options);
 }
 
+// ===== 4. クリップボードからの直接取り込み（ファイル保存の手間を省く） =====
+// Windows専用（PowerShellのGet-Clipboardを利用）。ChatGPT等の出力をコピーした状態で
+// このコマンドを実行するだけで、ファイル保存の手間なしに取り込みまで完了させる。
+function readClipboardText() {
+  try {
+    const out = execFileSync('powershell.exe', ['-NoProfile', '-Command', '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; Get-Clipboard -Raw'], { encoding: 'utf8' });
+    return { ok: true, text: out };
+  } catch (err) {
+    return { ok: false, reason: `クリップボードの読み取りに失敗しました（Windows以外の環境の可能性があります）: ${err.message}` };
+  }
+}
+
+function importManualDraftResultFromClipboard(jobId, options = {}) {
+  const clip = readClipboardText();
+  if (!clip.ok) {
+    return { jobId, outcome: 'skipped', reason: clip.reason };
+  }
+  return importManualDraftResult(jobId, clip.text, options);
+}
+
+// クリップボードへの書き込み。clip.exeはBOMをクリップボードへ混入させるため、標準入力（UTF-8）を
+// Set-Clipboardへ渡す方式にする（応募文の先頭へ不可視文字が入るのを防ぐ）。
+function writeClipboardText(text) {
+  try {
+    execFileSync('powershell.exe', [
+      '-NoProfile', '-Command',
+      '[Console]::InputEncoding = [System.Text.Encoding]::UTF8; Set-Clipboard -Value ([Console]::In.ReadToEnd())',
+    ], { input: Buffer.from(text, 'utf8') });
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, reason: `クリップボードへの書き込みに失敗しました: ${err.message}` };
+  }
+}
+
+// CrowdWorksの応募フォームへ貼り付ける本文（応募文＋回答可能な質問への回答）。show表示の【応募文】と同じ内容。
+function buildCopyText(draft) {
+  const readyAnswers = (draft.questionAnswers || []).filter(qa => qa.status === 'ready' && qa.answer);
+  return `${draft.applicationText}${readyAnswers.map(qa => `
+---
+${qa.question}
+${qa.answer}`).join('')}`;
+}
+
+// ===== 5. 案件分析サマリー（Application Packetのみから機械的に組み立てる。AIを使わない） =====
+// Stage1（＋存在すればStage2）が既に確定させた事実だけを並べ替えて表示する。
+// 新しい判断・推測は一切行わない（Packetに無い情報は「（Packet未記載）」のまま表示する）。
+function judgmentFromRecommendation(packet) {
+  if (packet.recommendation.value === 'proceed') return '応募';
+  if (packet.recommendation.value === 'proceed_after_confirmation') return '要確認';
+  return '見送り'; // Packetはstop案件については生成されないため、通常はここに来ない
+}
+
+function buildAnalysisSummary(packet) {
+  const clientPurpose = packet.usableFactsForProposal.centralMessage || '（Packet未記載。案件本文を直接確認してください）';
+  const requiredCapabilities = (packet.requiredCapabilities && packet.requiredCapabilities.length > 0)
+    ? packet.requiredCapabilities.join('・')
+    : '（未特定）';
+  const requiredConditionsField = packet.applicationQuestions.requiredConditions || {};
+  const requiredConditionsText = requiredConditionsField.value || requiredConditionsField.evidenceText || '（本文に明記なし、または未抽出）';
+
+  const cautionLines = [];
+  if (packet.concerns.toolMismatchNote) cautionLines.push(packet.concerns.toolMismatchNote);
+  (packet.concerns.toolIssues || []).forEach(t => cautionLines.push(`使用ツール「${t.tool}」: ${t.reason}`));
+  (packet.concerns.flaggedSafetyReview || []).forEach(f => cautionLines.push(`${f.field}: ${f.status}`));
+  const cautionText = cautionLines.length > 0 ? cautionLines.join('／') : '特になし';
+
+  const experienceItems = (packet.usableExperience || []).map(e => ({
+    experience: e.knowledgeText,
+    capability: requiredCapabilities,
+    rationale: e.connectionReason,
+    evidence: e.evidenceLevel,
+    clientValue: e.clientValue || '（未記載）',
+  }));
+
+  const reasonText = (packet.recommendation.reasons || []).join('、') || '（理由の記載なし）';
+
+  return {
+    judgment: judgmentFromRecommendation(packet),
+    clientPurpose,
+    requiredCapabilities,
+    requiredConditionsText,
+    cautionText,
+    experienceItems,
+    reasonText,
+    confirmationItems: (packet.missingInformation || []).map(m => ({ item: m.item, reason: m.reason })),
+  };
+}
+
+function formatAnalysisSummaryText(packet) {
+  const s = buildAnalysisSummary(packet);
+  const experienceBlock = s.experienceItems.length > 0
+    ? s.experienceItems.map(e =>
+      `・経験：${e.experience}\n  能力：${e.capability}\n  根拠：${e.rationale}\n  証拠：${e.evidence}\n  クライアント価値：${e.clientValue}`
+    ).join('\n\n')
+    : '（Application Packetに使える経験の記載なし）';
+
+  return [
+    `【応募判断】\n${s.judgment}`,
+    `【案件分析】\nクライアントの目的：${s.clientPurpose}\n求められる能力：${s.requiredCapabilities}\n必須条件：${s.requiredConditionsText}\n注意点：${s.cautionText}`,
+    `【使用する経験・根拠】\n${experienceBlock}`,
+    `【応募理由】\n${s.reasonText}`,
+  ].join('\n\n');
+}
+
+// ===== 6. 最終レビュー表示（Application Packet＋Application Draftを合わせて、ユーザー指定の出力形式で表示） =====
+// Draftが未生成（まだChatGPTへ貼っていない）場合は【応募文】を「未生成」と表示し、
+// 生成プロンプトの案内を添える（存在しないものを作らない）。
+function buildReviewOutputText(jobId) {
+  const packet = loadApplicationPacket(jobId);
+  if (!packet) {
+    return { ok: false, reason: `Application Packet（data/private/application_packets/${jobId}.json）が見つからない` };
+  }
+  const analysisText = formatAnalysisSummaryText(packet);
+  const draft = loadApplicationDraft(jobId);
+
+  let applicationTextBlock;
+  let confirmationBlock;
+  if (draft && draft.status === 'success') {
+    const readyAnswers = (draft.questionAnswers || []).filter(qa => qa.status === 'ready' && qa.answer);
+    const answerText = readyAnswers.map(qa => `\n---\n${qa.question}\n${qa.answer}`).join('');
+    applicationTextBlock = `${draft.applicationText}${answerText}`;
+    const items = (draft.confirmationItems || []).map(c => `・${c.item}（${c.reason}）`);
+    confirmationBlock = items.length > 0 ? items.join('\n') : 'なし';
+  } else {
+    applicationTextBlock = `（まだ応募文が生成されていません。先に「node application-draft-generator-manual.js prompt ${jobId}」で生成したプロンプトをChatGPT等へ貼り付け、返ってきたJSONを「import」または「import-clipboard」で取り込んでください）`;
+    confirmationBlock = 'なし（応募文生成後に表示されます）';
+  }
+
+  const text = [
+    analysisText,
+    `【応募文】\n${applicationTextBlock}`,
+    `【確認事項】\n${confirmationBlock}`,
+  ].join('\n\n');
+
+  return { ok: true, jobId, packet, draft, text };
+}
+
 module.exports = {
   PRIVATE_DATA_DIR,
   APPLICATION_DRAFT_PROMPTS_DIR,
@@ -215,6 +353,14 @@ module.exports = {
   extractJsonFromText,
   importManualDraftResult,
   importManualDraftResultFromFile,
+  readClipboardText,
+  writeClipboardText,
+  buildCopyText,
+  importManualDraftResultFromClipboard,
+  judgmentFromRecommendation,
+  buildAnalysisSummary,
+  formatAnalysisSummaryText,
+  buildReviewOutputText,
 };
 
 if (require.main === module) {
@@ -224,6 +370,9 @@ if (require.main === module) {
     console.log('使い方:');
     console.log('  node application-draft-generator-manual.js prompt <jobId>');
     console.log('  node application-draft-generator-manual.js import <jobId> <result-file> [modelName]');
+    console.log('  node application-draft-generator-manual.js import-clipboard <jobId> [modelName]');
+    console.log('  node application-draft-generator-manual.js show <jobId>');
+    console.log('  node application-draft-generator-manual.js copy <jobId>');
   }
 
   if (!command || !jobId) {
@@ -239,6 +388,8 @@ if (require.main === module) {
     }
     console.log(`✅ 生成プロンプトを書き出しました: ${result.filePath}`);
     console.log('このファイルの中身をそのままChatGPT等へ貼り付けてください。');
+    const promptClip = writeClipboardText(fs.readFileSync(result.filePath, 'utf8'));
+    console.log(promptClip.ok ? '📋 プロンプト全文をクリップボードにもコピーしました（そのままChatGPTへ貼り付け可）' : `⚠️  ${promptClip.reason}`);
   } else if (command === 'import') {
     if (!arg3) {
       printUsage();
@@ -255,6 +406,35 @@ if (require.main === module) {
     if (result.draft.confirmationItems.length > 0) {
       console.log(`   要確認事項: ${result.draft.confirmationItems.length}件`);
     }
+  } else if (command === 'import-clipboard') {
+    const result = importManualDraftResultFromClipboard(jobId, { modelName: arg3 || null });
+    if (result.outcome !== 'success') {
+      console.error(`❌ 取り込み失敗: ${result.reason || (result.error && result.error.message)}`);
+      if (result.failedRecordPath) console.error(`   詳細: ${result.failedRecordPath}`);
+      process.exit(1);
+    }
+    console.log(`✅ クリップボードからApplication Draftを保存しました（jobId=${jobId}）`);
+    console.log(`   保存先: data/private/application_drafts/${jobId}.json`);
+    const savedDraft = loadApplicationDraft(jobId);
+    const textClip = savedDraft ? writeClipboardText(buildCopyText(savedDraft)) : { ok: false, reason: 'Draftの再読込に失敗しました' };
+    console.log(textClip.ok ? '📋 応募文をクリップボードにコピーしました（CrowdWorksのフォームへそのまま貼り付け可）' : `⚠️  ${textClip.reason}`);
+    console.log(`確認事項の表示: node application-draft-generator-manual.js show ${jobId}`);
+  } else if (command === 'copy') {
+    const draft = loadApplicationDraft(jobId);
+    if (!draft || draft.status !== 'success') {
+      console.error(`❌ 応募文（Application Draft）が未生成です: ${jobId}`);
+      process.exit(1);
+    }
+    const copied = writeClipboardText(buildCopyText(draft));
+    if (!copied.ok) { console.error(`❌ ${copied.reason}`); process.exit(1); }
+    console.log('📋 応募文をクリップボードにコピーしました');
+  } else if (command === 'show') {
+    const result = buildReviewOutputText(jobId);
+    if (!result.ok) {
+      console.error(`❌ ${result.reason}`);
+      process.exit(1);
+    }
+    console.log(result.text);
   } else {
     printUsage();
     process.exit(1);

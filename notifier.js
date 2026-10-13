@@ -1,4 +1,67 @@
 const nodemailer = require('nodemailer');
+const fs = require('fs');
+const { loadApplicationPacket } = require('./application-packet-store');
+const { loadApplicationDraft } = require('./application-draft-store');
+const { promptPath, buildAnalysisSummary } = require('./application-draft-generator-manual');
+
+// 案件分析（Application Packet）→ 応募文（Application Draft、または未生成ならChatGPT貼り付け用
+// プロンプト）を、候補メール本文に直接埋め込む。GitHub Pages（公開）には一切載せず、
+// 非公開のGmail本文のみに表示することで、個人情報・見積もり事情を含む可能性のある内容を
+// 公開ページから切り離す。Packet/Draft/プロンプトのいずれも存在しない場合は何も追加しない
+// （存在しない情報を作らない）。
+function buildApplicationSectionHtml(jobId) {
+  const packet = loadApplicationPacket(jobId);
+  if (!packet) return '';
+
+  const s = buildAnalysisSummary(packet);
+  const experienceHtml = s.experienceItems.length > 0
+    ? s.experienceItems.map(e =>
+      `<div style="margin-bottom:6px">・経験: ${escHtml(e.experience)}<br>　根拠: ${escHtml(e.rationale)}<br>　証拠: ${escHtml(e.evidence)}<br>　クライアント価値: ${escHtml(e.clientValue)}</div>`
+    ).join('')
+    : '（Application Packetに使える経験の記載なし）';
+
+  const analysisHtml = `
+    <div style="background:#f7f7fb;border-radius:8px;padding:10px 12px;margin-top:8px;font-size:12px;color:#333">
+      <div style="font-weight:bold;margin-bottom:4px">📋 応募判断: ${escHtml(s.judgment)}</div>
+      <div><b>クライアントの目的:</b> ${escHtml(s.clientPurpose)}</div>
+      <div><b>求められる能力:</b> ${escHtml(s.requiredCapabilities)}</div>
+      <div><b>必須条件:</b> ${escHtml(s.requiredConditionsText)}</div>
+      <div><b>注意点:</b> ${escHtml(s.cautionText)}</div>
+      <div style="margin-top:6px"><b>使用する経験・根拠:</b></div>
+      ${experienceHtml}
+      <div style="margin-top:6px"><b>応募理由:</b> ${escHtml(s.reasonText)}</div>
+    </div>`;
+
+  const draft = loadApplicationDraft(jobId);
+  if (draft && draft.status === 'success') {
+    const readyAnswers = (draft.questionAnswers || []).filter(qa => qa.status === 'ready' && qa.answer);
+    const answerHtml = readyAnswers.map(qa => `<div style="margin-top:6px"><b>${escHtml(qa.question)}</b><br>${escHtml(qa.answer)}</div>`).join('');
+    const confirmItems = (draft.confirmationItems || []).map(c => `・${escHtml(c.item)}（${escHtml(c.reason)}）`).join('<br>');
+    return analysisHtml + `
+    <div style="background:#eefaf0;border:1px solid #bfe8c8;border-radius:8px;padding:10px 12px;margin-top:6px;font-size:12px;color:#1a1a1a">
+      <div style="font-weight:bold;margin-bottom:4px">✅ 応募文（そのままCloudWorksへ貼り付け可）</div>
+      <div style="white-space:pre-wrap">${escHtml(draft.applicationText)}</div>
+      ${answerHtml}
+      ${confirmItems ? `<div style="margin-top:8px"><b>確認事項:</b><br>${confirmItems}</div>` : ''}
+    </div>`;
+  }
+
+  const pFile = promptPath(jobId);
+  if (fs.existsSync(pFile)) {
+    let promptText = '';
+    try { promptText = fs.readFileSync(pFile, 'utf8'); } catch { /* 読めない場合は下の案内のみ表示 */ }
+    return analysisHtml + `
+    <div style="background:#eef6fb;border:1px solid #bee5f8;border-radius:8px;padding:10px 12px;margin-top:6px;font-size:12px;color:#1a1a1a">
+      <div style="font-weight:bold;margin-bottom:4px">📝 応募文はまだ未生成です。以下をChatGPT等へ貼り付けてください</div>
+      <pre style="white-space:pre-wrap;font-family:monospace;font-size:11px;background:white;border-radius:6px;padding:8px;max-height:260px;overflow:auto">${escHtml(promptText)}</pre>
+      <div style="margin-top:6px">貼り付け結果（JSON）をコピーした状態でPCのターミナルで実行:</div>
+      <div style="font-family:monospace;background:white;border-radius:6px;padding:6px;margin-top:2px">node application-draft-generator-manual.js import-clipboard ${escHtml(jobId)}</div>
+      <div style="margin-top:4px">応募文の確認: <span style="font-family:monospace">node application-draft-generator-manual.js show ${escHtml(jobId)}</span></div>
+    </div>`;
+  }
+
+  return analysisHtml;
+}
 
 async function sendGmailNotification({ jobs, growthCount = 0, pageUrl, date }) {
   const email = process.env.GMAIL_USER;
@@ -22,6 +85,7 @@ async function sendGmailNotification({ jobs, growthCount = 0, pageUrl, date }) {
       <td style="padding:10px; border-bottom:1px solid #eee;">
         <a href="${job.url}" style="color:#1a1a2e;font-weight:bold;text-decoration:none">${i + 1}. ${escHtml(job.title)}</a><br>
         <span style="color:#888;font-size:12px">💰 ${escHtml(job.price || '要確認')}</span>
+        ${buildApplicationSectionHtml(job.id)}
       </td>
     </tr>
   `).join('');
