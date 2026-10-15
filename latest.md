@@ -1,14 +1,35 @@
 # 今日の応募候補
 
-**日付**: 2026/10/15
+**日付**: 2026/10/16
 
-今日の最優先応募(S) 1件 / 優先応募(A) 0件 / 🔥高単価チャレンジ 6件 / 🌱通常チャレンジ 2件 / ❓確認候補 6件 / 見送り 250件 / 不足資産 1件
+今日の最優先応募(S) 2件 / 優先応募(A) 0件 / 🔥高単価チャレンジ 15件 / 🌱通常チャレンジ 1件 / ❓確認候補 5件 / 見送り 228件 / 不足資産 1件
 
-保留 0件 / 除外 250件
+保留 0件 / 除外 228件
 
 ## 🎯 今日応募すべき案件（今すぐ応募、最大5件。無理な枠埋めはしません）
 
-### 1. 【完全在宅・未経験歓迎】セールスライター｜LP・メール原稿の作成｜AI活用OK・長期継続
+### 1. 20代×スキルを身につけ本業にしていきたい方へ（AI活用可／完全在宅）
+
+- URL: https://crowdworks.jp/public/jobs/13537467
+- 報酬: 30,000円
+- ランク: **S**（証拠の強さ: 強い代替証明）
+- 職能一致度: ★★★★★
+- この案件を選ぶ理由:
+  ★★★★★ ライティング案件
+  ★★★★★ 採用理由の証拠が強い（強い代替証明）
+  ★★★★★ ライティングページを営業資料にできる
+  ★★★★★ 高単価案件
+  ★★★★★ AI活用経験をアピールできる
+  ★★★★☆ 長期的な営業資産になりやすい
+  ★★★★☆ 受注できる可能性が高い
+- 提案文の軸:
+  ライティング実績（SEO記事・比較記事・商品レビューの自主制作） × ChatGPT/Claude活用による効率的な情報整理・文章化
+  → 「Webコンテンツ」に沿って、検索意図と読者像を踏まえた記事構成・執筆を担当できます
+  → 検索・読者導線を意識した記事で、集客につながるコンテンツ資産を残せます
+
+---
+
+### 2. 【完全在宅・未経験歓迎】セールスライター｜LP・メール原稿の作成｜AI活用OK・長期継続
 
 - URL: https://crowdworks.jp/public/jobs/13517195
 - 報酬: 1,500円
@@ -30,9 +51,21 @@
 
 ---
 
-## 📋 今すぐ応募（全1件）
+## 📋 今すぐ応募（全2件）
 
-1. [S] 【完全在宅・未経験歓迎】セールスライター｜LP・メール原稿の作成｜AI活用OK・長期継続
+1. [S] 20代×スキルを身につけ本業にしていきたい方へ（AI活用可／完全在宅）
+   URL: https://crowdworks.jp/public/jobs/13537467
+   報酬: 30,000円
+   証拠の強さ: 強い代替証明
+   応募理由: ★★★★★ ライティング案件
+★★★★★ 採用理由の証拠が強い（強い代替証明）
+★★★★★ ライティングページを営業資料にできる
+★★★★★ 高単価案件
+★★★★★ AI活用経験をアピールできる
+★★★★☆ 長期的な営業資産になりやすい
+★★★★☆ 受注できる可能性が高い
+
+2. [S] 【完全在宅・未経験歓迎】セールスライター｜LP・メール原稿の作成｜AI活用OK・長期継続
    URL: https://crowdworks.jp/public/jobs/13517195
    報酬: 1,500円
    証拠の強さ: 強い代替証明
@@ -45,65 +78,114 @@
 ★★★★☆ 受注できる可能性が高い
 ★★★☆☆ 未経験・初心者歓迎
 
-## 🔥 高単価チャレンジ（全6件）
+## 🔥 高単価チャレンジ（全15件）
 
 直接実績は不足していても、強い代替証明があり、単価・継続性・長期資産性のいずれかが高い案件。
 
-1. 超簡単！おうち時短レシピをAIで画像生成するお仕事
+1. 【ライター未経験OK】ChatGPTを活用した記事制作のお仕事｜報酬10,000円～｜長期契約あり
+   URL: https://crowdworks.jp/public/jobs/13537446
+   報酬: 10,000円
+   高単価と判断した理由: 報酬10,000円で単価が高い、継続案件のシグナルがあり、次の案件・継続契約につながる可能性がある、長期的な営業資産（実績・ポートフォリオ）として残る度合いが高い
+   不足資産: 同一ジャンル・同一クライアントでの受注実績はまだ少ない
+
+2. 超簡単！おうち時短レシピをAIで画像生成するお仕事
    URL: https://crowdworks.jp/public/jobs/13521601
    報酬: 30,000円
    高単価と判断した理由: 報酬30,000円で単価が高い
    不足資産: 同一ジャンル・同一クライアントでの受注実績はまだ少ない
 
-2. 【20代向け☕️】休日に行ってみたいカフェを紹介♪Canvaバナー作成のお仕事
-   URL: https://crowdworks.jp/public/jobs/13536243
-   報酬: 10,000円
-   高単価と判断した理由: 報酬10,000円で単価が高い
+3. 【実績を積みたい方大歓迎！】スイーツ好きのあなたへ✨｜流れに沿ってかんたんバナー作成😊｜サポート体制◎｜継続あり✨
+   URL: https://crowdworks.jp/public/jobs/13534596
+   報酬: 3,300円
+   高単価と判断した理由: 継続案件のシグナルがあり、次の案件・継続契約につながる可能性がある
    不足資産: 同一ジャンル・同一クライアントでの受注実績はまだ少ない
 
-3. 【CanvaでOK】整理好きがすすめる100均アイテム｜バナー作成
-   URL: https://crowdworks.jp/public/jobs/13536270
-   報酬: 10,000円
-   高単価と判断した理由: 報酬10,000円で単価が高い
+4. 【在宅×YouTube】新チャンネルの動画ディレクター募集│長期依頼/企画/台本
+   URL: https://crowdworks.jp/public/jobs/13535855
+   報酬: 250,000円
+   高単価と判断した理由: 報酬250,000円で単価が高い
    不足資産: 同一ジャンル・同一クライアントでの受注実績はまだ少ない
 
-4. 【継続発注あり】LPライター募集｜ベネフィット設計が得意な方歓迎★
+5. 【継続発注あり】LPライター募集｜ベネフィット設計が得意な方歓迎★
    URL: https://crowdworks.jp/public/jobs/13465775
    報酬: 要確認
    高単価と判断した理由: 継続案件のシグナルがあり、次の案件・継続契約につながる可能性がある
    不足資産: 同一ジャンル・同一クライアントでの受注実績はまだ少ない
 
-5. 【継続依頼有】セミナー集客FAXDMライター募集（単価UPあり）
+6. 【継続依頼有】セミナー集客FAXDMライター募集（単価UPあり）
    URL: https://crowdworks.jp/public/jobs/13005022
    報酬: 要確認
    高単価と判断した理由: 継続案件のシグナルがあり、次の案件・継続契約につながる可能性がある
    不足資産: 同一ジャンル・同一クライアントでの受注実績はまだ少ない
 
-6. 【1本5,000円】株式投資番組の企画立案業務
-   URL: https://crowdworks.jp/public/jobs/13536269
+7. 【初心者歓迎・長期依頼あり】AIを使ったWeb記事制作｜1本10,000円～・文字単価2円以上
+   URL: https://crowdworks.jp/public/jobs/13537449
+   報酬: 10,000円
+   高単価と判断した理由: 報酬10,000円で単価が高い
+   不足資産: 同一ジャンル・同一クライアントでの受注実績はまだ少ない
+
+8. 【未経験可💪】あなたの「筋トレ経験」を記事にしませんか？｜1記事2,000円・継続あり
+   URL: https://crowdworks.jp/public/jobs/13537428
+   報酬: 2,000円
+   高単価と判断した理由: 継続案件のシグナルがあり、次の案件・継続契約につながる可能性がある
+   不足資産: 同一ジャンル・同一クライアントでの受注実績はまだ少ない
+
+9. 【未経験OK🍽️】飲食店経験を活かして、お店の魅力をデザインしませんか？｜Instagram画像制作・継続あり✨
+   URL: https://crowdworks.jp/public/jobs/13537427
+   報酬: 10,000円
+   高単価と判断した理由: 報酬10,000円で単価が高い、継続案件のシグナルがあり、次の案件・継続契約につながる可能性がある、長期的な営業資産（実績・ポートフォリオ）として残る度合いが高い
+   不足資産: 同一ジャンル・同一クライアントでの受注実績はまだ少ない
+
+10. 【未経験OK☕️】「このカフェ気になる！」を生み出すSNSデザイン制作｜継続あり✨
+   URL: https://crowdworks.jp/public/jobs/13537423
+   報酬: 10,000円
+   高単価と判断した理由: 報酬10,000円で単価が高い、継続案件のシグナルがあり、次の案件・継続契約につながる可能性がある、長期的な営業資産（実績・ポートフォリオ）として残る度合いが高い
+   不足資産: 同一ジャンル・同一クライアントでの受注実績はまだ少ない
+
+11. ＼未経験OK◎長期継続あり／「こんな部屋に住みたい！」と思えるナチュラルな空間づくりを発信するお仕事🪴🤍✨
+   URL: https://crowdworks.jp/public/jobs/13537392
+   報酬: 5,000円
+   高単価と判断した理由: 報酬5,000円で単価が高い、継続案件のシグナルがあり、次の案件・継続契約につながる可能性がある、長期的な営業資産（実績・ポートフォリオ）として残る度合いが高い
+   不足資産: 同一ジャンル・同一クライアントでの受注実績はまだ少ない
+
+12. 【未経験OK】感動する映画に出会いたい20代へ♡映画紹介バナーをつくりませんか？
+   URL: https://crowdworks.jp/public/jobs/13537355
+   報酬: 10,000円
+   高単価と判断した理由: 報酬10,000円で単価が高い
+   不足資産: 同一ジャンル・同一クライアントでの受注実績はまだ少ない
+
+13. 【未経験OK🌿】20代社会人の「モヤモヤ」を記事にしませんか？｜1記事2,000円・継続あり
+   URL: https://crowdworks.jp/public/jobs/13537421
+   報酬: 2,000円
+   高単価と判断した理由: 継続案件のシグナルがあり、次の案件・継続契約につながる可能性がある
+   不足資産: 同一ジャンル・同一クライアントでの受注実績はまだ少ない
+
+14. 【20代女性向け】インテリア・暮らし系Instagramフィード投稿作成｜テンプレ・素材あり
+   URL: https://crowdworks.jp/public/jobs/13537430
    報酬: 5,000円
    高単価と判断した理由: 報酬5,000円で単価が高い
    不足資産: 同一ジャンル・同一クライアントでの受注実績はまだ少ない
 
-## 🌱 通常チャレンジ（全2件）
+15. 【初心者OK✨】清潔感のある手元を目指す美容系SNSデザインスタッフ募集！
+   URL: https://crowdworks.jp/public/jobs/13537388
+   報酬: 5,000円
+   高単価と判断した理由: 報酬5,000円で単価が高い
+   不足資産: 同一ジャンル・同一クライアントでの受注実績はまだ少ない
+
+## 🌱 通常チャレンジ（全1件）
 
 実績獲得目的のチャレンジ候補（高単価チャレンジ基準には届かないが、応募理由は作れる案件）。
 
 ### 今回見つかった営業資産の不足（高単価・通常チャレンジ合算）
 
-- 同一ジャンル・同一クライアントでの受注実績はまだ少ない（8件）
+- 同一ジャンル・同一クライアントでの受注実績はまだ少ない（16件）
 
 1. 【時給2,500円】広告用記事LP＆記事CR制作者募集／継続／ペット商材
    URL: https://crowdworks.jp/public/jobs/13499884
    報酬: 2,500円
    不足資産: 同一ジャンル・同一クライアントでの受注実績はまだ少ない
 
-2. 【時給2,000円】広告用記事LP＆記事CR制作者募集／継続／ペット商材
-   URL: https://crowdworks.jp/public/jobs/13497408
-   報酬: 2,000円
-   不足資産: 同一ジャンル・同一クライアントでの受注実績はまだ少ない
-
-## ❓ 確認候補（全6件）
+## ❓ 確認候補（全5件）
 
 案件辞典・能力辞典のいずれでも応募可能／対応不可と断定できない案件。除外していません。
 
@@ -119,25 +201,19 @@
    確認候補になった理由: 案件辞典の主要カテゴリーには一致しないが、案件文に転用可能な能力（相手目線）に関連する語（投稿デザイン）が含まれており、対応可能とも対応不可とも断定できないため確認候補と判定
    応募前に確認すべき条件: 転用可能な能力（相手目線）との関連語は見つかったが、案件の中心業務・必須条件が案件文だけでは確定できない
 
-3. ※追加※【継続的な在宅でできるお仕事です！】SNSの投稿デザインの作業をお任せします！
-   URL: https://crowdworks.jp/public/jobs/13495166
-   報酬: 100,000円
+3. 【週1日～OK】好きなものを発信するInstagram投稿制作スタッフ募集｜経験不問
+   URL: https://crowdworks.jp/public/jobs/13537469
+   報酬: 30,000円
+   確認候補になった理由: 案件辞典の主要カテゴリーには一致しないが、案件文に転用可能な能力（相手目線）に関連する語（投稿制作）が含まれており、対応可能とも対応不可とも断定できないため確認候補と判定
+   応募前に確認すべき条件: 転用可能な能力（相手目線）との関連語は見つかったが、案件の中心業務・必須条件が案件文だけでは確定できない
+
+4. 🎀20代歓迎【平成のかわいい文化、つい惹かれちゃう方へ】「懐かしい！」を届けるInstagram投稿デザイン｜独立したい方📣
+   URL: https://crowdworks.jp/public/jobs/13536922
+   報酬: 10,000円
    確認候補になった理由: 案件辞典の主要カテゴリーには一致しないが、案件文に転用可能な能力（相手目線）に関連する語（投稿デザイン）が含まれており、対応可能とも対応不可とも断定できないため確認候補と判定
    応募前に確認すべき条件: 転用可能な能力（相手目線）との関連語は見つかったが、案件の中心業務・必須条件が案件文だけでは確定できない
 
-4. 【20代女性向け/旅行・お出かけ好き歓迎】「旅先でこんな時間を過ごしたい！」Instagramフィード投稿作成✈️🌿
-   URL: https://crowdworks.jp/public/jobs/13536249
-   報酬: 10,000円
-   確認候補になった理由: 案件辞典の主要カテゴリーには一致しないが、案件文に転用可能な能力（相手目線）に関連する語（フィード投稿）が含まれており、対応可能とも対応不可とも断定できないため確認候補と判定
-   応募前に確認すべき条件: 転用可能な能力（相手目線）との関連語は見つかったが、案件の中心業務・必須条件が案件文だけでは確定できない
-
-5. 【中国OEM/貿易】現地工場との直接取引におけるネゴシエーション・契約・現場管理（PMO）支援の募集
-   URL: https://crowdworks.jp/public/jobs/13536191
-   報酬: 要確認
-   確認候補になった理由: 案件辞典の主要カテゴリーには一致しないが、案件文に転用可能な能力（課題整理力）に関連する語（PMO）が含まれており、対応可能とも対応不可とも断定できないため確認候補と判定
-   応募前に確認すべき条件: 報酬額（案件詳細で確認）、業界の一致度（工場）、転用可能な能力（課題整理力）との関連語は見つかったが、案件の中心業務・必須条件が案件文だけでは確定できない
-
-6. 【急募・継続】メーカーの商品・ブランドを育てるWeb・LPデザイナー募集｜フルリモート
+5. 【急募・継続】メーカーの商品・ブランドを育てるWeb・LPデザイナー募集｜フルリモート
    URL: https://crowdworks.jp/public/jobs/13524616
    報酬: 3,000円
    確認候補になった理由: 案件辞典の主要カテゴリーには一致しないが、案件文に転用可能な能力（相手目線）に関連する語（デザイナー募集）が含まれており、対応可能とも対応不可とも断定できないため確認候補と判定
@@ -145,26 +221,26 @@
 
 ## ⏸ 保留（全0件）
 
-## 🚫 除外（全250件）
+## 🚫 除外（全228件）
 
-### 募集終了（104件）
+### 募集終了（109件）
 
 - 【在宅／時給制】海外進出支援会社の代表を支えるアシスタント｜まずは1〜2ヶ月から
   URL: https://crowdworks.jp/public/jobs/13454678
 - 【ゴルフ指導経験者募集】オンライン講座のカリキュラム設計にご協力ください（スクール開業を目指す方歓迎）
   URL: https://crowdworks.jp/public/jobs/13400017
-- 【ノーコード指導経験者募集】オンライン講座のカリキュラム設計にご協力ください（スクール開業を目指す方歓迎）
-  URL: https://crowdworks.jp/public/jobs/13400071
 - 【子育て支援経験者募集】オンライン講座のカリキュラム設計にご協力ください（スクール開業を目指す方歓迎）
   URL: https://crowdworks.jp/public/jobs/13399914
-- 【キャリア支援経験者募集】オンライン講座のカリキュラム設計にご協力ください（スクール開業を目指す方歓迎）
-  URL: https://crowdworks.jp/public/jobs/13399916
 - 【体質改善指導経験者募集】オンライン講座のカリキュラム設計にご協力ください（スクール開業を目指す方歓迎）
   URL: https://crowdworks.jp/public/jobs/13399913
 - 【婚活サポート経験者募集】オンライン講座のカリキュラム設計にご協力ください（スクール開業を目指す方歓迎）
   URL: https://crowdworks.jp/public/jobs/13399961
 - 【塾講師・塾経営経験者募集】オンライン講座のカリキュラム設計にご協力ください（スクール開業を目指す方歓迎）
   URL: https://crowdworks.jp/public/jobs/13399917
+- 【ノーコード指導経験者募集】オンライン講座のカリキュラム設計にご協力ください（スクール開業を目指す方歓迎）
+  URL: https://crowdworks.jp/public/jobs/13400071
+- 【キャリア支援経験者募集】オンライン講座のカリキュラム設計にご協力ください（スクール開業を目指す方歓迎）
+  URL: https://crowdworks.jp/public/jobs/13399916
 - 【ダイエット指導経験者募集】オンライン講座のカリキュラム設計にご協力ください（スクール開業を目指す方歓迎）
   URL: https://crowdworks.jp/public/jobs/13400024
 - 【夫婦仲改善カウンセリング経験者募集】オンライン講座のカリキュラム設計にご協力ください（スクール開業を目指す方歓迎）
@@ -179,6 +255,8 @@
   URL: https://crowdworks.jp/public/jobs/13517147
 - 営業資料の微調整
   URL: https://crowdworks.jp/public/jobs/13516075
+- 【営業事務】講座申込管理・書類作成・講師サポートなど｜稼働時間自由！お休み自由！未経験OK｜副業OK｜毎月昇給のチャンスあり！
+  URL: https://crowdworks.jp/public/jobs/13514460
 - 【土日祝の午前中】スプレッドシートを使った数値集計・管理事務｜関数・GASに興味がある方歓迎◎完全在宅・長期
   URL: https://crowdworks.jp/public/jobs/13512562
 - 急募【短納期：10月18日】既存ピッチ資料の構成・デザイン改善｜PPT・16:9／11〜20枚
@@ -195,10 +273,14 @@
   URL: https://crowdworks.jp/public/jobs/13507140
 - 【継続/即決】補助金申請全般を代行していただける方
   URL: https://crowdworks.jp/public/jobs/13503781
+- 【継続依頼あり】AIを活用した漫画広告のリメイク・絵柄変更ができる方を募集！
+  URL: https://crowdworks.jp/public/jobs/13532846
 - AIツールを活用した着用画像の作成
   URL: https://crowdworks.jp/public/jobs/13518415
 - 🌷「こんな画像、AIで作れるの？」を仕事に。｜AI画像制作メンバー募集🌷
   URL: https://crowdworks.jp/public/jobs/13517520
+- 【在宅・AI活用】資料作成・画像作成・動画編集・SNS運用などの業務サポート｜経験を活かせる方歓迎
+  URL: https://crowdworks.jp/public/jobs/13513668
 - 【報酬2万円/継続可能性あり】AIエージェントを活用したSNSアカウント（X・Instagram等）の自動運用計画・設計作成依頼
   URL: https://crowdworks.jp/public/jobs/13511517
 - 🧬「こんなの作れたら」を、AIで形に。｜AIクリエイティブメンバー募集
@@ -207,8 +289,12 @@
   URL: https://crowdworks.jp/public/jobs/13503940
 - Amazon商品画像の作成【継続依頼】
   URL: https://crowdworks.jp/public/jobs/13502261
+- 【高単価！顔出し不要・完全在宅】ChatGPT教材動画の制作にご協力いただける講師の方を募集します
+  URL: https://crowdworks.jp/public/jobs/13498014
 - 【Zoho CRM構築】顧客・案件管理の仕組みを設計・構築｜伴走型／納品型で対応できる方
   URL: https://crowdworks.jp/public/jobs/13497241
+- 歌唱用AIボイスモデル（RVC等）のオーダーメイド制作｜声質指定・複数ソフト対応形式での納品
+  URL: https://crowdworks.jp/public/jobs/13495401
 - 歌唱用AIボイスモデル（RVC等）のオーダーメイド制作｜声質指定・複数ソフト対応形式での納品
   URL: https://crowdworks.jp/public/jobs/13495390
 - 【成果報酬型で月30万円も可能！】生成AI・動画生成ツールを活用した最新研修コンテンツ制作メンバー募集
@@ -265,14 +351,14 @@
   URL: https://crowdworks.jp/public/jobs/13442121
 - 【AI素材生成】参考動画をもとに動画素材を作れる方募集｜※AI動画生成経験者のみの募集です
   URL: https://crowdworks.jp/public/jobs/13442206
-- 【AI活用歓迎】生成AIを活用したSNS広告クリエイティブ制作
-  URL: https://crowdworks.jp/public/jobs/13438416
 - 【時給2,500円】ペット商材のLPライター募集／フルリモート
   URL: https://crowdworks.jp/public/jobs/13499872
 - 【手紙代筆業務】★在宅★営業用手書きDMの代筆業務
   URL: https://crowdworks.jp/public/jobs/13452279
 - 【学歴・職歴不問】“売れる文章”が書けるようになるセールスライター｜週4日～3時間～OK｜パパ・ママ活躍中｜未経験からスキルUP
   URL: https://crowdworks.jp/public/jobs/13500461
+- 【時給2,000円】広告用記事LP＆記事CR制作者募集／継続／ペット商材
+  URL: https://crowdworks.jp/public/jobs/13497408
 - 【時給2,000円】ペット商材のLPライター募集／フルリモート
   URL: https://crowdworks.jp/public/jobs/13496718
 - セールスライター、プロモーターさんの募集
@@ -358,280 +444,232 @@
 - 【完全在宅／時給3,000円～5,000円】美容・D2C特化のWeb広告クリエイティブディレクター
   URL: https://crowdworks.jp/public/jobs/13240267
 
-### 単価が低すぎる（34件）
+### 単価が低すぎる（27件）
 
-- 【2分で完了】ピラティスについてのアンケート調査
-  URL: https://crowdworks.jp/public/jobs/13515633
-- 【急募｜未経験可】Webメディア記事・SNS投稿文のライティングをお願いします
-  URL: https://crowdworks.jp/public/jobs/13535457
-- 【未経験歓迎・AI活用OK】愛用アイテムの魅力を伝えるレビュー文作成｜長くお付き合いできる方募集
-  URL: https://crowdworks.jp/public/jobs/13535404
-- 【長期継続】【簡単作業】個別文書作成のお手伝いをして頂ける方を募集【初心者OK】【主婦活躍中】
-  URL: https://crowdworks.jp/public/jobs/13536221
-- 【未経験OK｜継続案件あり】居酒屋のオープニング告知ポスター制作（AI使用可）
-  URL: https://crowdworks.jp/public/jobs/13535325
-- 【簡単3分！20円がもらえる！】リフォームQ&Aの質問を集めています。
-  URL: https://crowdworks.jp/public/jobs/13536202
-- 【経験不問！】スキマ時間を有効活用♪AIを使って始めるWebライティングのお仕事
-  URL: https://crowdworks.jp/public/jobs/13536201
-- 【AI使用◎／文字単価1.5円】地元を離れて気づいた、家族や友人の大切さ｜体験談募集
-  URL: https://crowdworks.jp/public/jobs/13536194
-- 【完全在宅】オンライン秘書募集｜日程調整・データ入力などの事務サポート
-  URL: https://crowdworks.jp/public/jobs/13536190
-- 【完全在宅／主婦さん歓迎】お洋服好きな方へ♪古着の撮影スタッフ募集｜1着50円
-  URL: https://crowdworks.jp/public/jobs/13536160
-- スキマ時間で！暮らし・ライフスタイルのSEO記事作成｜初心者歓迎・AI活用OK
-  URL: https://crowdworks.jp/public/jobs/13536189
-- 【初心者歓迎・AI活用OK】未経験から始めるWebライター｜フルリモート・簡単な記事作成からスタート！長期継続あり
-  URL: https://crowdworks.jp/public/jobs/13536196
-- ライティングに関する記事を読んで簡単なワークに回答するお仕事
-  URL: https://crowdworks.jp/public/jobs/13536131
-- 【継続あり】あなたの旅行の思い出を教えてください｜記事ライター募集
-  URL: https://crowdworks.jp/public/jobs/13536164
-- 【初心者大歓迎】あなたの仕事の経験を文章にしてみませんか？
-  URL: https://crowdworks.jp/public/jobs/13536192
-- 【体験談※ママ限定】飲食店で理不尽な人に絡まれたけど…店員さんや周りの人の「神対応」で救われたエピソードを教えてください！
-  URL: https://crowdworks.jp/public/jobs/13536187
-- 【体験談※女性限定】義家族との集まりで「豪華な食事」なのに、自分だけ「安い具材」しかよそってもらえなかったエピソードを大募集！
-  URL: https://crowdworks.jp/public/jobs/13536184
-- ⏳20代のうちに始めたいこと・挑戦したいことについてのライティングのお仕事｜未経験OK✨
-  URL: https://crowdworks.jp/public/jobs/13536181
-- 【体験談※ママ限定】傷ついたLINEの内容を「誰かに打ち明けた」結果、意外な展開が起きたエピソードを大募集！＜ママ友／家族など＞
-  URL: https://crowdworks.jp/public/jobs/13536180
-- 【体験談※ママ限定】妊娠中・育児中にあった送迎トラブルを大募集＜ママ友から送ってと言われた／義母から迎えにきてと頻繁に連絡が…＞
-  URL: https://crowdworks.jp/public/jobs/13536178
+- 【初心者歓迎・簡単アンケート】非正規雇用で働き続けるうえで感じる「不安」は何ですか?
+  URL: https://crowdworks.jp/public/jobs/13534592
+- 【初心者OK】生成AIを活用したWebライティング｜在宅で始める記事制作・継続依頼あり
+  URL: https://crowdworks.jp/public/jobs/13537451
+- 💄20代におすすめ｜未経験歓迎✨｜「最近、自分磨きできていますか？」｜美容・垢抜け習慣の記事ライター募集｜継続で単価up❗️
+  URL: https://crowdworks.jp/public/jobs/13536912
+- 【初心者OK】生成AIを活用したWeb記事執筆のお仕事｜在宅ワーク・継続依頼あり
+  URL: https://crowdworks.jp/public/jobs/13537450
+- 家計簿に関するアンケート
+  URL: https://crowdworks.jp/public/jobs/13537432
 - ケアワーカー×記事執筆｜初回テスト800文字程度・AI活用OK【継続案件あり】
   URL: https://crowdworks.jp/public/jobs/13474499
-- 【未経験の方も歓迎｜AIツール使用可】まずはトライアル記事から！Web記事ライター募集
-  URL: https://crowdworks.jp/public/jobs/13530052
-- 【ライティング/文章作成】SNS投稿における文章作成のご依頼
-  URL: https://crowdworks.jp/public/jobs/13533811
-- 義実家や夫、嫁との「モヤモヤ体験談」を記事に！苦労した話、衝撃を受けた話、人生経験を執筆するライターを募集【在宅OK/継続案件】
-  URL: https://crowdworks.jp/public/jobs/13504949
-- 【高額報酬】初心者歓迎のライティングのお仕事｜終わらせた方には継続案件10種類以上あります！！【14日間限定】
-  URL: https://crowdworks.jp/public/jobs/13510191
-- 【継続力のある方を歓迎します！】Instagramコンテンツ制作のためのキャプション文を作成してください！
-  URL: https://crowdworks.jp/public/jobs/13520161
+- 【未経験でもOK！】普段取り入れている美容・セルフケア習慣についての記事作成
+  URL: https://crowdworks.jp/public/jobs/13537400
+- 【未経験OK】スキマ時間でできる！AIに関する簡単ライティング
+  URL: https://crowdworks.jp/public/jobs/13537399
+- 【20〜30代前半の社会人募集！】「自分の好きなゲーム」に関する記事ライター募集　文字単価1.5円
+  URL: https://crowdworks.jp/public/jobs/13404901
+- 日々の暮らしと将来の希望に関するアンケート【全10問】
+  URL: https://crowdworks.jp/public/jobs/13537394
+- 【未経験OK】スキマ時間でできる！AIに関する簡単ライティング
+  URL: https://crowdworks.jp/public/jobs/13537381
+- 【継続依頼】モザイク処理編集(1分350円〜)
+  URL: https://crowdworks.jp/public/jobs/13537376
+- 【未経験歓迎】カフェ好き必見！おいしいコーヒーが楽しめるカフェの記事を書いてみませんか？
+  URL: https://crowdworks.jp/public/jobs/13537362
+- 【20代・未経験歓迎！】お気に入りのファッションアイテム紹介記事
+  URL: https://crowdworks.jp/public/jobs/13537352
 - 【未経験歓迎】クラウドワークスで実績を作りたい方へ！簡単な記事作成のお仕事
   URL: https://crowdworks.jp/public/jobs/13522294
-- 【初心者歓迎】AI活用OK｜実績づくりに◎ Webライター募集｜テスト記事500円
-  URL: https://crowdworks.jp/public/jobs/13529789
 - 【初心者・未経験者OK】 AIを使用したSEOライティングをお願いします！継続ライター募集！
   URL: https://crowdworks.jp/public/jobs/13498771
+- 【初心者歓迎】AI活用OK｜実績づくりに◎ Webライター募集｜テスト記事500円
+  URL: https://crowdworks.jp/public/jobs/13529789
+- 【継続力のある方を歓迎します！】Instagramコンテンツ制作のためのキャプション文を作成してください！
+  URL: https://crowdworks.jp/public/jobs/13520161
+- 義実家や夫、嫁との「モヤモヤ体験談」を記事に！苦労した話、衝撃を受けた話、人生経験を執筆するライターを募集【在宅OK/継続案件】
+  URL: https://crowdworks.jp/public/jobs/13504949
+- 【2分で完了】ピラティスについてのアンケート調査
+  URL: https://crowdworks.jp/public/jobs/13515633
+- 【高額報酬】初心者歓迎のライティングのお仕事｜終わらせた方には継続案件10種類以上あります！！【14日間限定】
+  URL: https://crowdworks.jp/public/jobs/13510191
+- 【ライティング/文章作成】SNS投稿における文章作成のご依頼
+  URL: https://crowdworks.jp/public/jobs/13533811
 - 【急募・3分】20代で転職を考えている方へ｜キャリア意識アンケート
   URL: https://crowdworks.jp/public/jobs/13505716
-- 【ドキュメンタリー好き限定】あなたが「もっと世の中に知ってほしい」と思う素敵な経営者を教えてください！
-  URL: https://crowdworks.jp/public/jobs/13536263
 - 【未経験歓迎！】Web記事ライター募集｜AI使用｜実績作りにも
   URL: https://crowdworks.jp/public/jobs/13510230
-- ★20261014【急募！在宅OK！カンタン作業です】企業WEBサイトの問い合わせフォームからお問い合わせ送信作業です！！★
-  URL: https://crowdworks.jp/public/jobs/13533293
+- 【未経験の方も歓迎｜AIツール使用可】まずはトライアル記事から！Web記事ライター募集
+  URL: https://crowdworks.jp/public/jobs/13530052
+- 【20代医療職歓迎】医療現場の「リアルな声」を届ける✨コラムライター募集
+  URL: https://crowdworks.jp/public/jobs/13537479
 - 【大量依頼】ネイルチップ着用のAI画像生成
   URL: https://crowdworks.jp/public/jobs/13535835
 
-### 条件不一致（10件）
+### 条件不一致（6件）
 
-- 【40代、50代、60代、70代以上の女性限定】フェムケア商材モニター様募集【高報酬！】親子、お友達と一緒に応募もOK！
-  URL: https://crowdworks.jp/public/jobs/13536188
+- 【資格保有者限定】ネズミ駆除サイトの記事監修者を募集します
+  URL: https://crowdworks.jp/public/jobs/13537433
 - 【長期・フルタイム可能な方歓迎】在宅電話対応スタッフ
   URL: https://crowdworks.jp/public/jobs/13526496
-- 三重県桑名市★高級腕時計店の覆面調査（ミステリーショッパー）店舗訪問 11月5日（木）～11月11日（水）女性限定の調査
-  URL: https://crowdworks.jp/public/jobs/13536146
-- 【在宅・フルリモート】クロージング業務・営業代行
-  URL: https://crowdworks.jp/public/jobs/13536108
-- 【25〜35歳/女性限定】宅配食の広告動画モデル
-  URL: https://crowdworks.jp/public/jobs/13536186
-- 【美容好き歓迎♡】美容サロンを支えるオンライン秘書募集｜予約管理・事務サポート✨
-  URL: https://crowdworks.jp/public/jobs/13536252
-- 在宅可能！9時~20時！シフト自由。コールセンター、予約受付代行のお仕事
-  URL: https://crowdworks.jp/public/jobs/13536254
-- 【20代女性限定】頑張った自分へのご褒美に♪グルメ・ご飯屋さんのバナー作成
-  URL: https://crowdworks.jp/public/jobs/13536266
+- 【男性限定！】科学・心理学YouTubeチャンネルの男性ナレーター募集 【継続案件】
+  URL: https://crowdworks.jp/public/jobs/13537422
+- 【報酬15400円】※女性限定※ 個人鑑賞用シチュエーションボイスの収録
+  URL: https://crowdworks.jp/public/jobs/13537343
 - 【営業代行メンバー募集】インサイドセールス・zoom営業
   URL: https://crowdworks.jp/public/jobs/13525813
 - 医療職歓迎】医療経験を活かすオンライン秘書募集
   URL: https://crowdworks.jp/public/jobs/13516250
 
-### SNS運用代行（14件）
+### SNS運用代行（11件）
 
-- 【未経験歓迎】SNS運用サポートメンバー募集！
-  URL: https://crowdworks.jp/public/jobs/13525449
-- 🔰「SNS運用実績がない…」と悩んでいませんか？🔰 未経験からSNS運用パートナーに挑戦！
-  URL: https://crowdworks.jp/public/jobs/13536242
-- 【未経験OK】Threadsの投稿作成・アカウント運用サポート｜完全在宅
-  URL: https://crowdworks.jp/public/jobs/13536172
-- ”Instagramマーケティング”集客実践！
-  URL: https://crowdworks.jp/public/jobs/13519746
-- 【法人向けSNS運用】経営者発信動画の編集アシスタント募集｜ディレクター指示あり｜未経験可・マニュアル完備
-  URL: https://crowdworks.jp/public/jobs/13531573
+- バズる SNS の企画立案から撮影まで行うスタッフを福岡県で募集したい
+  URL: https://crowdworks.jp/public/jobs/13537419
 - 【法人向けSNS運用】経営者発信動画の編集アシスタント募集｜ディレクター指示あり｜未経験可・マニュアル完備
   URL: https://crowdworks.jp/public/jobs/13531575
-- AIで作った画像を差し込む、30秒〜1分の縦型ショート動画の編集をお願いします
-  URL: https://crowdworks.jp/public/jobs/13532271
-- 【未経験OK /動画編集】インスタグラムリール動画　9：16　制作／編集
-  URL: https://crowdworks.jp/public/jobs/13535652
+- ”Instagramマーケティング”集客実践！
+  URL: https://crowdworks.jp/public/jobs/13519746
 - 【完全在宅🍀】SNS運用代行サポート｜未経験・会社員大歓迎/1投稿3,000円
   URL: https://crowdworks.jp/public/jobs/13521715
 - 【サンプル動画ありで未経験の方の実績あります✨】30秒ほどのリール動画作成依頼！
   URL: https://crowdworks.jp/public/jobs/13502334
-- 【SNSを見るのが好きな方へ📱】20代から始めるInstagram運用のお仕事！
-  URL: https://crowdworks.jp/public/jobs/13536289
+- AIで作った画像を差し込む、30秒〜1分の縦型ショート動画の編集をお願いします
+  URL: https://crowdworks.jp/public/jobs/13532271
+- 【未経験OK /動画編集】インスタグラムリール動画　9：16　制作／編集
+  URL: https://crowdworks.jp/public/jobs/13535652
+- 【法人向けSNS運用】経営者発信動画の編集アシスタント募集｜ディレクター指示あり｜未経験可・マニュアル完備
+  URL: https://crowdworks.jp/public/jobs/13531573
+- 【未経験歓迎】SNS運用サポートメンバー募集！
+  URL: https://crowdworks.jp/public/jobs/13525449
 - 🤖【業務委託】AI技術を活用したSNSコンテンツ制作（画像・動画）の効率化および運用パートナー募集🤖
   URL: https://crowdworks.jp/public/jobs/13529634
 - ✨【AI×アカウント運用】AIスキルを次のステージへ｜長期パートナー募集✨
   URL: https://crowdworks.jp/public/jobs/13529433
-- 【在宅・AI活用】資料作成・画像作成・動画編集・SNS運用などの業務サポート｜経験を活かせる方歓迎
-  URL: https://crowdworks.jp/public/jobs/13513668
 
 ### 必須条件不一致（資格・専門実務）（1件）
 
 - 【継続/即決】補助金申請全般を代行していただける方
   URL: https://crowdworks.jp/public/jobs/13521222
 
-### 対応不可（Knowledge判定）（87件）
+### 対応不可（Knowledge判定）（74件）
 
+- 【完全在宅】女性スタッフ活躍中！オンライン営業スタッフ募集
+  URL: https://crowdworks.jp/public/jobs/13499312
+- ≪長期依頼≫YouTubeチャンネル登録者数10万人を超える野球系YouTube動画の編集者様を募集しております。
+  URL: https://crowdworks.jp/public/jobs/13532218
 - 【初案件可】簡単なショート動画編集に携わっていただける編集者を募集！
   URL: https://crowdworks.jp/public/jobs/13532822
-- 【月80h・フルリモート】Claude Codeを使いこなすWebディレクター募集（AIマーケ支援会社）
-  URL: https://crowdworks.jp/public/jobs/13536244
-- 【女性インナー商品監修】AEA上級・AJESTHE認定上級エステティシャン資格保有者募集
-  URL: https://crowdworks.jp/public/jobs/13536230
-- 石川県金沢(11月)・ウェディング1.5次会や2次会のスナップ写真
-  URL: https://crowdworks.jp/public/jobs/13536224
-- <<急募‼️>>【継続依頼】SNS男性スキンケア広告用肌モデル様募集‼️
-  URL: https://crowdworks.jp/public/jobs/13536222
-- 【1本2,800円〜｜未経験・初心者歓迎】完全在宅でできる動画編集スタッフ募集！
-  URL: https://crowdworks.jp/public/jobs/13500686
-- 【継続依頼】YouTubeで無職転生の解説動画の監修・ディレクター業務をして頂ける方募集！
-  URL: https://crowdworks.jp/public/jobs/13511216
-- 【インバウンド・英語使います】東京で外国人観光客を案内するツアーガイド
-  URL: https://crowdworks.jp/public/jobs/13536220
-- <<急募‼️>>【継続依頼】SNS女性スキンケア広告用肌モデル様募集‼️
-  URL: https://crowdworks.jp/public/jobs/13536219
-- 【長期継続、大量募集あり】ガンダム系アニメの反応集ショート動画編集者さんを募集します
-  URL: https://crowdworks.jp/public/jobs/13536193
-- 【未経験歓迎】YouTubeマーケター募集｜登録者80万人超のチャンネルを「伸ばす側」へ｜月30万円〜
-  URL: https://crowdworks.jp/public/jobs/13505229
-- 【完全在宅・未経験歓迎】PR業務に伴うカンタンな事務作業！（副業OK）
-  URL: https://crowdworks.jp/public/jobs/13536179
-- 【ゴルフ好き歓迎】新しいゴルフ用品ネットショップのSNS販売パートナー募集
-  URL: https://crowdworks.jp/public/jobs/13536170
-- X（旧Twitter）のDM営業【単純作業コツコツやれる方向き】
-  URL: https://crowdworks.jp/public/jobs/13536167
-- zoomセールスできる営業マンを募集しています(月収50万円以上目指せる)
-  URL: https://crowdworks.jp/public/jobs/13536148
-- 【継続案件あり】IT分野に強い取材・記事執筆ライター募集｜システム開発・インフラ・セキュリティなど
-  URL: https://crowdworks.jp/public/jobs/13536162
-- 【異世界転生好きな方！】効果音・構成・演出で漫画をもっと面白く！男性向け漫画仕上げスタッフ募集！
-  URL: https://crowdworks.jp/public/jobs/13536115
-- 【完全在宅×夜間】オンライン講座のカスタマーサポート事務｜LINE返信・顧客管理｜事務経験者歓迎◎1日4時間～
-  URL: https://crowdworks.jp/public/jobs/13536123
-- 【商談1件3,000〜5,000円＋受注で20%】システム開発・AI導入・デザイン制作の（商談獲得）パートナー募集
-  URL: https://crowdworks.jp/public/jobs/13536129
-- 【週3日～・1日4時間～】オンライン講座のお客様をサポート！問い合わせ対応・顧客管理などのCS事務／完全在宅・長期
-  URL: https://crowdworks.jp/public/jobs/13535820
-- 【獣医師免許をお持ちの方】診療経験をペットの健康教育へ！オンライン講師・動画出演／フルリモート
-  URL: https://crowdworks.jp/public/jobs/13534373
-- 【ペット整体経験者募集】講師未経験OK！施術経験を活かすオンライン技術指導・動画出演／月30万円～
-  URL: https://crowdworks.jp/public/jobs/13534381
-- AI×リスティング広告の入稿のご依頼ができる方
-  URL: https://crowdworks.jp/public/jobs/13532711
-- ＜＜急募＞＞【既存Illustratorデータあり】パンフレットの見開き2ページ分の修正作業
-  URL: https://crowdworks.jp/public/jobs/13536177
-- 【経験や実績は問いません！】SNS集客のための動画制作のご依頼
-  URL: https://crowdworks.jp/public/jobs/13497186
-- 【在宅ワーク】スキマ時間を活用したSNS動画のデザインスタッフ募集！
-  URL: https://crowdworks.jp/public/jobs/13512836
-- 【デザイン急募】牛農場の看板デザイン
-  URL: https://crowdworks.jp/public/jobs/13514661
-- 初案件にピッタリの簡単ショート動画制作！【未経験可】
-  URL: https://crowdworks.jp/public/jobs/13502944
-- 【将来の選択肢を広げたい方へ】SNSショート動画編集のお仕事／継続依頼あり
-  URL: https://crowdworks.jp/public/jobs/13519369
-- 【AIツールを活用した制作もOK】Instagramリール動画の制作スタッフ募集！
-  URL: https://crowdworks.jp/public/jobs/13518456
-- 【デザインのスキルを存分に活かせるお仕事です！】SNS動画作成のお仕事♪
-  URL: https://crowdworks.jp/public/jobs/13515209
-- Web掲載用の画像を整える・情報を入力するお仕事
-  URL: https://crowdworks.jp/public/jobs/13536261
-- 【持ち家・土地をお持ちの方】住まいのこれからについてのオンラインインタビュー（Google Meet・25分程度）
-  URL: https://crowdworks.jp/public/jobs/13503912
-- 【初心者でもスキルあれば！】YouTubeチャンネル内の動画編集業務　※継続あり
-  URL: https://crowdworks.jp/public/jobs/13518416
-- 完全在宅・フルリモート｜コールスタッフ（電話オペレーター・電話調査員）募集
-  URL: https://crowdworks.jp/public/jobs/13513232
+- 【賞金30万円】スロットゲームのキービジュアル募集｜提出はイラスト1枚だけ・継続依頼あり
+  URL: https://crowdworks.jp/public/jobs/13537461
+- 20代歓迎！「明日休み！」のワクワクを動画に🌙 ショート動画編集｜未経験OK◎
+  URL: https://crowdworks.jp/public/jobs/13537106
+- YouTube動画用BGMとしてオリジナル楽曲の制作※TuneCore審査対応必須
+  URL: https://crowdworks.jp/public/jobs/13537457
+- 【1コマ3,000円／オンライン】"初回カウンセリング担当者"募集！モチベーションを高めるのが得意な方へ
+  URL: https://crowdworks.jp/public/jobs/13503079
+- 【生成AI動画クリエイター募集】映画・ショートドラマのような感動系企業CM制作｜継続依頼あり
+  URL: https://crowdworks.jp/public/jobs/13536168
+- 【美容が好き、その経験をSNSでも活かしてみませんか？】
+  URL: https://crowdworks.jp/public/jobs/13507066
+- 【在宅ワーク・スマホでOK】住宅カタログを見てカンタンな感想を送るだけ
+  URL: https://crowdworks.jp/public/jobs/13440081
+- 【主婦・主夫の方も歓迎】スキマ時間にカタログを見て感想送るだけのお仕事
+  URL: https://crowdworks.jp/public/jobs/13501638
+- 【もちもち食感🍡】スイーツのASMRショート動画編集｜素材支給・1本3,000円・月4本〜
+  URL: https://crowdworks.jp/public/jobs/13535656
+- 【秋冬くすみカラー✨】低彩度メイクのInstagramリール動画編集｜素材・構成案完備／1本2,800円
+  URL: https://crowdworks.jp/public/jobs/13535569
+- 【何秒でできる？⏱】身近なことを計ってみる検証ショート動画編集パートナー募集！｜素材・構成案完備・1本3,000円
+  URL: https://crowdworks.jp/public/jobs/13535491
+- 【動画編集最初の一歩に🎬】1話1分の「縦型ショートドラマ」編集アシスタント｜台本・撮影素材支給あり｜1本2,500円
+  URL: https://crowdworks.jp/public/jobs/13535297
+- 採用や人事に関する生成AI（Claude Code など） の活用を5分間プレゼンしてくれる方を大募集
+  URL: https://crowdworks.jp/public/jobs/13537418
+- HPE Nimble Storage HF20に障害が発生しており、復旧方法について相談したい
+  URL: https://crowdworks.jp/public/jobs/13537412
+- シミがある方歓迎！！スマホで自宅で撮影！素材撮影ができる方を募集！
+  URL: https://crowdworks.jp/public/jobs/13537383
+- 男性歓迎！！スマホで自宅で撮影！素材撮影ができる方を募集！
+  URL: https://crowdworks.jp/public/jobs/13537382
+- 【撮影不要】結婚式の前撮り写真をご提供いただける方募集
+  URL: https://crowdworks.jp/public/jobs/13537364
+- 【20代〜40代の方が活躍中！】30秒ほどの短尺動画編集スタッフ募集！
+  URL: https://crowdworks.jp/public/jobs/13537359
 - 【デザインのお仕事にこれから挑戦したい方も歓迎です！】Instagramリール動画のデザイン作業を担当いただける方を募集します。
   URL: https://crowdworks.jp/public/jobs/13502429
 - 【週1〜/フルリモートOK/時給2000〜4000円】子ども向けオンライン運動教室の運動コーチ職を募集！
   URL: https://crowdworks.jp/public/jobs/13522632
-- 【これから動画編集で食べていきたいと考えている方！】ゲーム好き！初心者ok！VtuberのYouTube編集 学生・主婦 大歓迎
-  URL: https://crowdworks.jp/public/jobs/13522471
-- 【営業力に自信のある方へ！】個人向け商材のオンライン営業メンバー募集✨
-  URL: https://crowdworks.jp/public/jobs/13511502
-- ≪長期依頼≫YouTubeチャンネル登録者数10万人を超える野球系YouTube動画の編集者様を募集しております。
-  URL: https://crowdworks.jp/public/jobs/13532218
-- 【ポートフォリオへの掲載も可能です！】Instagram短尺動画制作の依頼
-  URL: https://crowdworks.jp/public/jobs/13502531
-- 【生成AI動画クリエイター募集】映画・ショートドラマのような感動系企業CM制作｜継続依頼あり
-  URL: https://crowdworks.jp/public/jobs/13536168
-- 【経験が浅くてもOK】SNS用動画コンテンツの制作をサポートしてくださる編集スタッフ募集
-  URL: https://crowdworks.jp/public/jobs/13500659
-- 【追加募集（10月募集）】ネイティブ日本語話者による日本語・英語発話音声録音作業
-  URL: https://crowdworks.jp/public/jobs/13520938
-- 自分のペースでできる画像編集とデータ入力
-  URL: https://crowdworks.jp/public/jobs/13536267
-- 【1コマ3,000円／オンライン】"初回カウンセリング担当者"募集！モチベーションを高めるのが得意な方へ
-  URL: https://crowdworks.jp/public/jobs/13503079
-- 【20代〜40代の方が活躍中！】30秒ほどの短尺動画編集スタッフ募集！
-  URL: https://crowdworks.jp/public/jobs/13519254
-- 【子育てママさん、育休中の方大活躍中！】インスタグラムDM送信の作業依頼！
-  URL: https://crowdworks.jp/public/jobs/13531070
+- 【持ち家・土地をお持ちの方】住まいのこれからについてのオンラインインタビュー（Google Meet・25分程度）
+  URL: https://crowdworks.jp/public/jobs/13503912
+- セミナー動画のアシスタントMC
+  URL: https://crowdworks.jp/public/jobs/13536691
 - 【実力者募集！】LINEマーケター｜30万円 ＋ ボーナス ＋ インセンティブ【急成長中！最大級の報酬設計！】
   URL: https://crowdworks.jp/public/jobs/13488884
-- 【完全在宅】女性スタッフ活躍中！オンライン営業スタッフ募集
-  URL: https://crowdworks.jp/public/jobs/13499312
-- 【10日間で最大70,000円の報酬チャンス】短い動画をチェックして「何をしているか」を入力するお仕事【在宅／初心者歓迎】
-  URL: https://crowdworks.jp/public/jobs/13517330
-- 【データ入力/未経験可】SNS投稿用の文章作成/入力
-  URL: https://crowdworks.jp/public/jobs/13533816
-- 【画像編集、デザインの経験あればOK】商品画像の背景加工依頼
-  URL: https://crowdworks.jp/public/jobs/13511569
-- タレントのインタビュー、広告、YouTube番組の撮影
-  URL: https://crowdworks.jp/public/jobs/13514444
-- 【在宅でコツコツ作業したい方へ！！】商品画像のデザイン加工依頼✨
-  URL: https://crowdworks.jp/public/jobs/13518322
-- 【動画編集経験6ヶ月以上の方】ショート動画編集者募集！Premiere Pro初心者OK・継続依頼あり・在宅副業
-  URL: https://crowdworks.jp/public/jobs/13536273
-- 【超カンタン！】完全在宅・スキマ時間｜インスタグラムDM送信｜女性ファッション誌の広告企画｜短期OK｜主婦の方大歓迎！
-  URL: https://crowdworks.jp/public/jobs/13535123
-- 【完全在宅・未経験可】賃貸情報のSNS投稿スタッフ｜Instagram・TikTok
-  URL: https://crowdworks.jp/public/jobs/13496082
-- [在宅ワーク]月8〜時間｜事務サポート募集（電話なし）
-  URL: https://crowdworks.jp/public/jobs/13509946
+- 【1本2,800円〜｜未経験・初心者歓迎】完全在宅でできる動画編集スタッフ募集！
+  URL: https://crowdworks.jp/public/jobs/13500686
+- 【30秒ほどの動画製作】在宅未経験でもOK 編集アシスタント募集
+  URL: https://crowdworks.jp/public/jobs/13536398
+- 対談動画撮影・編集（テロップ付き）
+  URL: https://crowdworks.jp/public/jobs/13536789
+- 初案件にピッタリの簡単ショート動画制作！【未経験可】
+  URL: https://crowdworks.jp/public/jobs/13502944
 - 【ゲーム好きや配信をよく見る方！】動画編集のお仕事！VtuberのYouTube切り抜き 主婦、学生、大歓迎
   URL: https://crowdworks.jp/public/jobs/13498979
 - 【子育てママさん活躍中！】スキマ時間を使った商品画像を加工するお仕事
   URL: https://crowdworks.jp/public/jobs/13519658
-- 【主婦さん・初心者ユーザー大歓迎！ 】無料スマホゲームを《1日３つプレイ》するだけ♫ ［実績になる][マニュアル付き]
-  URL: https://crowdworks.jp/public/jobs/13531840
+- 【継続依頼】YouTubeで無職転生の解説動画の監修・ディレクター業務をして頂ける方募集！
+  URL: https://crowdworks.jp/public/jobs/13511216
+- 【画像編集、デザインの経験あればOK】商品画像の背景加工依頼
+  URL: https://crowdworks.jp/public/jobs/13511569
 - 【完全在宅】SNS情報発信スタッフ募集｜未経験歓迎・スマホで活動可能
   URL: https://crowdworks.jp/public/jobs/13514926
-- 【1時間で6,000円】関東の戸建てにお住まいの方｜無料診断アンケート募集【未経験歓迎！】
-  URL: https://crowdworks.jp/public/jobs/13509355
+- 【AIツールを活用した制作もOK】Instagramリール動画の制作スタッフ募集！
+  URL: https://crowdworks.jp/public/jobs/13518456
 - 【未経験OK！】WEBデザイン講義を見て、かんたんな感想を書くお仕事です！【実績になる！】
   URL: https://crowdworks.jp/public/jobs/13505568
-- 問い合わせフォームからの営業文送信代行（コピペ中心・マニュアル完備／未経験可）
-  URL: https://crowdworks.jp/public/jobs/13536296
-- 画像やデータを整える在宅サポートスタッフ
-  URL: https://crowdworks.jp/public/jobs/13536298
-- 画像の加工と情報入力をお手伝いいただける方募集
-  URL: https://crowdworks.jp/public/jobs/13536301
-- 介護リフォームのチラシデザイン
-  URL: https://crowdworks.jp/public/jobs/13536302
+- 【営業力に自信のある方へ！】個人向け商材のオンライン営業メンバー募集✨
+  URL: https://crowdworks.jp/public/jobs/13511502
+- 【在宅でコツコツ作業したい方へ！！】商品画像のデザイン加工依頼✨
+  URL: https://crowdworks.jp/public/jobs/13518322
+- 【初心者でもスキルあれば！】YouTubeチャンネル内の動画編集業務　※継続あり
+  URL: https://crowdworks.jp/public/jobs/13518416
+- 【将来の選択肢を広げたい方へ】SNSショート動画編集のお仕事／継続依頼あり
+  URL: https://crowdworks.jp/public/jobs/13519369
+- 【在宅ワーク】スキマ時間を活用したSNS動画のデザインスタッフ募集！
+  URL: https://crowdworks.jp/public/jobs/13512836
+- タレントのインタビュー、広告、YouTube番組の撮影
+  URL: https://crowdworks.jp/public/jobs/13514444
+- 【10日間で最大70,000円の報酬チャンス】短い動画をチェックして「何をしているか」を入力するお仕事【在宅／初心者歓迎】
+  URL: https://crowdworks.jp/public/jobs/13517330
+- 【データ入力/未経験可】SNS投稿用の文章作成/入力
+  URL: https://crowdworks.jp/public/jobs/13533816
+- 【主婦さん・初心者ユーザー大歓迎！ 】無料スマホゲームを《1日３つプレイ》するだけ♫ ［実績になる][マニュアル付き]
+  URL: https://crowdworks.jp/public/jobs/13531840
+- 完全在宅・フルリモート｜コールスタッフ（電話オペレーター・電話調査員）募集
+  URL: https://crowdworks.jp/public/jobs/13513232
+- 【ポートフォリオへの掲載も可能です！】Instagram短尺動画制作の依頼
+  URL: https://crowdworks.jp/public/jobs/13502531
+- 【超カンタン！】完全在宅・スキマ時間｜インスタグラムDM送信｜女性ファッション誌の広告企画｜短期OK｜主婦の方大歓迎！
+  URL: https://crowdworks.jp/public/jobs/13535123
+- 【デザインのスキルを存分に活かせるお仕事です！】SNS動画作成のお仕事♪
+  URL: https://crowdworks.jp/public/jobs/13515209
+- 【経験が浅くてもOK】SNS用動画コンテンツの制作をサポートしてくださる編集スタッフ募集
+  URL: https://crowdworks.jp/public/jobs/13500659
+- 【1時間で6,000円】関東の戸建てにお住まいの方｜無料診断アンケート募集【未経験歓迎！】
+  URL: https://crowdworks.jp/public/jobs/13509355
+- 【20代〜40代の方が活躍中！】30秒ほどの短尺動画編集スタッフ募集！
+  URL: https://crowdworks.jp/public/jobs/13519254
+- 【Excel入力】紙資料のデータ入力スタッフ募集♪ 継続依頼あり
+  URL: https://crowdworks.jp/public/jobs/13537478
+- 【医療系データに関するエクセル作業☆初心者歓迎】
+  URL: https://crowdworks.jp/public/jobs/13535582
+- PDF社内マニュアルをWordへ転記・編集するお仕事
+  URL: https://crowdworks.jp/public/jobs/13535595
+- 【子育てママさん、育休中の方大活躍中！】インスタグラムDM送信の作業依頼！
+  URL: https://crowdworks.jp/public/jobs/13531070
+- 【長期継続・単価アップあり✨】推し活・イベント系のTikTokショート動画編集メンバー募集！｜マニュアル完備・初めてOK◎
+  URL: https://crowdworks.jp/public/jobs/13537481
+- 【これから動画編集で食べていきたいと考えている方！】ゲーム好き！初心者ok！VtuberのYouTube編集 学生・主婦 大歓迎
+  URL: https://crowdworks.jp/public/jobs/13522471
+- 【追加募集（10月募集）】ネイティブ日本語話者による日本語・英語発話音声録音作業
+  URL: https://crowdworks.jp/public/jobs/13520938
 - SNSの企画書やコンテンツ制作、分析スタッフ募集(スカウト用)
   URL: https://crowdworks.jp/public/jobs/13536085
-- 【継続依頼あり】AIを活用した漫画広告のリメイク・絵柄変更ができる方を募集！
-  URL: https://crowdworks.jp/public/jobs/13532846
 - 女性向け恋愛AI漫画のネーム・作画制作担当募集（商業案件）
   URL: https://crowdworks.jp/public/jobs/13527573
 - 【主婦大歓迎／長期継続あり】台本からのAI音声生成（Fish Audio）＋AI図解画像生成（ChatGPT）※マニュアルあり
@@ -642,33 +680,26 @@
   URL: https://crowdworks.jp/public/jobs/13515274
 - 【非エンジニア歓迎】Jev や Claude Code に関して5分の、やさしいLT（プチ発表）募集
   URL: https://crowdworks.jp/public/jobs/13501089
-- 【高単価！顔出し不要・完全在宅】ChatGPT教材動画の制作にご協力いただける講師の方を募集します
-  URL: https://crowdworks.jp/public/jobs/13498014
-- 歌唱用AIボイスモデル（RVC等）のオーダーメイド制作｜声質指定・複数ソフト対応形式での納品
-  URL: https://crowdworks.jp/public/jobs/13495401
-- 【1講座20,000円】転職支援講座のカリキュラム作成者募集(AI活用可/設計未経験OK)
-  URL: https://crowdworks.jp/public/jobs/13533654
+- 【1講座20,000円】美容講座のカリキュラム作成者募集(AI活用可/設計未経験OK)
+  URL: https://crowdworks.jp/public/jobs/13533637
   見送り理由: Stage1判定: 見送り（案件詳細の全文再評価で「対応不可（Knowledge判定）」に該当した）
-- 【1講座20,000円】英語講座のカリキュラム作成者募集(AI活用可/設計未経験OK)
-  URL: https://crowdworks.jp/public/jobs/13533660
-  見送り理由: Stage1判定: 見送り（案件詳細の全文再評価で「対応不可（Knowledge判定）」に該当した）
-- 【1講座20,000円】自己理解講座のカリキュラム作成者募集(AI活用可/設計未経験OK)
-  URL: https://crowdworks.jp/public/jobs/13533657
-  見送り理由: Stage1判定: 見送り（案件詳細の全文再評価で「対応不可（Knowledge判定）」に該当した）
-- 【1講座20,000円】婚活講座のカリキュラム作成者募集(AI活用可/設計未経験OK)
-  URL: https://crowdworks.jp/public/jobs/13533694
-  見送り理由: Stage1判定: 見送り（案件詳細の全文再評価で「対応不可（Knowledge判定）」に該当した）
-- 【1講座20,000円】モンテッソーリ講座のカリキュラム作成者募集(AI活用可/設計未経験OK)
-  URL: https://crowdworks.jp/public/jobs/13533698
+- 【1講座20,000円】体質改善講座のカリキュラム作成者募集(AI活用可/設計未経験OK)
+  URL: https://crowdworks.jp/public/jobs/13533648
   見送り理由: Stage1判定: 見送り（案件詳細の全文再評価で「対応不可（Knowledge判定）」に該当した）
 - 【1講座20,000円】恋愛講座のカリキュラム作成者募集(AI活用可/設計未経験OK)
   URL: https://crowdworks.jp/public/jobs/13533665
   見送り理由: Stage1判定: 見送り（案件詳細の全文再評価で「対応不可（Knowledge判定）」に該当した）
-- 【1講座20,000円】看護師国試対策講座のカリキュラム作成者募集(AI活用可/設計未経験OK)
-  URL: https://crowdworks.jp/public/jobs/13533712
+- 【1講座20,000円】モンテッソーリ講座のカリキュラム作成者募集(AI活用可/設計未経験OK)
+  URL: https://crowdworks.jp/public/jobs/13533698
+  見送り理由: Stage1判定: 見送り（案件詳細の全文再評価で「対応不可（Knowledge判定）」に該当した）
+- 【1講座20,000円】婚活講座のカリキュラム作成者募集(AI活用可/設計未経験OK)
+  URL: https://crowdworks.jp/public/jobs/13533694
   見送り理由: Stage1判定: 見送り（案件詳細の全文再評価で「対応不可（Knowledge判定）」に該当した）
 - 【1講座20,000円】薬剤師国試対策講座のカリキュラム作成者募集(AI活用可/設計未経験OK)
   URL: https://crowdworks.jp/public/jobs/13533709
+  見送り理由: Stage1判定: 見送り（案件詳細の全文再評価で「対応不可（Knowledge判定）」に該当した）
+- 【1講座20,000円】看護師国試対策講座のカリキュラム作成者募集(AI活用可/設計未経験OK)
+  URL: https://crowdworks.jp/public/jobs/13533712
   見送り理由: Stage1判定: 見送り（案件詳細の全文再評価で「対応不可（Knowledge判定）」に該当した）
 - 【1講座20,000円】夫婦関係講座のカリキュラム作成者募集(AI活用可/設計未経験OK)
   URL: https://crowdworks.jp/public/jobs/13533703
