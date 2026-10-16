@@ -26,6 +26,7 @@
 //   9. 応募時回答項目の緩やかな検知（見出し不一致でも消失させない）
 const { evaluateJob, normalizeFullWidthDigits } = require('./evaluator');
 const { classifyCapability } = require('./knowledge-classifier');
+const { detectSelectionSignals } = require('./application-conditions');
 const {
   APPLICANT_ATTRIBUTE_EXCLUDE_PATTERNS,
   APPLICANT_ATTRIBUTE_CAUTION_PATTERNS,
@@ -243,6 +244,39 @@ function evaluateWithCategory(detail) {
   if (domainExperience && !hasFoodContextConfirmation(text)) {
     categoryMatchNotes.push('飲食テーマ理解（ドメイン経験）は却下：飲食・店舗運営を示す語が本文に見つからない');
     domainExperience = null;
+  }
+
+  // 修正9：本文中の付随的な1語で、案件の主題とは別のカテゴリーに先頭一致してしまう誤分類の補正。
+  // taskCategoriesは優先順位付きの先頭一致のため、本文の途中に出る「業務効率化」等の1語が、
+  // タイトルが示す実際の職種（例：セールスライター）より先に一致することがある。
+  // 一致カテゴリーの語がタイトルに1つも無く、かつ別カテゴリーの語がタイトルにある場合に限り、
+  // タイトルに一致するカテゴリーのうち本文の一致語数が最多のものを選び、その語数が元のカテゴリーの
+  // 本文一致語数を上回る場合に限って差し替える（同数以下は従来どおり＝判定を変えない）。
+  // 判定値（応募可能度・証拠区分・必須能力・不足証拠・判定根拠）は、そのカテゴリー単独で
+  // classifyCapability()を再実行して得るため、新しい判定基準は追加しない。
+  if (matchedCategory && !excluded) {
+    const titleText = stripNegatedPhrasesLocal(normalizeFullWidthDigits(detail.title || ''));
+    const countHits = (txt, cat) => cat.patterns.filter(p => txt.toLowerCase().includes(String(p).toLowerCase())).length;
+    if (countHits(titleText, matchedCategory) === 0) {
+      const titleCandidates = yukiProfile.taskCategories.filter(c => c.id !== matchedCategory.id && countHits(titleText, c) > 0);
+      if (titleCandidates.length > 0) {
+        const best = titleCandidates.reduce((a, b) => (countHits(text, b) > countHits(text, a) ? b : a));
+        const rematched = countHits(text, best) > countHits(text, matchedCategory)
+          ? classifyCapability(text, { ...yukiProfile, taskCategories: [best] })
+          : null;
+        if (rematched && rematched.matchedCategory && rematched.matchedCategory.id === best.id) {
+          categoryMatchNotes.push(`カテゴリー補正：本文の付随語で「${matchedCategory.label}」に先頭一致したが、タイトルが示す主題に合う「${best.label}」へ差し替え`);
+          matchedCategory = rematched.matchedCategory;
+          capabilityStatus = rematched.capabilityStatus;
+          evidenceType = rematched.evidenceType;
+          capabilityReason = rematched.capabilityReason;
+          matchedCapabilities = rematched.matchedCapabilities;
+          missingEvidenceList = rematched.missingEvidence;
+          decisionSource = rematched.decisionSource;
+          domainExperience = hasFoodContextConfirmation(text) ? rematched.domainExperience : null;
+        }
+      }
+    }
   }
 
   return {
@@ -703,8 +737,34 @@ function buildClientValueChain(searchSystemResult, usableExperience) {
 // ===== 10. 不足情報 =====
 // Knowledgeで既に答えが分かっている項目は再度質問しない。修正2：Knowledgeに使用実績のないツール
 // （Notion等）は不足情報として明示する。
-function buildMissingInformation(conditions, searchSystemResult, toolFit) {
+function buildMissingInformation(conditions, searchSystemResult, toolFit, signals = null) {
   const missing = [];
+
+  // 案件全文から検出した、応募可否・契約条件に関わる重要事項（application-conditions.js）
+  if (signals) {
+    if (signals.age.level === 'hard') {
+      missing.push({ item: '年齢条件の確認', detail: signals.age.excerpt, reason: '応募者の年齢・年代を求める記載があり、年齢はCommon Knowledgeに登録されていない（未開示）ため本人確認が必要' });
+    }
+    if (signals.qualification && signals.qualification.detected) {
+      missing.push({ item: '応募資格（資格・職業・経験の限定）の確認', detail: signals.qualification.excerpt, reason: '応募者の資格・職業・経験を限定する記載があり、Knowledgeで満たすことを確認できないため' });
+    }
+    if (signals.requiredExperience && signals.requiredExperience.detected) {
+      missing.push({ item: '必須の経験の確認', detail: signals.requiredExperience.excerpt, reason: '応募条件に必須の経験が明記されており、登録済みの経験・作品でカバーできるか判断できないため' });
+    }
+    if (signals.specialApply.detected) {
+      missing.push({ item: '特殊な応募方式への対応', detail: signals.specialApply.excerpts.join(' / '), reason: '応募画面での指定入力や外部フォーム等、通常と異なる応募方法が指定されているため' });
+    }
+    if (signals.workConstraint.detected && conditions.workHours.status !== 'extracted') {
+      missing.push({ item: '稼働条件（具体的な拘束）の対応可否', detail: signals.workConstraint.excerpts.join(' / '), reason: 'Common Knowledgeには具体的な稼働可能時間の記載がないため' });
+    }
+    if (signals.requiredSubmission.uncovered.length > 0) {
+      missing.push({
+        item: `必須提出物の不足：${signals.requiredSubmission.uncovered.map(u => u.label).join('・')}`,
+        detail: signals.requiredSubmission.excerpt,
+        reason: '制作実績・ポートフォリオの提示が必須だが、同種の登録済み作品がないため',
+      });
+    }
+  }
 
   if (conditions.responseItems.status === 'extracted' && conditions.responseItems.value) {
     missing.push({ item: 'クライアント指定の質問への回答内容', detail: conditions.responseItems.value, reason: '案件が個別の回答項目を指定しているため' });
@@ -1025,7 +1085,8 @@ function analyzeJobDetail(detail) {
   const requestSummary = buildRequestSummary(detail, searchSystemResult, conditions);
   const clientPurpose = buildClientPurpose(detail, searchSystemResult);
   const fitAssessment = buildFitAssessment(conditions, searchSystemResult, toolFit);
-  const missingInformation = buildMissingInformation(conditions, searchSystemResult, toolFit);
+  const selectionSignals = detectSelectionSignals(detail.title, detail.description);
+  const missingInformation = buildMissingInformation(conditions, searchSystemResult, toolFit, selectionSignals);
   const safetyReview = buildSafetyReview(detail, searchSystemResult);
   const recommendation = buildRecommendation({ searchSystemResult, safetyReview, missingInformation, conditions, toolFit });
 
@@ -1071,6 +1132,11 @@ function analyzeJobDetail(detail) {
     evidence,
     clientValue: clientValueChain,
     missingInformation,
+    selectionSignals: {
+      ...selectionSignals,
+      categoryId: searchSystemResult.matchedCategory ? searchSystemResult.matchedCategory.id : null,
+      categoryLabel: searchSystemResult.matchedCategory ? searchSystemResult.matchedCategory.label : null,
+    },
     portfolioCandidates,
     safetyReview,
     recommendation,

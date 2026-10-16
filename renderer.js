@@ -22,6 +22,7 @@ function getReasonColor(reason) {
     '必須条件不一致（指定ツール）': '#8e44ad',
     '対応不可（Knowledge判定）': '#c0392b',
     '募集終了': '#95a5a6',
+    '同一発注者の連番募集（集約）': '#7f8c8d',
   }[reason] || '#555';
 }
 
@@ -141,6 +142,12 @@ function renderJobCard(job, i, isTop3 = false) {
         <div class="detail-text">${job.missingAssets.map(escapeHtml).join('、')}</div>
       </div>` : ''}
 
+      ${(job.growthActions && job.growthActions.length > 0) ? `
+      <div class="detail-section missing">
+        <div class="detail-label">▶ 補う行動</div>
+        <div class="detail-text">${job.growthActions.map(escapeHtml).join('<br>')}</div>
+      </div>` : ''}
+
       <div class="detail-section caution">
         <div class="detail-label">⚠️ 注意点</div>
         <div class="detail-text">${escapeHtml(job.caution)}</div>
@@ -238,7 +245,7 @@ function renderHTML({ nowApply, highValueChallenge = [], normalChallenge = [], c
     acc[j.excludeReason] = (acc[j.excludeReason] || 0) + 1;
     return acc;
   }, {});
-  const reasonOrder = ['応募済み', '見送り', '既出', '募集終了', '単価が低すぎる', '条件不一致', '条件不一致（属性）', 'SNS運用代行', 'リスクあり', '必須条件不一致（資格・専門実務）', '必須条件不一致（指定ツール）', '対応不可（Knowledge判定）'];
+  const reasonOrder = ['応募済み', '見送り', '既出', '募集終了', '単価が低すぎる', '条件不一致', '条件不一致（属性）', 'SNS運用代行', 'リスクあり', '必須条件不一致（資格・専門実務）', '必須条件不一致（指定ツール）', '対応不可（Knowledge判定）', '同一発注者の連番募集（集約）'];
   let excludedHtml = '';
   for (const reason of reasonOrder) {
     const list = excluded.filter(j => j.excludeReason === reason);
@@ -1268,7 +1275,8 @@ function renderMarkdown({ nowApply, highValueChallenge = [], normalChallenge = [
   md += `## 🔥 高単価チャレンジ（全${highValueChallenge.length}件）\n\n`;
   md += `直接実績は不足していても、強い代替証明があり、単価・継続性・長期資産性のいずれかが高い案件。\n\n`;
   highValueChallenge.forEach((job, i) => {
-    md += `${i + 1}. ${job.title}\n   URL: ${job.url}\n   報酬: ${job.price || '要確認'}\n   高単価と判断した理由: ${(job.highValueSignals || []).map(s => s.text).join('、') || 'なし'}\n   不足資産: ${(job.missingAssets || []).join('、') || 'なし'}\n\n`;
+    md += `${i + 1}. ${job.title}\n   URL: ${job.url}\n   報酬: ${job.price || '要確認'}\n   高単価と判断した理由: ${(job.highValueSignals || []).map(s => s.text).join('、') || 'なし'}\n   不足資産: ${(job.missingAssets || []).join('、') || 'なし'}${(job.growthActions || []).length > 0 ? `
+   補う行動: ${job.growthActions.join('、')}` : ''}\n\n`;
   });
 
   md += `## 🌱 通常チャレンジ（全${normalChallenge.length}件）\n\n`;
@@ -1279,7 +1287,8 @@ function renderMarkdown({ nowApply, highValueChallenge = [], normalChallenge = [
     md += `\n`;
   }
   normalChallenge.forEach((job, i) => {
-    md += `${i + 1}. ${job.title}\n   URL: ${job.url}\n   報酬: ${job.price || '要確認'}\n   不足資産: ${(job.missingAssets || []).join('、') || 'なし'}\n\n`;
+    md += `${i + 1}. ${job.title}\n   URL: ${job.url}\n   報酬: ${job.price || '要確認'}\n   不足資産: ${(job.missingAssets || []).join('、') || 'なし'}${(job.growthActions || []).length > 0 ? `
+   補う行動: ${job.growthActions.join('、')}` : ''}\n\n`;
   });
 
   md += `## ❓ 確認候補（全${confirmCandidates.length}件）\n\n`;
@@ -1294,7 +1303,7 @@ function renderMarkdown({ nowApply, highValueChallenge = [], normalChallenge = [
   });
 
   md += `## 🚫 除外（全${excluded.length}件）\n\n`;
-  const reasonOrder = ['応募済み', '見送り', '既出', '募集終了', '単価が低すぎる', '条件不一致', '条件不一致（属性）', 'SNS運用代行', 'リスクあり', '必須条件不一致（資格・専門実務）', '必須条件不一致（指定ツール）', '対応不可（Knowledge判定）'];
+  const reasonOrder = ['応募済み', '見送り', '既出', '募集終了', '単価が低すぎる', '条件不一致', '条件不一致（属性）', 'SNS運用代行', 'リスクあり', '必須条件不一致（資格・専門実務）', '必須条件不一致（指定ツール）', '対応不可（Knowledge判定）', '同一発注者の連番募集（集約）'];
   for (const reason of reasonOrder) {
     const list = excluded.filter(j => j.excludeReason === reason);
     if (list.length === 0) continue;

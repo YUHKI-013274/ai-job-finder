@@ -2083,6 +2083,189 @@ function cleanupFillerArtifacts(jobId) {
   cleanupFillerArtifacts(jobId);
 }
 
+{
+  // Ver1ブロッカー修正1：Stage1が「見送り（stop）」と判定した案件は「今すぐ応募」から外れ、除外（見送り理由つき）へ移る
+  const path = require('path');
+  const { saveJobAnalysis, JOB_ANALYSIS_DIR } = require('./analysis-store');
+  const { demoteStage1StoppedFromNowApply } = require('./run');
+  const stopId = 'X_STAGE1_STOP', okId = 'X_STAGE1_OK';
+  saveJobAnalysis(stopId, { jobId: stopId, recommendation: { value: 'stop', reasons: ['必須ツール（Illustrator）がKnowledge上の使用可能ツールにないため'] } });
+  saveJobAnalysis(okId, { jobId: okId, recommendation: { value: 'proceed', reasons: [] } });
+  const nowApplyList = [{ id: stopId, title: '停止案件', rank: 'A' }, { id: okId, title: '通常案件', rank: 'S' }, { id: 'X_NO_ANALYSIS', title: '分析なし案件', rank: 'A' }];
+  const excludedList = [];
+  const stopped = demoteStage1StoppedFromNowApply(nowApplyList, excludedList);
+  record('Stage1「見送り」案件は今すぐ応募から外れ、見送り理由つきの除外へ移る（他の案件・分析なし案件は残る）',
+    nowApplyList.map(j => j.id).join() === okId + ',X_NO_ANALYSIS' && stopped.length === 1 && excludedList.length === 1
+    && excludedList[0].excludeReason === '対応不可（Knowledge判定）' && /Illustrator/.test(excludedList[0].skipReason));
+  for (const id of [stopId, okId]) { try { fs.unlinkSync(path.join(JOB_ANALYSIS_DIR, id + '.json')); } catch { /* 後始末 */ } }
+}
+{
+  // Ver1ブロッカー修正2：本文の付随語（業務効率化）でなく、タイトルが示す主題（セールスライター）のカテゴリーで分析する
+  const writer = analyzer.analyzeJobDetail(detailFixture({
+    title: '【未経験歓迎】セールスライター｜LP・メール原稿の作成｜AI活用OK',
+    description: 'LPやメールの原稿を書くお仕事です。記事・ブログ・ライティングの経験を活かせます。ライターとして文章を作成します。選考では、AIを業務効率化のために上手に使えるかを確認します。',
+  }));
+  record('タイトルが示す主題（ライター）のカテゴリーで分析され、業務改善系の経験・能力が混ざらない',
+    writer.usableExperience.length > 0 && writer.usableExperience.every(e => e.id.startsWith('seo_article:'))
+    && !writer.searchSystemReevaluation.matchedCapabilities.includes('改善提案力')
+    && writer.searchSystemReevaluation.categoryMatchNotes.some(n => /カテゴリー補正/.test(n)));
+  const base = analyzer.analyzeJobDetail(detailFixture());
+  record('カテゴリー補正は同数以下では働かず、通常案件の分析結果を変えない',
+    !base.searchSystemReevaluation.categoryMatchNotes.some(n => /カテゴリー補正/.test(n)));
+}
+
+
+{
+  // ===== 案件選定精度：条件検出（application-conditions.js） =====
+  const cond = require('./application-conditions');
+  const age1 = cond.detectAgeCondition('募集要項\n・20代〜30代前半の方（読者層と同世代でよりリアルな執筆をお願いしたいため）');
+  record('年齢条件：「20代〜30代前半の方」を応募者の年齢条件（hard）として検出する', age1.level === 'hard');
+  record('年齢条件：「20代の方歓迎」は歓迎レベル（soft）で、要確認の対象にしない', cond.detectAgeCondition('・20代の方歓迎！').level === 'soft');
+  record('年齢条件：読者層の説明（20代向けメディア）は年齢条件として検出しない',
+    cond.detectAgeCondition('20代向けメディアに掲載する記事を作成します。20代が読んで共感できる内容です。').detected === false);
+  record('年齢条件：「年齢不問」は検出しない', cond.detectAgeCondition('性別・年齢・職歴不問').detected === false);
+
+  const apply1 = cond.detectSpecialApplyMethod('「時間単価：11円」→「新しい条件を提示」\n→✅固定報酬で11円✅と入力してご応募ください。');
+  record('特殊な応募方式：条件欄への指定入力（固定報酬で11円）を検出する', apply1.detected === true);
+  record('特殊な応募方式：通常の応募案内は検出しない', cond.detectSpecialApplyMethod('ご応募お待ちしております。簡単な自己紹介をお願いします。').detected === false);
+
+  record('稼働条件：「週15時間以上」を具体的な拘束として検出する', cond.detectWorkConstraint('・週15時間以上、週4日～').detected === true);
+  record('稼働条件：「週1日以上からご相談可能」は拘束として検出しない', cond.detectWorkConstraint('週1日以上からご相談可能です。').detected === false);
+
+  const sub1 = cond.detectRequiredSubmission('■ 応募条件（必須）\n・価格表、メニュー表、商品カタログなど、価格表に近い制作実績があること\n・応募時に、その実績がわかるポートフォリオを添付してください');
+  record('必須提出物：価格表・メニュー表の制作実績の提示を必須として検出し、同種の登録作品が無い（uncovered）と判定する',
+    sub1.required === true && sub1.uncovered.some(u => u.id === 'price_menu') && sub1.uncovered[0].action.length > 0);
+  record('必須提出物：「ポートフォリオがあれば添付」（任意）は必須としない', cond.detectRequiredSubmission('ポートフォリオがあれば添付してください。').required === false);
+  const sub2 = cond.detectRequiredSubmission('応募時に、記事のサンプルを提出してください。');
+  record('必須提出物：記事の提出は登録済みのAIライティング記事でカバーでき、不足にしない', sub2.required === true && sub2.uncovered.length === 0);
+
+  record('資格・職業の限定：「施工管理の経験が2年以上ある方に限る」を明確な資格不一致（mismatch）として検出する',
+    cond.detectQualificationMismatch('機械器具設置工事の施工管理の経験が2年以上ある方に限る。').level === 'mismatch');
+  record('資格・職業の限定：ゆうきの経歴領域（飲食）と重なる限定は除外せず確認（confirm）にとどめる',
+    cond.detectQualificationMismatch('飲食店の店長経験が3年以上ある方に限る。').level === 'confirm');
+}
+{
+  // ===== 案件選定精度：連番募集の集約・4分類・補充（job-selection.js） =====
+  const sel = require('./job-selection');
+  const mk = (id, title, extra = {}) => ({ id, title, url: `https://crowdworks.jp/public/jobs/${id}`, price: '20,000円', rank: 'A', totalScore: 50, displayTier: 'now', ...extra });
+  const series = [
+    mk('S1', '【1講座20,000円】夫婦関係講座のカリキュラム作成者募集(AI活用可/設計未経験OK)'),
+    mk('S2', '【1講座20,000円】看護師国試対策講座のカリキュラム作成者募集(AI活用可/設計未経験OK)'),
+    mk('S3', '【1講座20,000円】英語講座のカリキュラム作成者募集(AI活用可/設計未経験OK)'),
+    mk('X1', '営業資料のデザイン修正をお願いします', { price: '5,000円' }),
+  ];
+  const excludedList = [];
+  const collapsed = sel.collapseSerialPostings([series], excludedList);
+  record('同一テンプレートの連番募集は代表1件に集約し、別案件は残す',
+    series.map(j => j.id).join() === 'S1,X1' && collapsed.length === 2 && excludedList.every(j => j.excludeReason === sel.SERIAL_REASON));
+
+  // 4分類（Stage1の分析をスタブして判定）
+  const analysis = (over = {}) => ({
+    recommendation: { value: 'proceed_after_confirmation', reasons: [] },
+    searchSystemReevaluation: { capabilityStatus: '応募可能', evidenceType: '直接証明', missingEvidence: ['同一ジャンルの受注実績はまだ少ない'] },
+    selectionSignals: { age: { level: null }, specialApply: { detected: false }, workConstraint: { detected: false }, qualification: { detected: false }, requiredSubmission: { required: false, uncovered: [] }, categoryId: 'proposal_document' },
+    ...over,
+  });
+  const withSignals = patch => analysis({ selectionSignals: { ...analysis().selectionSignals, ...patch } });
+  record('4分類：条件を満たす応募可能案件は「今応募」', sel.classifyFinal(mk('A'), analysis()).cls === '今応募');
+  record('4分類：ツール未確認などの軽微な確認事項だけでは「今応募」から外さない',
+    sel.classifyFinal(mk('A'), analysis({ missingInformation: [{ item: 'Excel使用経験の確認' }, { item: '必須条件の内容確認' }] })).cls === '今応募');
+  record('4分類：年齢条件（hard）があれば「要確認」で、確認事項に年齢条件を明示する',
+    (r => r.cls === '要確認' && r.confirmItems.some(c => /年齢条件/.test(c)))(sel.classifyFinal(mk('A'), withSignals({ age: { level: 'hard', excerpt: '20代〜30代前半の方' } }))));
+  record('4分類：特殊な応募方式・稼働条件があれば「要確認」',
+    sel.classifyFinal(mk('A'), withSignals({ specialApply: { detected: true, excerpts: ['固定報酬で11円と入力'] } })).cls === '要確認'
+    && sel.classifyFinal(mk('A'), withSignals({ workConstraint: { detected: true, excerpts: ['週15時間以上'] } })).cls === '要確認');
+  record('4分類：報酬額が未確認の案件は「要確認」', sel.classifyFinal(mk('A', 't', { priceUnverified: true }), analysis()).cls === '要確認');
+  const grow1 = sel.classifyFinal(mk('A'), withSignals({ requiredSubmission: { required: true, uncovered: [{ id: 'price_menu', label: 'メニュー表・価格表・カタログ', action: 'メニュー表のサンプルを1点自主制作する' }] } }));
+  record('4分類：必須の提出物が不足する案件は「育成候補」で、不足と補う行動を具体的に示す',
+    grow1.cls === '育成候補' && /メニュー表・価格表/.test(grow1.shortage[0]) && /自主制作/.test(grow1.actions[0]));
+  record('4分類：Stage1が見送り（stop）の案件は「対象外」',
+    sel.classifyFinal(mk('A'), analysis({ recommendation: { value: 'stop', reasons: ['必須ツール（Illustrator）'] } })).cls === '対象外');
+  record('4分類：明確な応募資格の不一致（mismatch）は「対象外」',
+    sel.classifyFinal(mk('A'), withSignals({ qualification: { detected: true, level: 'mismatch', excerpt: '施工管理の経験が2年以上ある方に限る' } })).cls === '対象外');
+  record('4分類：詳細未取得（全文未確認）の「今すぐ応募」候補は、そのまま「今応募」にせず「要確認」にする',
+    (r => r.cls === '要確認' && r.unverified === true)(sel.classifyFinal(mk('A'), null)));
+  const rev = sel.classifyFinal(mk('A', 't', { displayTier: 'normal_challenge' }), analysis({
+    searchSystemReevaluation: { capabilityStatus: 'チャレンジ可能', evidenceType: '強い代替証明', missingEvidence: [] },
+    selectionSignals: { ...analysis().selectionSignals, categoryId: 'seo_article' },
+  }));
+  record('4分類：条件を満たすライティング（チャレンジ可能・強い証拠）は収益・実績枠の候補', rev.cls === '今応募' && rev.slot === 'revenue');
+
+  // 補充：主力が5件未満の日だけ収益・実績候補で補う
+  const analysesById = {};
+  const stateWith = (mainN, revN) => {
+    const st = { nowApply: [], highValueChallenge: [], normalChallenge: [], confirmCandidates: [], excluded: [] };
+    for (let i = 0; i < mainN; i++) { const id = `M${i}`; st.nowApply.push(mk(id, `主力案件${i}`)); analysesById[id] = analysis(); }
+    for (let i = 0; i < revN; i++) {
+      const id = `R${i}`;
+      st.normalChallenge.push(mk(id, `ライティング案件${i}`, { displayTier: 'normal_challenge' }));
+      analysesById[id] = analysis({ searchSystemReevaluation: { capabilityStatus: 'チャレンジ可能', evidenceType: '強い代替証明', missingEvidence: [] }, selectionSignals: { ...analysis().selectionSignals, categoryId: 'seo_article' } });
+    }
+    return st;
+  };
+  const load = id => analysesById[id] || null;
+  const st1 = stateWith(2, 6);
+  const res1 = sel.rebucket(st1, { loadAnalysis: load });
+  record('補充：主力2件の日は、収益・実績枠のライティングで5件まで補充し、残りは育成候補に回す',
+    st1.nowApply.length === 5 && res1.counts.収益実績枠 === 3 && res1.counts.育成候補 === 3
+    && st1.nowApply.filter(j => j.slot === 'revenue').length === 3);
+  const st2 = stateWith(6, 4);
+  const res2 = sel.rebucket(st2, { loadAnalysis: load });
+  record('補充：主力が5件以上ある日は収益・実績枠で補充しない（ライティングは育成候補のまま）',
+    res2.counts.収益実績枠 === 0 && res2.counts.主力 === 6 && res2.counts.育成候補 === 4);
+
+  // 補充用の詳細取得プール：全文未確認かつ未試行の候補だけを優先順に返す
+  const st3 = stateWith(0, 0);
+  st3.nowApply.push(mk('P1', 'a'), mk('P2', 'b'), mk('P3', 'c'));
+  analysesById.P2 = analysis();
+  const pool = sel.selectBackfillPool(st3, ['P1'], 5, load);
+  record('補充用の取得プール：試行済み・全文確認済みの案件を除き、未確認の候補だけを返す', pool.map(j => j.id).join() === 'P3');
+}
+{
+  // Work依頼用プロンプトに、検出した重要事項（年齢・特殊な応募方式・稼働条件・必須提出物）が入る
+  const { buildWorkPrompt } = require('./work-prompt-builder');
+  const packet = {
+    jobId: 'X_WP', job: { title: 'テスト案件', url: 'https://crowdworks.jp/public/jobs/1', price: { raw: '5,000円' }, deadline: { raw: '2026年12月1日' }, description: '本文' },
+    evaluation: { rank: 'A' }, recommendation: { value: 'proceed_after_confirmation', reasons: ['確認あり'] },
+    concerns: { toolIssues: [], flaggedSafetyReview: [] }, requiredCapabilities: ['構成力'], usableExperience: [], clientValue: [],
+    usableFactsForProposal: { centralMessage: 'メッセージ', portfolioCandidates: [], avoidExpressions: [], prohibitedClaims: [] },
+    missingInformation: [], applicationQuestions: {},
+    selectionSignals: {
+      age: { level: 'hard', excerpt: '20代の方中心' }, specialApply: { detected: true, excerpts: ['固定報酬で11円と入力'] },
+      workConstraint: { detected: true, excerpts: ['週15時間以上'] }, qualification: { detected: false },
+      requiredSubmission: { required: true, excerpt: 'ポートフォリオを添付', uncovered: [{ label: 'メニュー表・価格表・カタログ' }] },
+    },
+  };
+  const wp = buildWorkPrompt({ id: 'X_WP', rank: 'A' }, { packet });
+  record('Work依頼用プロンプト：年齢条件・特殊な応募方式・稼働条件・必須提出物が【応募時に確認すべき条件】に入る',
+    wp.ok && /年齢条件: 20代の方中心/.test(wp.text) && /特殊な応募方式: 固定報酬で11円/.test(wp.text)
+    && /稼働条件: 週15時間以上/.test(wp.text) && /必須の提出物/.test(wp.text) && /同種の登録作品なし：メニュー表・価格表・カタログ/.test(wp.text));
+}
+
+
+{
+  // ===== 案件選定精度：追加の判定（必須の経験・補助金申請業務・上限超過） =====
+  const cond2 = require('./application-conditions');
+  record('必須の経験：応募条件に「ホワイトペーパー作成経験のある方」とある案件を検出する',
+    cond2.detectRequiredExperience('【必須スキル・募集概要】\n福祉介護のICT・ソリューションなどのホワイトペーパー作成経験のある方').detected === true);
+  record('必須の経験：登録済みの手持ち資産でカバーできる種類（提案資料）や、歓迎・任意の記載は検出しない',
+    cond2.detectRequiredExperience('■応募条件\n・営業資料、提案資料の作成経験がある方').detected === false
+    && cond2.detectRequiredExperience('■応募条件\n・ライティング経験がある方歓迎').detected === false);
+  record('資格・専門実務：補助金の申請サポート業務は資格不一致（mismatch）、補助金の記事執筆は誤検出しない',
+    cond2.detectQualificationMismatch('補助金の申請サポート（交付申請・実績報告）').level === 'mismatch'
+    && cond2.detectQualificationMismatch('補助金の最新ニュースを解説する記事を書いてください').detected === false);
+
+  const sel2 = require('./job-selection');
+  const ok = { recommendation: { value: 'proceed_after_confirmation', reasons: [] },
+    searchSystemReevaluation: { capabilityStatus: '応募可能', evidenceType: '直接証明', missingEvidence: [] },
+    selectionSignals: { age: { level: null }, specialApply: { detected: false }, workConstraint: { detected: false }, qualification: { detected: false }, requiredExperience: { detected: false }, requiredSubmission: { required: false, uncovered: [] }, categoryId: 'proposal_document' } };
+  const stOver = { nowApply: [], highValueChallenge: [], normalChallenge: [], confirmCandidates: [], excluded: [] };
+  for (let i = 0; i < 13; i++) stOver.nowApply.push({ id: `O${i}`, title: `案件${i}`, rank: 'A', totalScore: 100 - i, displayTier: 'now' });
+  const resOver = sel2.rebucket(stOver, { loadAnalysis: () => ok });
+  record('今応募は上限10件まで。超過分は確認項目のない「要確認」へ落とさず表示しない', stOver.nowApply.length === 10 && stOver.confirmCandidates.length === 0 && resOver.counts.今応募 === 10);
+}
+
+
 console.log('\n' + '='.repeat(100));
 console.log(`■ 合計: ${pass}/${total} 件合格`);
 console.log('='.repeat(100));

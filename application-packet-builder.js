@@ -123,6 +123,7 @@ function buildApplicationPacket(jobId) {
       prohibitedClaims: stage1.proposalMaterials.prohibitedClaims || [],
     },
     missingInformation: stage1.missingInformation || [],
+    selectionSignals: stage1.selectionSignals || null,
     stage2,
   };
 

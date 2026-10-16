@@ -25,6 +25,7 @@ const aiAnalyzer = require('./ai-analyzer');
 const applicationPacketBuilder = require('./application-packet-builder');
 const applicationDraftGenerator = require('./application-draft-generator');
 const applicationDraftGeneratorManual = require('./application-draft-generator-manual');
+const jobSelection = require('./job-selection');
 
 // 応募文生成の方式（環境変数 DRAFT_MODE で切り替え）。
 // 'api'    : Anthropic APIで自動生成（ANTHROPIC_API_KEYが有効な場合のみ）。
@@ -47,6 +48,12 @@ const REPO_NAME = 'ai-job-finder';
 const PAGE_URL = process.env.PAGES_URL
   || `https://${REPO_OWNER}.github.io/${REPO_NAME}/`;
 
+// Stage1が「見送り（stop）」と判定した案件を「今すぐ応募」から外し、除外（見送り理由つき）へ移す。
+// 4分類への振り直し（job-selection.js の rebucket）がこの処理を内包する。旧APIの互換用に残している。
+function demoteStage1StoppedFromNowApply(nowApply, excluded) {
+  return jobSelection.demoteStopped(nowApply, excluded);
+}
+
 // Stage0（詳細取得）→Stage1（ルールベース分析・外部API不要）→Stage2（AI分析・Anthropic APIが
 // 正常な場合のみ）をこの順で接続する。各段は独立して失敗を許容し、案件取得・出力・通知・デプロイという
 // 既存の本番フローを止めない。Stage2の成否はStage1が確定させたランキング・除外判定・分析結果
@@ -56,10 +63,12 @@ async function runAnalysisPipeline(classified) {
 
   // Stage0: 優先候補（今すぐ応募→高単価チャレンジ→通常チャレンジ→確認候補）の詳細取得
   let validDetails = [];
+  let attemptedIds = [];
   try {
     const candidatePool = detailScraper.selectCandidatesForDetailFetch(classified, detailScraper.DETAIL_FETCH_MAX_ATTEMPTS);
     const stage0Result = await detailScraper.fetchJobDetailsWithBackfill(candidatePool);
     validDetails = stage0Result.validDetails;
+    attemptedIds = candidatePool.slice(0, stage0Result.stats.attemptedCandidateCount).map(j => j.id);
     detailStore.saveJobDetails(validDetails);
     console.log(`Stage0: 詳細取得 ${stage0Result.stats.validCount}件（試行${stage0Result.stats.attemptedCandidateCount}件中）`);
   } catch (err) {
@@ -74,6 +83,34 @@ async function runAnalysisPipeline(classified) {
     console.log(`Stage1: 分析完了 ${analyzedCount}件（対象外${stage1Results.length - analyzedCount}件）`);
   } catch (err) {
     console.log(`⚠️  Stage1スキップ（分析処理に失敗）: ${err.message}`);
+  }
+
+  // 補充：全文判定（Stage1）で「今応募（主力）」が目標に満たない場合、後続の候補の詳細を追加で取得して再分析する。
+  // 一覧ページの短い本文で通過した案件が、全文で見送りになることが多いため（取得は少数ずつ、合計上限あり）。
+  try {
+    const BACKFILL_BATCH = 5;
+    const BACKFILL_MAX_ATTEMPTS = 20;
+    const attempted = new Set(attemptedIds);
+    let extraAttempts = 0;
+    let extraValid = 0;
+    while (extraAttempts < BACKFILL_MAX_ATTEMPTS && jobSelection.countMainNow(classified) < jobSelection.MAIN_TARGET) {
+      const pool = jobSelection.selectBackfillPool(classified, [...attempted], BACKFILL_BATCH);
+      if (pool.length === 0) break;
+      const extra = await detailScraper.fetchJobDetailsWithBackfill(pool, { targetValidCount: BACKFILL_BATCH, maxAttempts: BACKFILL_BATCH });
+      pool.forEach(j => attempted.add(j.id));
+      extraAttempts += pool.length;
+      if (extra.validDetails.length > 0) {
+        detailStore.saveJobDetails(extra.validDetails);
+        validDetails = validDetails.concat(extra.validDetails);
+        extraValid += extra.validDetails.length;
+        stage1Results = analyzer.analyzeAllPendingJobDetails();
+      }
+    }
+    if (extraAttempts > 0) {
+      console.log(`補充取得: 追加で${extraAttempts}件を試行し${extraValid}件の全文を取得（今応募(主力)の目標${jobSelection.MAIN_TARGET}件、現在${jobSelection.countMainNow(classified)}件）`);
+    }
+  } catch (err) {
+    console.log(`⚠️  補充取得をスキップ（失敗）: ${err.message}`);
   }
 
   // Stage2: AI分析（Anthropic APIが正常な場合のみ実行。401/429/5xx・キー未設定・その他例外の
@@ -261,7 +298,27 @@ async function main() {
   }
 
   // 3.5. 案件分析パイプライン（Stage0→Stage1→Stage2）。失敗しても以降の出力・通知・デプロイは止めない。
-  await runAnalysisPipeline({ nowApply, highValueChallenge, normalChallenge, confirmCandidates });
+  // 連番募集の集約と全文判定による補充のため、表示件数で切り詰める前の全候補を使う。
+  // 同じテンプレートの連番募集は代表1件に集約し、枠の占有を防ぐ。
+  const pipelineState = jobSelection.buildUncappedState(allEvaluated);
+  pipelineState.excluded = excluded;
+  const collapsedSerial = jobSelection.collapseSerialPostings(
+    [pipelineState.nowApply, pipelineState.highValueChallenge, pipelineState.normalChallenge, pipelineState.confirmCandidates], excluded);
+  if (collapsedSerial.length > 0) {
+    console.log(`同一発注者の連番募集を集約: ${collapsedSerial.length}件（代表案件のみ候補に残す）`);
+  }
+
+  await runAnalysisPipeline(pipelineState);
+
+  // 全文判定（Stage1）の結果で4分類（今応募／要確認／育成候補／対象外）へ振り直す。
+  // 主力の今応募が少ない日は、条件を満たすライティング等の収益・実績候補で補充する。
+  const selection = jobSelection.rebucket(pipelineState);
+  for (const [dst, src] of [[nowApply, pipelineState.nowApply], [highValueChallenge, pipelineState.highValueChallenge], [normalChallenge, pipelineState.normalChallenge], [confirmCandidates, pipelineState.confirmCandidates]]) {
+    dst.length = 0;
+    dst.push(...src);
+  }
+  const stage1Stopped = selection.stopped;
+  console.log(`4分類: 今応募 ${selection.counts.今応募}件（主力${selection.counts.主力} / 収益・実績枠${selection.counts.収益実績枠}） / 要確認 ${selection.counts.要確認}件 / 育成候補 ${selection.counts.育成候補}件 / 見送り ${selection.counts.対象外}件`);
 
   // 4. HTML / Markdown 出力
   const htmlContent = renderHTML({ nowApply, highValueChallenge, normalChallenge, confirmCandidates, holds, excluded }, now, PAGE_URL);
@@ -322,7 +379,7 @@ async function main() {
   const gmailPass = process.env.GMAIL_APP_PASSWORD || '';
   if (gmailUser && gmailPass) {
     console.log('\nGmail通知を送信中...');
-    await sendGmailNotification({ jobs: nowApply, growthCount: highValueChallenge.length + normalChallenge.length, pageUrl: PAGE_URL, date: now });
+    await sendGmailNotification({ jobs: nowApply, confirmJobs: confirmCandidates, growthJobs: [...highValueChallenge, ...normalChallenge], stage1Stopped, growthCount: highValueChallenge.length + normalChallenge.length, pageUrl: PAGE_URL, date: now });
   } else {
     console.log('\n💡 Gmail通知をスキップ（環境変数未設定）');
     console.log('   .env ファイルに GMAIL_USER と GMAIL_APP_PASSWORD を設定してください');
@@ -384,7 +441,7 @@ function pushToGhPages(outputDir, repoDir, commitMsg) {
   }
 }
 
-module.exports = { runAnalysisPipeline };
+module.exports = { runAnalysisPipeline, demoteStage1StoppedFromNowApply };
 
 // requireされた場合（テスト等）はmain()を自動実行しない。`node run.js`で直接実行された場合のみ動く。
 if (require.main === module) {
