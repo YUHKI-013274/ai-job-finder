@@ -3,6 +3,8 @@ const { loadApplicationPacket } = require('./application-packet-store');
 const { loadApplicationDraft } = require('./application-draft-store');
 const { buildAnalysisSummary } = require('./application-draft-generator-manual');
 const { buildWorkPrompt, buildEntries, writeWorkPromptsPage, WORK_PROMPTS_PAGE_PATH } = require('./work-prompt-builder');
+const { describeJudgment } = require('./job-selection');
+const { formatTermYen } = require('./application-conditions');
 
 // 案件分析（Application Packet）→ Work依頼用プロンプトを、候補メール本文に直接埋め込む
 // （応募文Draftが取り込み済みならそれも表示）。GitHub Pages（公開）には一切載せず、
@@ -21,9 +23,24 @@ function buildApplicationSectionHtml(job) {
     ).join('')
     : '（Application Packetに使える経験の記載なし）';
 
+  // 応募判断は最終4分類と一致させる。報酬・作業量は判断材料として表示する（自動除外には使わない）
+  const jd = describeJudgment(job);
+  const sg = packet.selectionSignals || {};
+  const wp = sg.workloadPrice;
+  const terms = sg.priceTerms || {};
+  const priceBits = [];
+  if (sg.priceDetail && sg.priceDetail.unknown) priceBits.push(`詳細ページの報酬欄: ${sg.priceDetail.raw || '記載なし'}（金額は未確定）`);
+  if (terms.contract) priceBits.push(`本文の契約金額（本採用）: ${formatTermYen(terms.contract)}`);
+  if (terms.test) priceBits.push(`初回テスト: ${formatTermYen(terms.test)}`);
+  if (wp) priceBits.push(`作業量: ${wp.chars.toLocaleString()}文字以上／約${wp.yenPerChar}円/文字（参考値）`);
+  const priceHtml = priceBits.length > 0 ? `<div style="margin-top:3px"><b>💴 報酬・作業量:</b> ${escHtml(priceBits.join(' ／ '))}</div>` : '';
+
   const analysisHtml = `
     <div style="background:#f7f7fb;border-radius:8px;padding:10px 12px;margin-top:8px;font-size:12px;color:#333">
-      <div style="font-weight:bold;margin-bottom:4px">📋 応募判断: ${escHtml(s.judgment)}</div>
+      <div style="font-weight:bold;margin-bottom:4px">📋 応募判断: ${escHtml(jd.label)}</div>
+      <div style="font-size:11px;color:#555">${escHtml(jd.reason)}</div>
+      ${jd.confirmItems.map(c => `<div style="color:#7a5c00">・${escHtml(c)}</div>`).join('')}
+      ${priceHtml}
       <div><b>クライアントの目的:</b> ${escHtml(s.clientPurpose)}</div>
       <div><b>求められる能力:</b> ${escHtml(s.requiredCapabilities)}</div>
       <div><b>必須条件:</b> ${escHtml(s.requiredConditionsText)}</div>

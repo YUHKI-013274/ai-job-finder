@@ -748,6 +748,9 @@ function buildMissingInformation(conditions, searchSystemResult, toolFit, signal
     if (signals.qualification && signals.qualification.detected) {
       missing.push({ item: '応募資格（資格・職業・経験の限定）の確認', detail: signals.qualification.excerpt, reason: '応募者の資格・職業・経験を限定する記載があり、Knowledgeで満たすことを確認できないため' });
     }
+    if (signals.language && signals.language.level === 'required') {
+      missing.push({ item: '言語要件の確認', detail: signals.language.excerpt, reason: 'Knowledgeに語学力の記載がなく、本人の対応可否を確認できないため' });
+    }
     if (signals.requiredExperience && signals.requiredExperience.detected) {
       missing.push({ item: '必須の経験の確認', detail: signals.requiredExperience.excerpt, reason: '応募条件に必須の経験が明記されており、登録済みの経験・作品でカバーできるか判断できないため' });
     }
@@ -1085,7 +1088,7 @@ function analyzeJobDetail(detail) {
   const requestSummary = buildRequestSummary(detail, searchSystemResult, conditions);
   const clientPurpose = buildClientPurpose(detail, searchSystemResult);
   const fitAssessment = buildFitAssessment(conditions, searchSystemResult, toolFit);
-  const selectionSignals = detectSelectionSignals(detail.title, detail.description);
+  const selectionSignals = detectSelectionSignals(detail.title, detail.description, detail.price);
   const missingInformation = buildMissingInformation(conditions, searchSystemResult, toolFit, selectionSignals);
   const safetyReview = buildSafetyReview(detail, searchSystemResult);
   const recommendation = buildRecommendation({ searchSystemResult, safetyReview, missingInformation, conditions, toolFit });

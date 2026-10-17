@@ -9,6 +9,8 @@ const fs = require('fs');
 const path = require('path');
 const { loadApplicationPacket } = require('./application-packet-store');
 const { buildAnalysisSummary } = require('./application-draft-generator-manual');
+const { describeJudgment } = require('./job-selection');
+const { formatTermYen } = require('./application-conditions');
 
 const WORK_PROMPTS_DIR = path.join(__dirname, 'data', 'private', 'work_prompts');
 const WORK_PROMPTS_PAGE_PATH = path.join(WORK_PROMPTS_DIR, 'index.html');
@@ -63,6 +65,20 @@ function formatDeadline(deadline) {
   if (!deadline) return NOT_RECORDED;
   if (typeof deadline === 'string') return deadline;
   return deadline.raw || deadline.normalized || NOT_RECORDED;
+}
+
+// 報酬条件の補足（一覧／詳細ページ／本採用／初回テスト、作業量×報酬の参考値）。判断材料の表示のみで、自動除外には使わない。
+function describePriceTerms(signals, job) {
+  if (!signals) return '';
+  const lines = [];
+  const pd = signals.priceDetail;
+  if (pd && pd.raw && (pd.unknown || (job.price && job.price !== pd.raw))) lines.push(`詳細ページの報酬欄: ${pd.raw}${pd.type ? `（${pd.type}）` : ''}${pd.unknown ? ' ※金額は未確定' : ''}`);
+  const terms = signals.priceTerms || {};
+  if (terms.contract) lines.push(`本文に記載の契約金額（本採用）: ${formatTermYen(terms.contract)}`);
+  if (terms.test) lines.push(`本文に記載の初回テスト報酬: ${formatTermYen(terms.test)}`);
+  const wp = signals.workloadPrice;
+  if (wp) lines.push(`作業量と単価（参考値）: 1本あたり${wp.chars.toLocaleString()}文字以上／契約金額${wp.contractYen.toLocaleString()}円（約${wp.yenPerChar}円/文字）`);
+  return lines.length > 0 ? `\n${lines.join('\n')}` : '';
 }
 
 function uniqueExperiences(items) {
@@ -139,6 +155,7 @@ function buildWorkPrompt(job, { packet } = {}) {
     if (sig.qualification && sig.qualification.detected) conditionLines.push(`・応募資格の限定: ${sig.qualification.excerpt}`);
     if (sig.requiredExperience && sig.requiredExperience.detected) conditionLines.push(`・必須の経験: ${sig.requiredExperience.excerpt}（登録済みの経験・作品で述べられる範囲のみ。無い経験は書かない）`);
     if (sig.workConstraint && sig.workConstraint.detected) conditionLines.push(`・稼働条件: ${sig.workConstraint.excerpts.join(' / ')}（対応可否は本人確認。創作せず、必要なら［要記入：○○］）`);
+    if (sig.language && sig.language.level === 'required') conditionLines.push(`・言語要件: ${sig.language.excerpt}（本人の対応可否は未確認。できると断定しない）`);
     if (sig.specialApply && sig.specialApply.detected) conditionLines.push(`・特殊な応募方式: ${sig.specialApply.excerpts.join(' / ')}（応募画面での入力は本人が行う。応募文には書かない）`);
     if (sig.requiredSubmission && sig.requiredSubmission.required) {
       conditionLines.push(`・必須の提出物: ${sig.requiredSubmission.excerpt}${sig.requiredSubmission.uncovered.length > 0 ? `（同種の登録作品なし：${sig.requiredSubmission.uncovered.map(u => u.label).join('・')}）` : ''}`);
@@ -148,11 +165,15 @@ function buildWorkPrompt(job, { packet } = {}) {
     conditionLines.push('・自動抽出なし。上記【案件内容】の「応募資格」「応募方法」「選考」等の記載に従ってください');
   }
 
+  // 応募判断は最終4分類と一致させる（Stage1の推奨値を機械的に「要確認」と表示しない）
+  const jd = describeJudgment({ ...job, id: jobId });
+  const judgmentConfirm = jd.confirmItems.length > 0 ? `\n確認事項:\n${jd.confirmItems.map(c => `・${c}`).join('\n')}` : '';
+
   const text = [
     `【案件名】\n${title}`,
     `【案件URL / Job ID】\n${url}\nJob ID: ${jobId}`,
-    `【報酬・締切】\n報酬: ${formatPrice(pj.price || job.price)} / 締切: ${formatDeadline(pj.deadline || job.deadline)}`,
-    `【応募判断】\n${s.judgment}${rankText ? `（ランク${rankText}）` : ''}\n理由: ${s.reasonText}`,
+    `【報酬・締切】\n報酬: ${formatPrice(pj.price || job.price)} / 締切: ${formatDeadline(pj.deadline || job.deadline)}${describePriceTerms(p.selectionSignals, job)}`,
+    `【応募判断】\n${jd.label}${rankText ? `（評価ランク${rankText}）` : ''}\n理由: ${jd.reason}${judgmentConfirm}`,
     `【案件分析】\nクライアントの目的: ${s.clientPurpose}`,
     `【案件内容】\n${pj.description || NOT_RECORDED}`,
     `【求められる能力】\n${capabilityText}`,

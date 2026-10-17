@@ -2266,6 +2266,68 @@ function cleanupFillerArtifacts(jobId) {
 }
 
 
+{
+  // ===== 案件選定条件の最終修正：稼働条件・言語・報酬条件・創作系・応募判断の統一 =====
+  const c3 = require('./application-conditions');
+  const wl = t => c3.detectWorkload(t).level;
+  record('稼働条件：「週4〜5日・1日6時間以上」は週24時間以上に換算し、上限（週20時間）超の見込み（over）＝対象外にはしない',
+    wl('・時間：1日6時間以上（平日9〜18時の間で、開始・終了は相談）\n・日数：週4〜5日') === 'over');
+  record('稼働条件：「週15時間以上」は週15〜20時間の案件（heavy）', wl('・週15時間以上、週4日～') === 'heavy');
+  record('稼働条件：明示の最低稼働が週20時間を超える（週30時間を確保できる方）だけを超過（excess）とする', wl('10月に週30時間を確保できる方') === 'excess');
+  record('稼働条件：「週15時間以内」「週3〜5時間程度」「1日1〜2時間」の柔軟な短時間案件は除外・確認の対象にしない',
+    ['light', 'none'].includes(wl('稼働は週15時間以内でお願いします')) && ['light', 'none'].includes(wl('週3〜5時間程度')) && ['light', 'none'].includes(wl('1日1〜2時間の作業を分割して進められます')));
+  record('稼働条件：週4日以上だけ（時間の記載なし）は除外せず、稼働時間が不明（unknown_days）として確認に回す',
+    wl('日数：週4日以上') === 'unknown_days');
+  record('稼働条件：「週1日以上からご相談可能」は緩い表現で確認の対象にしない', ['light', 'none'].includes(wl('週1日以上からご相談可能です。')));
+  record('稼働条件：応募者への質問文・記入例（作業時間を教えてください 例）…／現在の雇用形態（週35時間など））は条件として扱わない',
+    ['light', 'none'].includes(wl('1週間でどのくらいの作業時間を確保できますか？例）平日20:00～23:00、週○○時間程度')) && ['light', 'none'].includes(wl('本業の雇用形態(アルバイト･週35時間など)/')));
+  record('稼働条件：固定時間帯（平日10:00～17:00の間で対応可能な方）は確認が必要（fixed）', wl('・平日10:00～17:00の間で対応可能な方') === 'fixed');
+  record('言語要件：「英語での対応必須」は必須（required）、「英語での対応ができる方は歓迎」は緩い表現（soft）で確認の対象にしない',
+    c3.detectLanguageRequirement('英文資料も出てきますので、英語での対応必須です。').level === 'required'
+    && c3.detectLanguageRequirement('英語での対応ができる方は歓迎します').level === 'soft');
+  record('応募方式：「報酬3,000円（2,728円と入力）」のような金額の入力指定を検出する', c3.detectSpecialApplyMethod('応募時には、報酬3,000円（2,728円と入力）とし、下記テンプレートにご記入ください。').detected === true);
+  record('創作系：「スカッとする話のシナリオライター」は創作系、営業・教育に関わる台本は創作系にしない',
+    c3.detectCreativeEntertainment('登録者10万人〜のスカッとする話のシナリオライターを募集', '朗読形式のシナリオ').detected === true
+    && c3.detectCreativeEntertainment('営業研修動画の台本作成', '社内研修用の台本').detected === false
+    && c3.detectCreativeEntertainment('商品紹介動画のシナリオ作成', '商品紹介').detected === false);
+  const pt = c3.detectPriceTerms('・契約金額 ：1本あたり25,000円（税込）\n※1件目はテスト依頼3,000円でお願いします。\n応募時には2,728円と入力してください。\n報酬は時間単価2,000〜3,000円程度を想定しています。');
+  record('報酬条件：本採用の契約金額と初回テスト報酬を区別して拾い、範囲表記は上限だけを金額として扱わない',
+    pt.contract.yen === 25000 && pt.test.yen === 3000
+    && c3.detectPriceTerms('報酬は時間単価2,000〜3,000円程度を想定しています。').contract.yenMax === 3000
+    && c3.detectPriceTerms('報酬は時間単価2,000〜3,000円程度を想定しています。').contract.yen === 2000);
+  const wp = c3.detectWorkloadPrice('文字数：1本あたり50000文字～\n契約金額：1本あたり25,000円', c3.detectPriceTerms('文字数：1本あたり50000文字～\n契約金額：1本あたり25,000円'));
+  record('作業量と報酬：文字数と契約金額から円/文字を算出して判断材料にする（0.5円/文字）', wp && wp.yenPerChar === 0.5 && wp.chars === 50000);
+
+  const sel3 = require('./job-selection');
+  const base = { recommendation: { value: 'proceed_after_confirmation', reasons: [] },
+    searchSystemReevaluation: { capabilityStatus: '応募可能', evidenceType: '直接証明', missingEvidence: [] },
+    selectionSignals: { age: { level: null }, specialApply: { detected: false }, workload: { level: 'none', excerpts: [] }, language: { detected: false }, creative: { detected: false }, priceDetail: { unknown: false }, priceTerms: {}, qualification: { detected: false }, requiredExperience: { detected: false }, requiredSubmission: { required: false, uncovered: [] }, categoryId: 'proposal_document' } };
+  const withSig = patch => ({ ...base, selectionSignals: { ...base.selectionSignals, ...patch } });
+  const job3 = (extra = {}) => ({ id: 'T', title: 't', price: '25000円', priceUnverified: false, ...extra });
+  record('4分類：週15〜20時間（heavy）は3条件の本人判断を示して「要確認」。自動では「今応募」にしない',
+    (r => r.cls === '要確認' && r.confirmItems.some(x => /①将来の事業につながる/.test(x) && /自動では「今応募」にしない/.test(x)))(sel3.classifyFinal(job3(), withSig({ workload: { level: 'heavy', excerpts: ['週15時間以上'], weeklyHoursMin: 15 } }))));
+  record('4分類：換算で週20時間超（over）・固定時間帯（fixed）・稼働日数のみ（unknown_days）・言語要件（必須）は「要確認」（対象外にしない）',
+    ['over', 'fixed', 'unknown_days'].every(lv => sel3.classifyFinal(job3(), withSig({ workload: { level: lv, excerpts: ['x'], weeklyHoursMin: 24 } })).cls === '要確認')
+    && sel3.classifyFinal(job3(), withSig({ language: { detected: true, level: 'required', excerpt: '英語での対応必須' } })).cls === '要確認');
+  record('4分類：明示の最低稼働が上限超（excess）だけが「対象外」', sel3.classifyFinal(job3(), withSig({ workload: { level: 'excess', excerpts: ['週30時間'], weeklyHoursMin: 30 } })).cls === '対象外');
+  record('4分類：柔軟な短時間案件（light）は確認事項なしで「今応募」のまま', sel3.classifyFinal(job3(), withSig({ workload: { level: 'light', excerpts: [] } })).cls === '今応募');
+  record('報酬条件：一覧は金額ありでも詳細ページが「ワーカーと相談する」なら要確認。一覧・詳細・本採用・初回テストを区別して示す',
+    (r => r.cls === '要確認' && r.confirmItems.some(x => /一覧：25000円/.test(x) && /詳細ページ：ワーカーと相談する/.test(x) && /本採用）：25,000円/.test(x) && /初回テスト）：3,000円/.test(x)))(
+      sel3.classifyFinal(job3(), withSig({ priceDetail: { raw: 'ワーカーと相談する', type: '固定報酬制', unknown: true }, priceTerms: { contract: { yen: 25000 }, test: { yen: 3000 } } }))));
+  const sci = { ...withSig({ creative: { detected: true, excerpt: 'スカッとする話のシナリオ' } }), searchSystemReevaluation: { capabilityStatus: 'チャレンジ可能', evidenceType: '強い代替証明', missingEvidence: [] } };
+  sci.selectionSignals.categoryId = 'seo_article';
+  record('戦略適合：創作系シナリオは収益・実績補充枠の「今応募」にしない（育成候補。確認事項があれば要確認）',
+    (r => r.cls === '育成候補' && r.slot !== 'revenue' && r.shortage.length > 0 && r.actions.length > 0)(sel3.classifyFinal(job3(), sci))
+    && sel3.classifyFinal(job3(), { ...sci, selectionSignals: { ...sci.selectionSignals, specialApply: { detected: true, excerpts: ['2,728円と入力'] } } }).cls === '要確認');
+  const norm = { ...base, searchSystemReevaluation: { capabilityStatus: 'チャレンジ可能', evidenceType: '強い代替証明', missingEvidence: [] }, selectionSignals: { ...base.selectionSignals, categoryId: 'seo_article' } };
+  record('戦略適合：通常のSEO・解説記事は引き続き収益・実績枠の候補（創作系だけを外す）', sel3.classifyFinal(job3(), norm).slot === 'revenue');
+  record('応募判断の統一：メール・プロンプトに表示する判断が最終4分類と一致する（収益枠は表記を区別）',
+    sel3.describeJudgment({ id: 'T', finalClass: '要確認', finalReason: '重要事項が未確認', finalConfirmItems: ['年齢条件：x'] }).label === '要確認'
+    && sel3.describeJudgment({ id: 'T', finalClass: '今応募', slot: 'revenue', finalReason: 'r' }).label === '今応募（収益・実績枠）'
+    && sel3.describeJudgment({ id: 'T', finalClass: '今応募', finalReason: 'r' }).label === '今応募');
+}
+
+
 console.log('\n' + '='.repeat(100));
 console.log(`■ 合計: ${pass}/${total} 件合格`);
 console.log('='.repeat(100));

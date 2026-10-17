@@ -62,6 +62,7 @@ function detectAgeCondition(text) {
 const SPECIAL_APPLY_PATTERNS = [
   /新しい条件を提示/,
   /固定報酬で\s*[\d,]+\s*円/,
+  /[\d,]+\s*円[^。\n]{0,6}(?:と|を)\s*入力/,
   /と入力して(?:ご)?応募/,
   /(?:Google\s*フォーム|グーグルフォーム|別途[^。\n]{0,12}フォーム|フォームに(?:ご)?(?:回答|入力))/,
   /件名に[^。\n]{0,30}(?:記載|入力)/,
@@ -79,31 +80,197 @@ function detectSpecialApplyMethod(text) {
   return { detected: found.length > 0, excerpts: found };
 }
 
-// ===== 稼働条件（具体的な拘束のみ。「週3時間程度」等の目安は対象外） =====
-const WORK_CONSTRAINT_PATTERNS = [
-  /(?:平日|土日|毎日|月[〜~～-]金)[^。\n]{0,12}\d{1,2}\s*[時:：]\s*[〜~～-]\s*\d{1,2}\s*[時:：]?/,
+// ===== 稼働条件（本人の稼働上限と照合できる形で検出する） =====
+// 本人の前提（ゆうき申告 2026-10-18）：週3日程度ライスワークがある。通常案件は週15時間以内が目安（毎週の確約はできない）。
+// 重点案件のみ、他のプロジェクトを調整した場合の上限として最大週20時間まで個別検討できる。
+// 1日1〜2時間の自由な分割作業は対応可能。固定時間帯・長時間の連続拘束は対応可否を確認する。
+// 「週4日以上」という条件だけでは除外しない。稼働条件が不明、または本人の確約が必要なものは「要確認」。
+// 明確に対応不能と確認できる条件（週20時間を超える明示の最低稼働など）だけを「超過（excess）」として対象外にできる。
+const AVAILABILITY = { normalWeeklyHours: 15, maxWeeklyHours: 20 };
+
+const WORK_NUM = '(\\d+)\\s*(?:[〜~～\\-－]\\s*(\\d+))?';
+const WORK_KIND = '\\s*(以上|以内|まで|程度|前後|[〜~～])?';
+const WEEK_HOURS_RE = new RegExp(`週\\s*${WORK_NUM}\\s*時間${WORK_KIND}`);
+const WEEK_DAYS_RE = new RegExp(`週\\s*${WORK_NUM}\\s*日${WORK_KIND}`);
+const DAY_HOURS_RE = new RegExp(`(?<!\\d)1日\\s*${WORK_NUM}\\s*時間${WORK_KIND}`);
+// 数値表現の直後（10字以内）に「目安・ご相談」などがあれば、必須ではなく緩い表現（soft）として扱う
+const WORK_SOFT_AFTER = /(ご?相談|応相談|目安|程度|前後|くらい|でも可|でもOK|歓迎|可能であれば|できれば)/;
+
+// 固定時間帯・連続拘束など（緩い表現を伴わないもの）
+const WORK_FIXED_PATTERNS = [
+  /(?:平日|土日|毎日|月[〜~～-]金)[^。\n]{0,14}\d{1,2}\s*(?:時|:\d{2})?\s*[〜~～-]\s*\d{1,2}\s*(?:時|:\d{2})/,
   /\d{1,2}\s*時\s*[〜~～-]\s*\d{1,2}\s*時[^。\n]{0,10}(?:稼働|対応|勤務|連絡)/,
   /(?:曜日|時間帯)[^。\n]{0,6}(?:固定|指定)/,
-  /カメラ[^。\n]{0,8}必須|必須[^。\n]{0,8}カメラ/,
+  /(?:リアルタイム|即レス|常時(?:連絡|対応))/,
 ];
+const WORK_FIXED_SOFT = /(相談可|柔軟|フレックス|自由|いつでも|時間帯は問いません)/;
+const WORK_QUESTION_RE = /(例）|例：|例:|ですか|ますか|教えて|雇用形態|現在お|現在の)/;
 
-// 「週N時間以上」はN>=10、「週N日以上」はN>=3 のときだけ具体的な拘束とみなす（「週1日以上からご相談可能」等は対象外）。
-function hasWeeklyMinimum(line) {
-  if (/ご?相談|応相談|調整可/.test(line)) return false;
-  const h = line.match(/週\s*(\d+)\s*時間\s*以上/);
-  if (h && Number(h[1]) >= 10) return true;
-  const d = line.match(/週\s*(\d+)\s*日\s*以上/);
-  return !!(d && Number(d[1]) >= 3);
+function pickField(current, candidate) {
+  // 緩い表現でない（必須の）候補を優先し、同じ強さなら最初の候補を残す
+  if (!current) return candidate;
+  if (current.soft && !candidate.soft) return candidate;
+  return current;
 }
 
-function detectWorkConstraint(text) {
+function parseWorkField(line, re) {
+  const m = line.match(re);
+  if (!m) return null;
+  const kind = m[3] === undefined ? '' : (/^[〜~～]$/.test(m[3]) ? '以上' : m[3]);
+  const after = line.slice(m.index + m[0].length, m.index + m[0].length + 10);
+  const soft = WORK_SOFT_AFTER.test(after) || /^(程度|前後)$/.test(kind);
+  return { min: Number(m[1]), max: m[2] ? Number(m[2]) : null, kind, soft, line };
+}
+
+// 戻り値のlevel（重い順）：excess（明示の最低稼働が週20時間超＝対象外にできる）／over（換算で週20時間超の見込み）／
+// heavy（週15〜20時間）／fixed（固定時間帯・長時間拘束）／unknown_days（週4日以上だが時間が不明）／light／none
+function detectWorkload(text) {
   const lines = toLines(text);
-  const found = [];
+  let wh = null, dpw = null, hpd = null;
+  const fixed = [];
+  let monthHours = null;
   for (const line of lines) {
-    if (hasWeeklyMinimum(line) || WORK_CONSTRAINT_PATTERNS.some(re => re.test(line))) found.push(excerpt(line));
-    if (found.length >= 2) break;
+    // 応募者への質問文・記入例（「作業時間を教えてください 例）…」「現在の雇用形態（週35時間など）」）は条件ではない
+    if (WORK_QUESTION_RE.test(line)) continue;
+    const mh = line.match(/月\s*(\d+)\s*時間/);
+    if (mh && !monthHours) monthHours = { hours: Number(mh[1]), line, soft: WORK_SOFT_AFTER.test(line.slice(mh.index + mh[0].length, mh.index + mh[0].length + 10)) };
+    const a = parseWorkField(line, WEEK_HOURS_RE); if (a) wh = pickField(wh, a);
+    const b = parseWorkField(line, WEEK_DAYS_RE); if (b) dpw = pickField(dpw, b);
+    const c = parseWorkField(line, DAY_HOURS_RE); if (c) hpd = pickField(hpd, c);
+    if (!WORK_FIXED_SOFT.test(line) && WORK_FIXED_PATTERNS.some(re => re.test(line))) fixed.push(excerpt(line));
   }
-  return { detected: found.length > 0, excerpts: found };
+
+  let weeklyMin = null, weeklyMax = null, basis = null, soft = false, monthLine = null;
+  if (wh) {
+    basis = 'explicit'; soft = wh.soft;
+    if (wh.kind === '以内' || wh.kind === 'まで') { weeklyMin = 0; weeklyMax = wh.max != null ? wh.max : wh.min; }
+    else { weeklyMin = wh.min; weeklyMax = wh.max != null ? wh.max : (wh.kind === '以上' ? null : wh.min); }
+  } else if (monthHours && !(hpd && dpw)) {
+    // 「月100時間」など月あたりの稼働は、1か月＝約4.3週として週あたりに換算する（換算値なので超過は「要確認」止まり）
+    basis = 'derived'; soft = monthHours.soft;
+    weeklyMin = Math.round(monthHours.hours / 4.3); weeklyMax = weeklyMin;
+    monthLine = monthHours.line;
+  } else if (hpd && dpw) {
+    basis = 'derived'; soft = hpd.soft || dpw.soft;
+    weeklyMin = hpd.min * dpw.min;
+    const hMax = hpd.max != null ? hpd.max : (hpd.kind === '以上' ? null : hpd.min);
+    const dMax = dpw.max != null ? dpw.max : (dpw.kind === '以上' ? null : dpw.min);
+    weeklyMax = hMax != null && dMax != null ? hMax * dMax : null;
+  }
+
+  const excerpts = [];
+  const add = f => { if (f && !excerpts.includes(excerpt(f.line))) excerpts.push(excerpt(f.line)); };
+  let level = 'none';
+  const rank = { none: 0, light: 1, unknown_days: 2, fixed: 3, heavy: 4, over: 5, excess: 6 };
+  const raise = lv => { if (rank[lv] > rank[level]) level = lv; };
+
+  if (weeklyMin != null) {
+    if (weeklyMin > AVAILABILITY.maxWeeklyHours) raise(basis === 'explicit' && !soft ? 'excess' : 'over');
+    else if (weeklyMin > AVAILABILITY.normalWeeklyHours) raise('heavy');
+    else if (weeklyMin === AVAILABILITY.normalWeeklyHours) raise(soft && wh && wh.kind !== '以上' ? 'light' : 'heavy');
+    else raise('light');
+    add(wh); if (basis === 'derived') { add(hpd); add(dpw); if (monthLine && !excerpts.includes(excerpt(monthLine))) excerpts.push(excerpt(monthLine)); }
+  } else if (dpw && dpw.min >= 4 && !dpw.soft) {
+    raise('unknown_days'); add(dpw);
+  } else if (hpd && hpd.min >= 4 && !hpd.soft) {
+    raise('fixed'); add(hpd); // 1日4時間以上の長時間拘束（週の日数は不明）
+  } else if (wh || dpw || hpd) {
+    raise('light');
+  }
+  if (fixed.length > 0) { raise('fixed'); fixed.forEach(f => { if (!excerpts.includes(f)) excerpts.push(f); }); }
+
+  return {
+    level, basis,
+    weeklyHoursMin: weeklyMin, weeklyHoursMax: weeklyMax,
+    flexibleHint: soft,
+    excerpts: excerpts.slice(0, 3),
+  };
+}
+
+// 旧API互換：具体的な拘束があるか（重さがlight/none以外）
+function detectWorkConstraint(text) {
+  const w = detectWorkload(text);
+  return { detected: !['none', 'light'].includes(w.level), level: w.level, excerpts: w.excerpts };
+}
+
+// ===== 言語要件（英語など）。「必須」と「歓迎」を区別する =====
+const LANG_NAMES = '(?:ビジネス英語|英語|英文|中国語|韓国語|フランス語|スペイン語|ドイツ語|TOEIC)';
+const LANG_REQUIRED_RE = new RegExp(`${LANG_NAMES}[^。\\n]{0,14}(?:必須|必要|できる方|対応可能な方|が求められ|レベル|ネイティブ)`);
+const LANG_SOFT_RE = /(歓迎|尚可|あれば|あると|優遇|できれば)/;
+
+function detectLanguageRequirement(text) {
+  const lines = toLines(text);
+  let soft = null;
+  for (const line of lines) {
+    const m = line.match(LANG_REQUIRED_RE);
+    if (!m) continue;
+    if (LANG_SOFT_RE.test(line)) { if (!soft) soft = { detected: true, level: 'soft', excerpt: excerpt(line) }; continue; }
+    return { detected: true, level: 'required', excerpt: excerpt(line) };
+  }
+  return soft || { detected: false, level: null, excerpt: null };
+}
+
+// ===== 報酬条件：詳細ページの表示・初回テスト報酬・本採用の報酬を区別して拾う（推測で補わない） =====
+function parseYen(s) { return Number(String(s).replace(/,/g, '')); }
+
+function detectPriceTerms(text) {
+  const lines = toLines(text);
+  let test = null, contract = null;
+  for (const line of lines) {
+    if (/入力|応募時/.test(line)) continue; // 応募画面への入力指示の金額は契約金額ではない
+    const t = line.match(/(?:1件目|初回|最初|テスト)[^。\n]{0,24}?([\d,]+)\s*円/);
+    if (t && /テスト/.test(line) && !test) { test = { yen: parseYen(t[1]), excerpt: excerpt(line) }; continue; }
+    // 「2,000〜3,000円」のような範囲は、下限・上限の両方を保持する（上限だけを契約金額として拾わない）
+    const c = line.match(/(?:契約金額|1(?:本|記事|件)あたり|時間単価|単価)[^。\n]{0,20}?([\d,]+)\s*(?:[〜~～\-－]\s*([\d,]+))?\s*円/);
+    if (c && !contract && !/テスト/.test(line) && parseYen(c[1]) >= 100) {
+      contract = { yen: parseYen(c[1]), yenMax: c[2] ? parseYen(c[2]) : null, estimated: /想定|程度|目安/.test(line), excerpt: excerpt(line) };
+    }
+  }
+  return { test, contract };
+}
+
+// 報酬条件の表示用（範囲・想定を保ったまま文字列にする。範囲の片側だけを金額として示さない）
+function formatTermYen(t) {
+  if (!t) return '';
+  return `${t.yen.toLocaleString()}円${t.yenMax ? `〜${t.yenMax.toLocaleString()}円` : ''}${t.estimated ? '（想定）' : ''}`;
+}
+
+// 詳細ページの報酬欄が「ワーカーと相談する」等で、金額が確定していないか
+function classifyDetailPrice(price) {
+  const raw = price && price.raw ? String(price.raw) : '';
+  const unknown = !raw || /相談|要確認|未定|応相談/.test(raw) || !/\d/.test(raw);
+  return { raw: raw || null, type: price && price.type ? price.type : null, unknown };
+}
+
+// ===== 作業量と報酬（判断材料の表示専用。自動除外には使わない） =====
+function detectWorkloadPrice(text, terms) {
+  if (!terms || !terms.contract) return null;
+  const lines = toLines(text);
+  for (const line of lines) {
+    if (!/(1本|1記事|1件|あたり|文字数)/.test(line)) continue;
+    const m = line.match(/(\d[\d,]*)\s*(?:文字|字)/);
+    if (!m) continue;
+    const chars = parseYen(m[1]);
+    if (chars < 300 || chars > 300000) continue;
+    return {
+      chars, contractYen: terms.contract.yen, testYen: terms.test ? terms.test.yen : null,
+      yenPerChar: Math.round((terms.contract.yen / chars) * 100) / 100,
+      excerpt: excerpt(line),
+    };
+  }
+  return null;
+}
+
+// ===== 創作系（小説・朗読シナリオ・娯楽系台本）。営業・教育・業務改善に関わる台本は対象にしない =====
+const CREATIVE_TOPIC_RE = /(小説|朗読|スカッと|物語|ショートドラマ|ドラマ|漫画|エンタメ|娯楽|怪談|恋愛|創作|ラノベ)/;
+const CREATIVE_WORK_RE = /(シナリオ|台本|脚本|小説|ストーリー|朗読)/;
+const BUSINESS_CONTEXT_RE = /(営業|セールス|研修|教育|マニュアル|業務|社内|採用|商品紹介|サービス紹介|講座|解説|ホワイトペーパー|提案|eラーニング|説明動画)/;
+
+function detectCreativeEntertainment(title, description) {
+  const t = String(title || '');
+  const head = `${t}\n${String(description || '').slice(0, 200)}`;
+  const detected = CREATIVE_TOPIC_RE.test(head) && CREATIVE_WORK_RE.test(t) && !BUSINESS_CONTEXT_RE.test(t);
+  return { detected, excerpt: detected ? excerpt(t) : null };
 }
 
 // ===== 資格・職業・属性・経験の限定（明確な応募資格の不一致） =====
@@ -135,7 +302,7 @@ function detectQualificationMismatch(text) {
 // ===== 必須の経験（応募条件の見出しの下に「〜の経験がある方」と明記されているもの） =====
 // 提案資料・記事など、登録済みの手持ち資産でカバーできる種類（DELIVERABLE_TYPESのcoveredBy）が明記されている場合は
 // 対象にしない。種類が特定できない／手持ち資産が無い種類の場合は、満たすかどうかの確認事項として検出する。
-const REQ_EXP_HEADING = /(必須スキル|必須条件|必須要件|応募条件|応募資格|応募要件)/;
+const REQ_EXP_HEADING = /(必須スキル|必須条件|必須要件|応募条件|応募資格|応募要件|重要視する点|求める人材|求めるスキル|求める経験|求める方)/;
 const REQ_EXP_LINE = /(経験(?:が|の)?(?:ある|あり|お持ち|豊富)|経験者|実務経験)/;
 const REQ_EXP_SOFT = /(歓迎|尚可|あれば|未経験|不問|問わず|なくても|優遇|あると)/;
 
@@ -178,6 +345,12 @@ const DELIVERABLE_TYPES = [
     patterns: ['LP', 'ランディングページ', 'セールスレター', 'ステップメール', 'メルマガ', 'セールスライティング', 'セールスコピー'],
     coveredBy: [],
     action: 'LP原稿またはステップメールのサンプルを1本自主制作し、ライティングポートフォリオ（/writing）に追加してから応募する',
+  },
+  {
+    id: 'scenario', label: 'シナリオ・台本（朗読・動画）',
+    patterns: ['シナリオ', '台本', '脚本', '朗読'],
+    coveredBy: [],
+    action: 'シナリオ（台本）のサンプルを1本自主制作し、ライティングポートフォリオ（/writing）に追加してから応募する',
   },
   {
     id: 'manual', label: 'マニュアル・手順書',
@@ -224,8 +397,10 @@ function detectRequiredSubmission(text) {
     // 種類の判定は、提出を求める行とその前後（実績の種類が前の行に書かれる形式が多い）で行う
     const window = lines.slice(Math.max(0, i - 2), i + 2).join('\n');
     const types = matchDeliverableTypes(window);
-    const specific = types.filter(t => ['price_menu', 'sales_copy', 'manual'].includes(t.id));
-    const target = specific.length > 0 ? specific : types;
+    const specific = types.filter(t => ['price_menu', 'sales_copy', 'manual', 'scenario'].includes(t.id));
+    // 提出を求める行の周辺に種類が無ければ、案件タイトルが示す種類で補う
+    const titleTypes = matchDeliverableTypes(lines[0] || '').filter(t => ['price_menu', 'sales_copy', 'manual', 'scenario'].includes(t.id));
+    const target = specific.length > 0 ? specific : (titleTypes.length > 0 ? titleTypes : types);
     const uncovered = target.filter(t => t.coveredBy.length === 0);
     return {
       required: true,
@@ -238,12 +413,21 @@ function detectRequiredSubmission(text) {
 }
 
 // 案件の全文（タイトル＋本文）から、選定に使う重要事項をまとめて検出する
-function detectSelectionSignals(title, description) {
+function detectSelectionSignals(title, description, price = null) {
   const text = `${title || ''}\n${description || ''}`;
+  const workload = detectWorkload(text);
+  const priceTerms = detectPriceTerms(text);
   return {
     age: detectAgeCondition(text),
     specialApply: detectSpecialApplyMethod(text),
-    workConstraint: detectWorkConstraint(text),
+    workload,
+    // 旧API互換（具体的な拘束があるか）
+    workConstraint: { detected: !['none', 'light'].includes(workload.level), level: workload.level, excerpts: workload.excerpts },
+    language: detectLanguageRequirement(text),
+    priceDetail: classifyDetailPrice(price),
+    priceTerms,
+    workloadPrice: detectWorkloadPrice(text, priceTerms),
+    creative: detectCreativeEntertainment(title, description),
     qualification: detectQualificationMismatch(text),
     requiredExperience: detectRequiredExperience(text),
     requiredSubmission: detectRequiredSubmission(text),
@@ -254,7 +438,15 @@ module.exports = {
   DELIVERABLE_TYPES,
   detectAgeCondition,
   detectSpecialApplyMethod,
+  AVAILABILITY,
+  detectWorkload,
   detectWorkConstraint,
+  detectLanguageRequirement,
+  detectPriceTerms,
+  classifyDetailPrice,
+  formatTermYen,
+  detectWorkloadPrice,
+  detectCreativeEntertainment,
   detectQualificationMismatch,
   detectRequiredExperience,
   detectRequiredSubmission,

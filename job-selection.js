@@ -12,6 +12,7 @@
 //   対象外  … 戦略外・明確な資格不一致・重大リスク（Stage1が見送り）・連番募集の集約
 // ツール使用経験の未確認、必須条件の自動抽出不可などの軽微な確認事項だけで「今応募」から外さない。
 const { loadJobAnalysis } = require('./analysis-store');
+const { formatTermYen } = require('./application-conditions');
 
 const MIN_MAIN = 5;      // 主力の「今応募」がこれ未満なら収益・実績候補で補充する
 const MAIN_TARGET = 10;  // 見送りで減った分を後続候補で補充する目標件数（既存のMAX_JOBSと同じ）
@@ -105,12 +106,45 @@ const GROWTH_BY_CATEGORY = {
 };
 const GROWTH_DEFAULT_ACTION = 'この案件に近い自主制作サンプルを1点作り、ポートフォリオに追加してから応募する';
 
+// 稼働条件の確認文。本人の前提（週15時間目安・重点案件で最大20時間・固定時間帯は要確認）に基づく。
+const HEAVY_CHECK = '週15〜20時間の案件：①将来の事業につながる実績・経験になるか ②報酬・継続性が作業負担に見合うか ③作業時間を柔軟に配分できるか を本人が判断する。3条件を満たしても自動では「今応募」にしない';
+
+function workloadConfirmItem(signals) {
+  const w = signals && signals.workload;
+  if (!w) { // 旧形式の分析結果との互換
+    const wc = signals && signals.workConstraint;
+    return wc && wc.detected ? `稼働条件：${wc.excerpts.join(' / ')}（対応可否を確認）` : null;
+  }
+  const ex = w.excerpts.join(' / ');
+  if (w.level === 'over') return `稼働条件：${ex}（換算で週${w.weeklyHoursMin}時間以上の見込み。通常は週15時間目安・重点案件でも最大20時間のため、超える可能性がある。対応可否を確認）`;
+  if (w.level === 'heavy') return `稼働条件：${ex}（${HEAVY_CHECK}）`;
+  if (w.level === 'fixed') return `稼働条件：${ex}（固定時間帯・長時間の拘束。対応可否を確認）`;
+  if (w.level === 'unknown_days') return `稼働条件：${ex}（稼働日数のみで時間が不明。週4日以上だけでは除外しないが、対応可否を確認）`;
+  return null;
+}
+
+// 報酬条件：一覧と詳細ページの表示が異なる／確定していない場合に、一覧・詳細・本採用・初回テストを区別して示す
+function priceConfirmItem(job, signals) {
+  const pd = signals && signals.priceDetail;
+  const detailUnknown = !!(pd && pd.unknown);
+  if (!job.priceUnverified && !detailUnknown) return null;
+  const terms = (signals && signals.priceTerms) || {};
+  const parts = [];
+  parts.push(job.price && job.price !== '要確認' ? `一覧：${job.price}` : '一覧：金額の記載なし');
+  if (pd && pd.raw) parts.push(`詳細ページ：${pd.raw}`);
+  if (terms.contract) parts.push(`本文の記載（本採用）：${formatTermYen(terms.contract)}`);
+  if (terms.test) parts.push(`本文の記載（初回テスト）：${formatTermYen(terms.test)}`);
+  return `報酬条件：${parts.join(' ／ ')}（契約条件は未確定。推測で補わず応募前に確認）`;
+}
+
 function importantConfirmItems(job, analysis, signals) {
   const items = [];
   if (signals) {
     if (signals.age && signals.age.level === 'hard') items.push(`年齢条件：${signals.age.excerpt}（本人が該当するか確認）`);
     if (signals.specialApply && signals.specialApply.detected) items.push(`特殊な応募方式：${signals.specialApply.excerpts.join(' / ')}`);
-    if (signals.workConstraint && signals.workConstraint.detected) items.push(`稼働条件：${signals.workConstraint.excerpts.join(' / ')}（対応可否を確認）`);
+    const wi = workloadConfirmItem(signals);
+    if (wi) items.push(wi);
+    if (signals.language && signals.language.level === 'required') items.push(`言語要件：${signals.language.excerpt}（本人の対応可否が未確認）`);
   }
   if (signals && signals.requiredExperience && signals.requiredExperience.detected) {
     items.push(`必須の経験：${signals.requiredExperience.excerpt}（登録済みの経験・作品で満たすか確認）`);
@@ -118,7 +152,8 @@ function importantConfirmItems(job, analysis, signals) {
   if (signals && signals.qualification && signals.qualification.level === 'confirm') {
     items.push(`応募資格：${signals.qualification.excerpt}（ゆうきの経歴で満たすか確認）`);
   }
-  if (job.priceUnverified) items.push('報酬額が未確認（案件詳細で確認）');
+  const pi = priceConfirmItem(job, signals);
+  if (pi) items.push(pi);
   if (analysis && analysis.recommendation && analysis.recommendation.value === 'hold') {
     items.push('Knowledgeだけでは対応可否を判断できない（人による確認が必要）');
   }
@@ -137,6 +172,13 @@ function classifyFinal(job, analysis) {
 
   if (signals && signals.qualification && signals.qualification.level === 'mismatch') {
     return { cls: '対象外', reason: `明確な応募資格の不一致：${signals.qualification.excerpt}`, confirmItems: [], shortage: [], actions: [] };
+  }
+
+  // 明確に対応不能と確認できる稼働条件（明示の最低稼働が本人の上限＝週20時間を超える）だけは対象外にする。
+  // 換算値（日数×時間）による超過や、週15〜20時間・固定時間帯などは対象外にせず「要確認」とする。
+  const wl = signals && signals.workload;
+  if (wl && wl.level === 'excess') {
+    return { cls: '対象外', reason: `明確に対応不能な稼働条件：${wl.excerpts[0] || ''}（明示の最低稼働が週${wl.weeklyHoursMin}時間で、上限の週20時間を超える）`, confirmItems: [], shortage: [], actions: [] };
   }
 
   if (!analysis) {
@@ -158,8 +200,20 @@ function classifyFinal(job, analysis) {
   if (confirmItems.length > 0) {
     return { cls: '要確認', reason: '重要事項が未確認', confirmItems, shortage, actions, categoryId };
   }
+  const creative = !!(signals && signals.creative && signals.creative.detected);
   if (submissionShortage.length > 0) {
-    return { cls: '育成候補', reason: '必須の提出物が不足', confirmItems: [], shortage, actions, categoryId };
+    return { cls: '育成候補', reason: `必須の提出物が不足${creative ? '（創作系は収益・実績補充枠の対象外）' : ''}`, confirmItems: [], shortage, actions, categoryId };
+  }
+  // 創作系（小説・朗読シナリオ・娯楽系台本）は、SEO・記事制作と同じ収益・実績補充枠へは入れない。
+  // 営業・教育・業務改善に関わる台本は創作系とみなさない（application-conditions.js の判定）。
+  if (creative) {
+    return {
+      cls: '育成候補', reason: '創作系（小説・朗読シナリオ・娯楽系台本）は収益・実績補充枠の対象外',
+      confirmItems: [],
+      shortage: ['創作系シナリオ（朗読・娯楽）の執筆実績・サンプルが登録されていない'],
+      actions: ['応募する場合は、シナリオ（台本）のサンプルを1本自主制作し、ライティングポートフォリオ（/writing）に追加してから応募する（戦略上の優先度は低い）'],
+      categoryId,
+    };
   }
 
   const status = refl.capabilityStatus;
@@ -207,6 +261,7 @@ function applyDisplayFields(job, result) {
   job.finalReason = result.reason;
   job.slot = result.slot || null;
   job.unverified = !!result.unverified;
+  job.finalConfirmItems = result.confirmItems || [];
   if (result.confirmItems.length > 0) {
     job.confirmBeforeApply = [...(job.confirmBeforeApply || []), ...result.confirmItems.filter(c => !(job.confirmBeforeApply || []).includes(c))];
   }
@@ -280,6 +335,23 @@ function rebucket(state, { minMain = MIN_MAIN, maxNow = MAIN_TARGET, loadAnalysi
   };
 }
 
+// メール・Work依頼用プロンプトに表示する「応募判断」。最終4分類と必ず一致させる
+// （Stage1の推奨値＝proceed_after_confirmation を機械的に「要確認」と表示しない）。
+// 日次実行で分類済みの案件はその結果を使い、未分類（CLI等）の場合はStage1の分析から同じ関数で求める。
+function describeJudgment(job, loadAnalysis = loadJobAnalysis) {
+  let cls = job.finalClass, reason = job.finalReason, confirmItems = job.finalConfirmItems, slot = job.slot;
+  if (!cls) {
+    const r = classifyFinal(job, loadAnalysis(job.id || job.jobId));
+    cls = r.cls; reason = r.reason; confirmItems = r.confirmItems; slot = r.slot || null;
+  }
+  return {
+    cls,
+    label: `${cls}${slot === 'revenue' ? '（収益・実績枠）' : ''}`,
+    reason: reason || '',
+    confirmItems: confirmItems || [],
+  };
+}
+
 // 旧API互換（Stage1が見送り判定した案件を今すぐ応募から外し、除外へ移す）。
 function demoteStopped(nowApply, excluded, loadAnalysis = loadJobAnalysis) {
   const stopped = [];
@@ -331,6 +403,7 @@ module.exports = {
   isSerialPair,
   collapseSerialPostings,
   classifyFinal,
+  describeJudgment,
   rebucket,
   demoteStopped,
   selectBackfillPool,
