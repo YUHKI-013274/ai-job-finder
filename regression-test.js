@@ -2328,6 +2328,71 @@ function cleanupFillerArtifacts(jobId) {
 }
 
 
+{
+  // ===== 将来の提供価値（4領域）の追加軸：分類は変えず、並び順・補充順にだけ反映する =====
+  const va = require('./value-axis');
+  record('提供価値の領域：LP・営業資料・提案資料・バナーなど、制作物が主題の案件は②（価値を形にする）',
+    va.detectValueAxis('LPのライティング・構成作成をお願いします', 'ベネフィット設計とセールスレターの作成').areaNo === '②'
+    && va.detectValueAxis('MEOの営業資料制作', '営業資料を制作します').areaNo === '②');
+  record('提供価値の領域：事務・アシスタント職の「資料作成」「申込フォーム管理」は業務の一部なので②にしない',
+    va.detectValueAxis('【営業事務】講座申込管理・書類作成・講師サポート', '・申込フォームの管理\n・資料作成\n・スライドの修正').areaNo !== '②');
+  record('提供価値の領域：カテゴリーの示唆だけ（本文・タイトルに領域の語が無い）では領域を決めない',
+    va.detectValueAxis('FX証券会社の口座開設のお願い', '口座を開設してください', 'proposal_document').area === null);
+  record('提供価値の領域：「AI活用OK」の定型句やツール名だけでは④にしない。AI導入・研修・仕組み化は④',
+    va.detectValueAxis('【AI活用OK】記事ライター募集', 'ChatGPTを使って記事を書きます。AI活用可。').areaNo !== '④'
+    && va.detectValueAxis('AI研修の講師・プロンプト設計の支援', 'AI導入の研修と仕組み化を支援します').areaNo === '④');
+  record('提供価値の領域：①（コーチング・自己理解）と③（事業戦略・収支管理）も検出する（除外はしない）',
+    va.detectValueAxis('コーチング・自己理解のワークショップ運営', '自己分析と強みの発見を支援').areaNo === '①'
+    && va.detectValueAxis('事業戦略と収支管理の相談', '新規事業の事業計画づくり').areaNo === '③');
+  const ex = va.detectValueAxis('商品紹介資料の制作', 'ヒアリングで課題を整理し、商品の強みを明確にして資料を制作。公開後は効果測定をして改善します。');
+  record('得られる経験：課題理解・価値の明確化・制作物化・成果確認と改善の4種類を本文から判断する', ex.experienceCount === 4);
+
+  const mkJob = (extra = {}) => ({ priceUnverified: false, priceScore: 4, continuityScore: 2, longTermAssetScore: 3, priceYen: 8000, ...extra });
+  const shape = (n) => ({ area: 'shape', areaNo: '②', areaLabel: '価値を形にする', experienceCount: n, experience: [], experienceLabels: [] });
+  const aiA = { area: 'ai', areaNo: '④', areaLabel: 'AIで実行力を高める', experienceCount: 2, experience: [], experienceLabels: [] };
+  record('優先度1：②で報酬が確定し収益が見込める案件', va.valueTier(shape(1), mkJob(), { priceDetail: { unknown: false } }).tier === 1);
+  record('優先度2：②で報酬が未確定でも、将来のサービスに活かせる経験（3種類以上）が得られる案件',
+    va.valueTier(shape(3), mkJob({ priceUnverified: true }), { priceDetail: { unknown: true } }).tier === 2);
+  record('優先度3：③④で収益性・将来性が高い案件。弱ければ優先度4（除外はしない）',
+    va.valueTier(aiA, mkJob({ priceScore: 4 }), { priceDetail: { unknown: false } }).tier === 3
+    && va.valueTier(aiA, mkJob({ priceScore: 2, continuityScore: 2, longTermAssetScore: 2, priceYen: 1500 }), { priceDetail: { unknown: false } }).tier === 4);
+  record('優先度4：領域を特定できない案件・②でも収益と経験が限定的な案件は最後に回すだけで、除外しない',
+    va.valueTier({ area: null }, mkJob(), {}).tier === 4 && va.valueTier(shape(1), mkJob({ priceUnverified: true }), { priceDetail: { unknown: true } }).tier === 4);
+
+  const selV = require('./job-selection');
+  const okBase = { recommendation: { value: 'proceed_after_confirmation', reasons: [] },
+    searchSystemReevaluation: { capabilityStatus: '応募可能', evidenceType: '直接証明', missingEvidence: [] },
+    selectionSignals: { age: { level: null }, specialApply: { detected: false }, workload: { level: 'none', excerpts: [] }, language: { detected: false }, creative: { detected: false }, priceDetail: { unknown: false }, priceTerms: {}, qualification: { detected: false }, requiredExperience: { detected: false }, requiredSubmission: { required: false, uncovered: [] }, categoryId: 'proposal_document' } };
+  const withAxis = (a) => ({ ...okBase, selectionSignals: { ...okBase.selectionSignals, valueAxis: a } });
+  const j0 = { id: 'V', title: 't', price: '8000円', priceUnverified: false, priceScore: 4, continuityScore: 2, longTermAssetScore: 3, priceYen: 8000 };
+  record('追加軸は分類を変えない：領域が①③④・不明でも、同じ条件なら「今応募」のまま（一律に除外しない）',
+    ['①', '③', '④', null].every(no => selV.classifyFinal(j0, withAxis(no ? { area: 'x', areaNo: no, areaLabel: 'x', experienceCount: 0, experienceLabels: [] } : null)).cls === '今応募')
+    && selV.classifyFinal(j0, okBase).cls === '今応募');
+
+  // 並び順：②×収益 → ②×将来の実績・経験 → ③④ → その他。同じ優先度なら従来どおりランク・スコア順
+  const analysisFor = (areaObj) => withAxis(areaObj);
+  const table = {
+    P4high: analysisFor({ area: 'ai', areaNo: '④', areaLabel: 'AIで実行力を高める', experienceCount: 0, experienceLabels: [] }),
+    P1low: analysisFor({ area: 'shape', areaNo: '②', areaLabel: '価値を形にする', experienceCount: 1, experienceLabels: [] }),
+    P3: analysisFor({ area: 'ai', areaNo: '④', areaLabel: 'AIで実行力を高める', experienceCount: 2, experienceLabels: [] }),
+    P1high: analysisFor({ area: 'shape', areaNo: '②', areaLabel: '価値を形にする', experienceCount: 1, experienceLabels: [] }),
+  };
+  const mkS = (id, rank, score, over = {}) => ({ id, title: id, rank, totalScore: score, displayTier: 'now', price: '8000円', priceUnverified: false, priceScore: 4, continuityScore: 2, longTermAssetScore: 3, priceYen: 8000, ...over });
+  const stOrd = { nowApply: [
+    mkS('S_ai_weak', 'S', 90, { priceScore: 1, longTermAssetScore: 1, priceYen: 500 }),   // ④で収益性が弱い → 優先度4（ランクは最上位）
+    mkS('B_shape', 'B', 40),                                                              // ②×収益 → 優先度1
+    mkS('A_ai_strong', 'A', 70),                                                          // ④×収益性高 → 優先度3
+    mkS('A_shape', 'A', 60),                                                              // ②×収益 → 優先度1（ランクが高い）
+  ], highValueChallenge: [], normalChallenge: [], confirmCandidates: [], excluded: [] };
+  const axisById = { S_ai_weak: table.P4high, B_shape: table.P1low, A_ai_strong: table.P3, A_shape: table.P1high };
+  selV.rebucket(stOrd, { loadAnalysis: id => axisById[id] });
+  record('並び順：②×収益が最優先、次に③④（収益性・将来性が高い）、その他が最後。同じ優先度ではランク順（S/Aでも優先度の低い案件は後ろ）',
+    stOrd.nowApply.map(j => j.id).join() === 'A_shape,B_shape,A_ai_strong,S_ai_weak');
+  record('並び順：全員が今応募のまま（優先度の低い案件も除外されない）かつ、優先度ラベルが付与される',
+    stOrd.nowApply.length === 4 && stOrd.nowApply.every(j => j.finalClass === '今応募') && stOrd.nowApply[0].valueAxis.tier === 1 && stOrd.nowApply[3].valueAxis.tier === 4);
+}
+
+
 console.log('\n' + '='.repeat(100));
 console.log(`■ 合計: ${pass}/${total} 件合格`);
 console.log('='.repeat(100));

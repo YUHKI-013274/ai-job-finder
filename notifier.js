@@ -34,6 +34,7 @@ function buildApplicationSectionHtml(job) {
   if (terms.test) priceBits.push(`初回テスト: ${formatTermYen(terms.test)}`);
   if (wp) priceBits.push(`作業量: ${wp.chars.toLocaleString()}文字以上／約${wp.yenPerChar}円/文字（参考値）`);
   const priceHtml = priceBits.length > 0 ? `<div style="margin-top:3px"><b>💴 報酬・作業量:</b> ${escHtml(priceBits.join(' ／ '))}</div>` : '';
+  const valueHtml = valueAxisHtml(job);
 
   const analysisHtml = `
     <div style="background:#f7f7fb;border-radius:8px;padding:10px 12px;margin-top:8px;font-size:12px;color:#333">
@@ -41,6 +42,7 @@ function buildApplicationSectionHtml(job) {
       <div style="font-size:11px;color:#555">${escHtml(jd.reason)}</div>
       ${jd.confirmItems.map(c => `<div style="color:#7a5c00">・${escHtml(c)}</div>`).join('')}
       ${priceHtml}
+      ${valueHtml}
       <div><b>クライアントの目的:</b> ${escHtml(s.clientPurpose)}</div>
       <div><b>求められる能力:</b> ${escHtml(s.requiredCapabilities)}</div>
       <div><b>必須条件:</b> ${escHtml(s.requiredConditionsText)}</div>
@@ -77,6 +79,14 @@ function buildApplicationSectionHtml(job) {
   return analysisHtml + workHtml;
 }
 
+// 将来の提供価値（4領域）と、得られる経験。選定の優先順位の追加軸（除外には使わない）。
+function valueAxisHtml(job) {
+  const v = job.valueAxis;
+  if (!v || !v.tierLabel) return '';
+  const exp = v.experienceCount > 0 ? `／得られる経験: ${v.experienceLabels.join('・')}（${v.experienceCount}/4）` : '';
+  return `<div style="margin-top:3px"><b>🧭 提供価値:</b> ${escHtml(v.tierLabel)}${escHtml(exp)}</div>`;
+}
+
 // 要確認：応募可否や契約条件に関わる重要事項が未確認の案件。確認事項を明示する（全文確認済みのもののみ）。
 function buildConfirmSectionHtml(confirmJobs) {
   if (confirmJobs.length === 0) return '';
@@ -84,7 +94,7 @@ function buildConfirmSectionHtml(confirmJobs) {
     const bullets = (j.confirmBeforeApply || []).map(c => `<div>・${escHtml(c)}</div>`).join('');
     const shortage = (j.finalClass === '要確認' && j.missingAssets && j.missingAssets.length > 0)
       ? `<div style="margin-top:4px;color:#7a5c00">不足: ${j.missingAssets.map(escHtml).join(' / ')}</div>` : '';
-    return `<div style="margin-top:8px"><a href="${j.url}" style="color:#1a1a2e;font-weight:bold;text-decoration:none">${escHtml(j.title)}</a><span style="color:#888"> 💰 ${escHtml(j.price || '要確認')}</span>${bullets}${shortage}</div>`;
+    return `<div style="margin-top:8px"><a href="${j.url}" style="color:#1a1a2e;font-weight:bold;text-decoration:none">${escHtml(j.title)}</a><span style="color:#888"> 💰 ${escHtml(j.price || '要確認')}</span>${valueAxisHtml(j)}${bullets}${shortage}</div>`;
   }).join('');
   return `
       <div style="background:#fffbea;border:1px solid #f3dc8a;border-radius:8px;padding:10px 12px;margin-bottom:16px;font-size:12px;color:#333">
@@ -100,7 +110,7 @@ function buildGrowthSectionHtml(growthJobs) {
   const items = growthJobs.map(j => {
     const shortage = (j.missingAssets || []).map(m => `<div>不足: ${escHtml(m)}</div>`).join('');
     const actions = (j.growthActions || []).map(a => `<div style="color:#1b6b3a">▶ 補う行動: ${escHtml(a)}</div>`).join('');
-    return `<div style="margin-top:8px"><a href="${j.url}" style="color:#1a1a2e;font-weight:bold;text-decoration:none">${escHtml(j.title)}</a><span style="color:#888"> 💰 ${escHtml(j.price || '要確認')}</span>${shortage}${actions}</div>`;
+    return `<div style="margin-top:8px"><a href="${j.url}" style="color:#1a1a2e;font-weight:bold;text-decoration:none">${escHtml(j.title)}</a><span style="color:#888"> 💰 ${escHtml(j.price || '要確認')}</span>${valueAxisHtml(j)}${shortage}${actions}</div>`;
   }).join('');
   return `
       <div style="background:#f0fff4;border:1px solid #bfe8c8;border-radius:8px;padding:10px 12px;margin-bottom:16px;font-size:12px;color:#333">

@@ -13,6 +13,7 @@
 // ツール使用経験の未確認、必須条件の自動抽出不可などの軽微な確認事項だけで「今応募」から外さない。
 const { loadJobAnalysis } = require('./analysis-store');
 const { formatTermYen } = require('./application-conditions');
+const { valueTier } = require('./value-axis');
 
 const MIN_MAIN = 5;      // 主力の「今応募」がこれ未満なら収益・実績候補で補充する
 const MAIN_TARGET = 10;  // 見送りで減った分を後続候補で補充する目標件数（既存のMAX_JOBSと同じ）
@@ -161,7 +162,7 @@ function importantConfirmItems(job, analysis, signals) {
 }
 
 // 1案件を4分類に振り分ける（副作用なし）。analysisが無い案件は全文未確認として扱う。
-function classifyFinal(job, analysis) {
+function classifyFinalCore(job, analysis) {
   const rec = analysis && analysis.recommendation;
   const signals = analysis && analysis.selectionSignals ? analysis.selectionSignals : null;
 
@@ -245,6 +246,27 @@ function classifyFinal(job, analysis) {
   };
 }
 
+// 4分類に、将来の提供価値の追加軸（value-axis.js）を付ける。分類（cls）は変えず、並び順・補充順にだけ使う。
+function classifyFinal(job, analysis) {
+  const result = classifyFinalCore(job, analysis);
+  const signals = analysis && analysis.selectionSignals ? analysis.selectionSignals : null;
+  const va = signals && signals.valueAxis ? signals.valueAxis : null;
+  const vt = valueTier(va, job, signals);
+  result.value = {
+    areaNo: va ? va.areaNo : null,
+    areaLabel: va ? va.areaLabel : null,
+    experienceLabels: va ? va.experienceLabels : [],
+    experienceCount: va ? va.experienceCount : 0,
+    tier: vt.tier,
+    tierLabel: vt.label,
+  };
+  return result;
+}
+
+// 同じ区分の中の並び順：①優先度（②×収益 → ②×将来の実績・経験 → ③④×収益性・将来性 → その他）→ ②評価器のランク・スコア
+const valueTierOf = r => (r.result && r.result.value ? r.result.value.tier : 4);
+const byValueThenRank = (a, b) => valueTierOf(a) - valueTierOf(b) || byRankThenScore(a.job, b.job);
+
 function classifyAll(state, loadAnalysis = loadJobAnalysis) {
   const origin = [
     ...state.nowApply.map(job => ({ job, from: 'now' })),
@@ -262,6 +284,7 @@ function applyDisplayFields(job, result) {
   job.slot = result.slot || null;
   job.unverified = !!result.unverified;
   job.finalConfirmItems = result.confirmItems || [];
+  job.valueAxis = result.value || null;
   if (result.confirmItems.length > 0) {
     job.confirmBeforeApply = [...(job.confirmBeforeApply || []), ...result.confirmItems.filter(c => !(job.confirmBeforeApply || []).includes(c))];
   }
@@ -285,7 +308,7 @@ function rebucket(state, { minMain = MIN_MAIN, maxNow = MAIN_TARGET, loadAnalysi
   }
 
   // 主力が足りない日だけ、収益・実績候補で補充する（残りは育成枠に戻す）
-  const sortedRevenue = revenue.sort((a, b) => byRankThenScore(a.job, b.job));
+  const sortedRevenue = revenue.sort(byValueThenRank);
   const needed = Math.max(0, minMain - main.length);
   const promoted = sortedRevenue.slice(0, needed);
   for (const r of sortedRevenue.slice(needed)) {
@@ -293,7 +316,7 @@ function rebucket(state, { minMain = MIN_MAIN, maxNow = MAIN_TARGET, loadAnalysi
     grow.push(r);
   }
 
-  const sortFn = (a, b) => byRankThenScore(a.job, b.job);
+  const sortFn = byValueThenRank;
   main.sort(sortFn);
   const nowList = [...main, ...promoted].slice(0, maxNow);
 

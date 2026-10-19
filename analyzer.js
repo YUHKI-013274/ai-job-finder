@@ -27,6 +27,7 @@
 const { evaluateJob, normalizeFullWidthDigits } = require('./evaluator');
 const { classifyCapability } = require('./knowledge-classifier');
 const { detectSelectionSignals } = require('./application-conditions');
+const { detectValueAxis } = require('./value-axis');
 const {
   APPLICANT_ATTRIBUTE_EXCLUDE_PATTERNS,
   APPLICANT_ATTRIBUTE_CAUTION_PATTERNS,
@@ -1139,6 +1140,8 @@ function analyzeJobDetail(detail) {
       ...selectionSignals,
       categoryId: searchSystemResult.matchedCategory ? searchSystemResult.matchedCategory.id : null,
       categoryLabel: searchSystemResult.matchedCategory ? searchSystemResult.matchedCategory.label : null,
+      // 将来の提供価値の追加軸（4領域と、得られる経験）。分類は変えず、並び順・補充順にだけ使う
+      valueAxis: detectValueAxis(detail.title, detail.description, searchSystemResult.matchedCategory ? searchSystemResult.matchedCategory.id : null),
     },
     portfolioCandidates,
     safetyReview,

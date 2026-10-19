@@ -131,6 +131,12 @@ function renderJobCard(job, i, isTop3 = false) {
         <div class="detail-text">${job.confirmBeforeApply.map(escapeHtml).join('、')}</div>
       </div>` : ''}
 
+      ${(job.valueAxis && job.valueAxis.tierLabel) ? `
+      <div class="detail-section strength">
+        <div class="detail-label">🧭 提供価値（選定の追加軸）</div>
+        <div class="detail-text">${escapeHtml(job.valueAxis.tierLabel)}${job.valueAxis.experienceCount > 0 ? `／得られる経験: ${escapeHtml(job.valueAxis.experienceLabels.join('・'))}（${job.valueAxis.experienceCount}/4）` : ''}</div>
+      </div>` : ''}
+
       <div class="detail-section strength">
         <div class="detail-label">💡 提案文の軸</div>
         <div class="detail-text" style="white-space:pre-line">${escapeHtml(job.strengthHint)}</div>
