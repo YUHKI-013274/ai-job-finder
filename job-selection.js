@@ -12,7 +12,7 @@
 //   対象外  … 戦略外・明確な資格不一致・重大リスク（Stage1が見送り）・連番募集の集約
 // ツール使用経験の未確認、必須条件の自動抽出不可などの軽微な確認事項だけで「今応募」から外さない。
 const { loadJobAnalysis } = require('./analysis-store');
-const { formatTermYen } = require('./application-conditions');
+const { formatTermYen, ENVIRONMENT, environmentVerdict } = require('./application-conditions');
 const { valueTier } = require('./value-axis');
 
 const MIN_MAIN = 5;      // 主力の「今応募」がこれ未満なら収益・実績候補で補充する
@@ -146,6 +146,15 @@ function importantConfirmItems(job, analysis, signals) {
     const wi = workloadConfirmItem(signals);
     if (wi) items.push(wi);
     if (signals.language && signals.language.level === 'required') items.push(`言語要件：${signals.language.excerpt}（本人の対応可否が未確認）`);
+    if (signals.environment && environmentVerdict(signals.environment).verdict === 'unknown') {
+      items.push(`利用環境の要件：${signals.environment.excerpt}（本人の利用環境が未登録のため確認）`);
+    }
+    // 必須条件の見出し配下に挙がったツールのうち、Knowledgeに使用実績が無い（unknown）ものは、重要な未確認事項として示す
+    const toolStatus = {};
+    for (const t of ((analysis && analysis.toolFit && analysis.toolFit.perTool) || [])) toolStatus[t.tool] = t.status;
+    for (const rt of (signals.requiredTools || [])) {
+      if (toolStatus[rt.tool] === 'unknown') items.push(`必須ツール「${rt.tool}」の使用経験が未確認：${rt.excerpt}`);
+    }
   }
   if (signals && signals.requiredExperience && signals.requiredExperience.detected) {
     items.push(`必須の経験：${signals.requiredExperience.excerpt}（登録済みの経験・作品で満たすか確認）`);
@@ -175,6 +184,16 @@ function classifyFinalCore(job, analysis) {
     return { cls: '対象外', reason: `明確な応募資格の不一致：${signals.qualification.excerpt}`, confirmItems: [], shortage: [], actions: [] };
   }
 
+  // 利用環境（OS）の必須要件が、本人の環境と明確に食い違う場合は対象外。本人の環境が未登録なら要確認（importantConfirmItems）。
+  // 「歓迎」「推奨」のような緩い表現は対象にしない（検出側でlevel=softになる）。
+  if (signals && signals.environment && environmentVerdict(signals.environment).verdict === 'mismatch') {
+    return {
+      cls: '対象外',
+      reason: `明確な必須条件の不一致：${signals.environment.excerpt}（本人の利用環境は${ENVIRONMENT.os}）`,
+      confirmItems: [], shortage: [], actions: [],
+    };
+  }
+
   // 明確に対応不能と確認できる稼働条件（明示の最低稼働が本人の上限＝週20時間を超える）だけは対象外にする。
   // 換算値（日数×時間）による超過や、週15〜20時間・固定時間帯などは対象外にせず「要確認」とする。
   const wl = signals && signals.workload;
@@ -195,7 +214,7 @@ function classifyFinalCore(job, analysis) {
   const confirmItems = importantConfirmItems(job, analysis, signals);
 
   const submissionShortage = signals && signals.requiredSubmission ? signals.requiredSubmission.uncovered || [] : [];
-  const shortage = submissionShortage.map(u => `必須の提出物「${u.label}」の同種の作品がない`);
+  const shortage = submissionShortage.map(u => `必須の提出物「${u.label}」: 登録済みの作品に同種がない（実績の有無そのものは未確認）`);
   const actions = submissionShortage.map(u => u.action).filter(Boolean);
 
   if (confirmItems.length > 0) {
@@ -291,6 +310,10 @@ function applyDisplayFields(job, result) {
   if (result.cls === '育成候補' || result.slot === 'revenue') {
     if (result.shortage.length > 0) job.missingAssets = result.shortage;
     job.growthActions = result.actions;
+  } else if (result.cls === '要確認') {
+    // 要確認の「不足」は、案件全文の最終分類で求めたものだけを示す。一覧段階の評価器の類型に由来する文言
+    // （案件本文と無関係な類型の「受注実績がまだない」等）は残さない。
+    job.missingAssets = result.shortage;
   }
 }
 

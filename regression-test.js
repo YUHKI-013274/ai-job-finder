@@ -2393,6 +2393,110 @@ function cleanupFillerArtifacts(jobId) {
 }
 
 
+{
+  // ===== 案件リストアップ精度の改善 #1〜#5 =====
+  const c5 = require('./application-conditions');
+  const sel5 = require('./job-selection');
+
+  // #1 一致した語が「〜経験者歓迎」と経験の言及にしか出てこない場合は類型を採用せず、確認候補（不適合とは断定しない）
+  const sns = analyzer.analyzeJobDetail(detailFixture({
+    title: '【在宅ワーク】SNSマーケティングスクールのオンライン相談スタッフ募集｜営業・接客経験者歓迎',
+    description: 'オンライン面談を担当していただくスタッフを募集します。\n営業経験を活かして働きたい方を歓迎します。\n\nこんな方を歓迎します\n・営業や接客の経験を活かしたい方\n\n応募方法\n⑤ 営業・接客などの経験：\n⑥ オンライン面談・商談の経験：',
+    requiredConditions: { value: null, status: 'requires_analysis', matchedHeading: null, sourceAvailable: true },
+    responseItems: { value: null, status: 'requires_analysis', matchedHeading: null, sourceAvailable: true },
+  }));
+  record('#1 語が「営業・接客経験者歓迎」と経験の言及にしか出てこない案件は、類型（飲食・接客）を採用せず確認候補にする',
+    sns.searchSystemReevaluation.capabilityStatus === '確認候補' && sns.searchSystemReevaluation.categoryMatchOverridden === true
+    && sns.searchSystemReevaluation.categoryMatchNotes.some(n => /経験者歓迎/.test(n)) && sns.recommendation.value !== 'stop');
+  const ctl = analyzer.analyzeJobDetail(detailFixture({
+    title: '接客マニュアル作成のお仕事', description: '店舗スタッフ向けの接客マニュアルを作成してください。接客の基本動作を整理します。',
+  }));
+  record('#1 業務内容として語が出てくる案件は却下しない（巻き添えなし）',
+    !(ctl.searchSystemReevaluation.categoryMatchNotes || []).some(n => /経験者歓迎/.test(n)));
+  const slide = analyzer.analyzeJobDetail(detailFixture({
+    title: 'Canvaスライド制作お願いします！', description: '【 重視する点・経験 】\n資料作成の経験・実績がある方\n【 応募方法 】\n・簡単な自己紹介',
+  }));
+  record('#1 タイトルに語が無く本文の「資料作成の経験」で類型が決まる案件は対象外にして、巻き添えで確認候補にしない',
+    !(slide.searchSystemReevaluation.categoryMatchNotes || []).some(n => /経験者歓迎/.test(n)));
+
+  // #2 利用環境（OS）：明確な必須条件の不一致は対象外。未登録なら要確認。歓迎レベルは対象にしない
+  const envMac = c5.detectEnvironmentRequirement('＊Mac系のPCのみ採用しております。');
+  record('#2 「Mac系のPCのみ採用」を必須のOS要件として検出し、本人のOS（Windows）とは不一致（mismatch）',
+    envMac.level === 'required' && envMac.requiredOs === 'Mac' && c5.ENVIRONMENT.os === 'Windows' && c5.environmentVerdict(envMac).verdict === 'mismatch');
+  record('#2 本人のOSが未登録なら「unknown（要確認）」、要件OSと一致すれば「ok」',
+    c5.environmentVerdict(envMac, null).verdict === 'unknown'
+    && c5.environmentVerdict(c5.detectEnvironmentRequirement('Windowsのみ対応可能です。'), 'Windows').verdict === 'ok');
+  record('#2 「Macだと尚可」「Macが望ましい」「Mac・Windowsどちらでも」は必須条件ではない（対象にしない）',
+    ['Macだと尚可です。', 'Macが望ましい', 'Mac・Windowsどちらでも問いません'].every(t => c5.environmentVerdict(c5.detectEnvironmentRequirement(t)).verdict === 'none'));
+  const sigBase = { age: { level: null }, specialApply: { detected: false }, workload: { level: 'none', excerpts: [] }, language: { detected: false }, creative: { detected: false }, priceDetail: { unknown: false }, priceTerms: {}, qualification: { detected: false }, requiredExperience: { detected: false }, requiredSubmission: { required: false, uncovered: [] }, requiredTools: [], categoryId: null };
+  const anaBase = { recommendation: { value: 'hold', reasons: [] }, searchSystemReevaluation: { capabilityStatus: '確認候補', evidenceType: '証明不足', missingEvidence: [] }, toolFit: { perTool: [] }, selectionSignals: sigBase };
+  const jobE = { id: 'E', title: 't', price: '8000円', priceUnverified: false };
+  const rMac = sel5.classifyFinal(jobE, { ...anaBase, selectionSignals: { ...sigBase, environment: envMac } });
+  record('#2 Mac限定の案件は「対象外」（明確な必須条件の不一致）。理由に本人の利用環境が示される',
+    rMac.cls === '対象外' && /Mac/.test(rMac.reason) && /Windows/.test(rMac.reason));
+
+  // #3 必須条件の見出し配下の「〜経験」、必須ツールの未確認は「要確認」（不適合とは断定しない）
+  record('#3 「■必須条件」配下の「Webサイトまたはの商用デザイン経験」を必須の経験として検出する',
+    c5.detectRequiredExperience('■ 必須条件\n・WebサイトまたはLPの商用デザイン経験\n・ポートフォリオをご提出いただける方\n■ 歓迎').detected === true);
+  record('#3 「実務経験は問いません」「社会人経験」や、歓迎の見出し配下の経験は必須の経験にしない',
+    c5.detectRequiredExperience('■ 応募資格\n・ライターとしての実務経験は問いません。').detected === false
+    && c5.detectRequiredExperience('■ 必須条件\n・社会人経験のある方\n■ 歓迎する経験\n・デザイン経験').detected === false);
+  const rt = c5.detectRequiredTools('■ 必須条件\n・Figmaで制作・データ共有ができる方\n・Excelの基本操作ができる方\n■ 歓迎する経験\n・Notion');
+  record('#3 必須条件の配下のツール（Figma）を拾い、基本操作・歓迎の見出し以降は拾わない', rt.tools.length === 1 && rt.tools[0].tool === 'Figma');
+  const tools = (status) => ({ ...anaBase, recommendation: { value: 'proceed_after_confirmation', reasons: [] },
+    searchSystemReevaluation: { capabilityStatus: '応募可能', evidenceType: '直接証明', missingEvidence: [] },
+    toolFit: { perTool: [{ tool: 'Figma', status }] }, selectionSignals: { ...sigBase, requiredTools: rt.tools } });
+  const rUn = sel5.classifyFinal(jobE, tools('unknown'));
+  record('#3 必須ツールの使用経験が未確認（unknown）なら「要確認」で項目別に示す。確認済み（met）なら出さない',
+    rUn.cls === '要確認' && rUn.confirmItems.some(x => /必須ツール「Figma」の使用経験が未確認/.test(x))
+    && sel5.classifyFinal(jobE, tools('met')).cls === '今応募');
+
+  // #4 Web・LPデザインの案件で「LP」をLP原稿（ライティング）の型に当てない
+  const subD = c5.detectRequiredSubmission('商品LP・Webサイトのデザイナー募集\n■ 必須条件\n・WebサイトまたはLPの商用デザイン経験\n・ポートフォリオをご提出いただける方');
+  record('#4 デザイン案件の必須提出物は「Web・LPデザイン」（LP原稿・ステップメールの型にしない）。不足なら対応するデザインの行動を示す',
+    subD.required === true && subD.uncovered.some(u => u.id === 'web_design') && !subD.uncovered.some(u => u.id === 'sales_copy')
+    && /デザイン/.test(subD.uncovered[0].action) && !/LP原稿/.test(subD.uncovered[0].action));
+  const subW = c5.detectRequiredSubmission('LPのライティング募集\n応募条件（必須）\n・LP原稿の執筆実績があること\n・ポートフォリオを添付してください');
+  record('#4 LPのライティング案件では従来どおり「LP・ステップメール・セールスレター」の型になる',
+    subW.uncovered.some(u => u.id === 'sales_copy'));
+
+  // #5 カテゴリー補正：タイトルの「AI活用OK」等の定型句を主題として数えない／案件本文の概要を示す
+  const sw = analyzer.analyzeJobDetail(detailFixture({
+    title: '【未経験歓迎】実務で学ぶセールスライティング｜LP・メール原稿の作成｜完全在宅・AI活用OK',
+    description: '記事やブログのライティングを行うライターを募集します。ライター未経験でも大丈夫です。\n原稿の執筆、記事の構成づくり、ブログ記事のライティングをお願いします。\n生成AIは下書きに活用できます。AI活用が推奨されています。',
+  }));
+  record('#5 タイトルの「AI活用OK」の定型句だけでAI活用類型にならず、ライティング類型（SEO・解説記事・体験ライティング）に補正される',
+    sw.selectionSignals.categoryId === 'seo_article');
+  const aiReal = analyzer.analyzeJobDetail(detailFixture({
+    title: 'AI活用の業務改善・仕組み化を支援', description: 'AI活用による業務改善の仕組み化、AI導入の相談を担当します。',
+  }));
+  record('#5 本当にAI活用が主題の案件は従来どおりAI活用類型のまま（巻き添えなし）', aiReal.selectionSignals.categoryId !== 'seo_article');
+  const ov = c5.extractOverview('「文章を書くことを、仕事につなげたい」\n\nそんな方へ。\n株式会社オレコンでは、商品・サービスの魅力を伝える原稿を作成するライターを募集しています。\nライター未経験の方も応募可能です。\n■□■ 作成する原稿 ■□■\n・LPの原稿');
+  record('#5 案件本文の概要は、挨拶・見出し・キャッチコピー・短い接続文を除いて本文の説明から取る',
+    ov && ov.startsWith('株式会社オレコンでは') && !/そんな方へ/.test(ov) && !/文章を書くことを/.test(ov));
+  const packetOv = {
+    jobId: 'X_OV', job: { title: 'テスト案件', url: 'https://crowdworks.jp/public/jobs/1', price: { raw: '5,000円' }, deadline: { raw: '2026年12月1日' }, description: '本文' },
+    evaluation: { rank: 'A' }, recommendation: { value: 'proceed_after_confirmation', reasons: [] }, concerns: { toolIssues: [], flaggedSafetyReview: [] },
+    requiredCapabilities: ['構成力'], usableExperience: [], clientValue: [],
+    usableFactsForProposal: { centralMessage: 'AIは手段と考え、現場で続けられる業務フローまで整理する', portfolioCandidates: [], avoidExpressions: [], prohibitedClaims: [] },
+    missingInformation: [], applicationQuestions: {}, selectionSignals: { overview: 'セールスライターを募集。LPとメール原稿を作成します。', age: { level: null } },
+  };
+  const wpOv = require('./work-prompt-builder').buildWorkPrompt({ id: 'X_OV', rank: 'A' }, { packet: packetOv });
+  record('#5 Work依頼用プロンプトに「案件本文の概要」を示し、Knowledgeの固定文は「類型の目安（案件固有の目的ではない）」と区別する',
+    wpOv.ok && /案件本文の概要: セールスライターを募集/.test(wpOv.text) && /類型の目安（Knowledgeの類型の固定文。案件固有の目的ではありません）: AIは手段/.test(wpOv.text)
+    && !/クライアントの目的: AIは手段/.test(wpOv.text));
+}
+
+
+{
+  // #3 の範囲：資格職として「現在勤務している方」という応募要件（「実務経験は問いません」の誤検出を直した結果、見えるようになった要件）
+  const c6 = require('./application-conditions');
+  record('#3 「現在、看護師として勤務している方」は明確な応募資格の不一致（mismatch）。「看護師向けの記事」「看護師として働いた経験は不要」は検出しない',
+    c6.detectQualificationMismatch('・現在、看護師として勤務している方\n・臨床経験5年未満の方').level === 'mismatch'
+    && c6.detectQualificationMismatch('看護師向けの記事を書いてください。看護師として働いた経験は不要です。').detected === false);
+}
+
+
 console.log('\n' + '='.repeat(100));
 console.log(`■ 合計: ${pass}/${total} 件合格`);
 console.log('='.repeat(100));

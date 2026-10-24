@@ -27,7 +27,7 @@
 const { evaluateJob, normalizeFullWidthDigits } = require('./evaluator');
 const { classifyCapability } = require('./knowledge-classifier');
 const { detectSelectionSignals } = require('./application-conditions');
-const { detectValueAxis } = require('./value-axis');
+const { detectValueAxis, AI_FLUFF_RE } = require('./value-axis');
 const {
   APPLICANT_ATTRIBUTE_EXCLUDE_PATTERNS,
   APPLICANT_ATTRIBUTE_CAUTION_PATTERNS,
@@ -122,6 +122,44 @@ function stripNegatedPhrasesLocal(str) {
 const FOOD_CONTEXT_CONFIRM_WORDS = ['飲食', '店舗', 'レストラン', 'カフェ', 'メニュー', '食品', '外食', '接客', '店長', '飲食店'];
 function hasFoodContextConfirmation(text) {
   return FOOD_CONTEXT_CONFIRM_WORDS.some(w => text.includes(w));
+}
+
+// ===== 修正10: 「営業・接客経験者歓迎」のように、一致した語が「〜経験者歓迎」と経験の言及にしか出てこない場合 =====
+// タイトルの一致語がすべて「〜経験者歓迎／優遇」の形で、本文の一致語もすべて「〜の経験」の形（行単位）のときだけ、
+// その類型は案件の業務内容を示していないとみなして却下する（確認候補にして人が判断する。不適合とは断定しない）。
+// タイトルに一致語が無い案件（本文の「資料作成の経験」だけで類型が決まる案件など）は対象外にして、巻き添えを防ぐ。
+const TITLE_EXPERIENCE_AFTER = /^[^。\n]{0,4}経験者\s*(?:大)?(?:歓迎|優遇)/;
+const BODY_EXPERIENCE_AFTER = /^[^。\n]{0,8}(?<!未)(?:経験|経験者)/;
+function experienceOnlyMatch(title, description, category) {
+  if (!category || !category.patterns) return { only: false };
+  const t = normalizeFullWidthDigits(title || '');
+  const tl = t.toLowerCase();
+  const matchedWords = new Set();
+  let titleOccurrences = 0;
+  for (const p of category.patterns) {
+    const pl = String(p).toLowerCase();
+    let i = tl.indexOf(pl);
+    while (i !== -1) {
+      titleOccurrences++;
+      if (!TITLE_EXPERIENCE_AFTER.test(t.slice(i + pl.length))) return { only: false };
+      matchedWords.add(p);
+      i = tl.indexOf(pl, i + 1);
+    }
+  }
+  if (titleOccurrences === 0) return { only: false };
+  for (const line of normalizeFullWidthDigits(description || '').split('\n')) {
+    const lower = line.toLowerCase();
+    for (const p of category.patterns) {
+      const pl = String(p).toLowerCase();
+      let i = lower.indexOf(pl);
+      while (i !== -1) {
+        if (!BODY_EXPERIENCE_AFTER.test(line.slice(i + pl.length, i + pl.length + 12))) return { only: false };
+        matchedWords.add(p);
+        i = lower.indexOf(pl, i + 1);
+      }
+    }
+  }
+  return { only: true, words: [...matchedWords] };
 }
 
 // ===== 修正5: 禁止事項等の「業務内容そのものではない文脈」にのみ出現する語でのカテゴリー誤判定を防ぐ =====
@@ -241,6 +279,11 @@ function evaluateWithCategory(detail) {
     // 修正5：一致した語が禁止事項・質問文の文脈にのみ出現する場合は却下
     const recheck = reverifyCategoryMatch(text, matchedCategory);
     if (!recheck.confident) rejectCategoryMatch(recheck.reason);
+    else {
+      // 修正10：一致した語が「〜経験者歓迎」と経験の言及にしか出てこない場合は、類型を採用せず確認候補にする
+      const expOnly = experienceOnlyMatch(detail.title, detail.description, matchedCategory);
+      if (expOnly.only) rejectCategoryMatch(`一致した語（${expOnly.words.join('・')}）がタイトルの「経験者歓迎」と経験の言及にしか出てこず、業務内容を示していない`);
+    }
   }
   if (domainExperience && !hasFoodContextConfirmation(text)) {
     categoryMatchNotes.push('飲食テーマ理解（ドメイン経験）は却下：飲食・店舗運営を示す語が本文に見つからない');
@@ -256,7 +299,8 @@ function evaluateWithCategory(detail) {
   // 判定値（応募可能度・証拠区分・必須能力・不足証拠・判定根拠）は、そのカテゴリー単独で
   // classifyCapability()を再実行して得るため、新しい判定基準は追加しない。
   if (matchedCategory && !excluded) {
-    const titleText = stripNegatedPhrasesLocal(normalizeFullWidthDigits(detail.title || ''));
+    // タイトルの「AI活用OK」等の募集文の定型句は、案件の主題を示す語として数えない
+    const titleText = stripNegatedPhrasesLocal(normalizeFullWidthDigits(detail.title || '')).replace(AI_FLUFF_RE, '');
     const countHits = (txt, cat) => cat.patterns.filter(p => txt.toLowerCase().includes(String(p).toLowerCase())).length;
     if (countHits(titleText, matchedCategory) === 0) {
       const titleCandidates = yukiProfile.taskCategories.filter(c => c.id !== matchedCategory.id && countHits(titleText, c) > 0);
@@ -748,6 +792,9 @@ function buildMissingInformation(conditions, searchSystemResult, toolFit, signal
     }
     if (signals.qualification && signals.qualification.detected) {
       missing.push({ item: '応募資格（資格・職業・経験の限定）の確認', detail: signals.qualification.excerpt, reason: '応募者の資格・職業・経験を限定する記載があり、Knowledgeで満たすことを確認できないため' });
+    }
+    if (signals.environment && signals.environment.detected && signals.environment.level === 'required') {
+      missing.push({ item: '利用環境（OS）の要件の確認', detail: signals.environment.excerpt, reason: '案件が利用環境（OS等）を限定しており、本人の環境との一致を確認する必要があるため' });
     }
     if (signals.language && signals.language.level === 'required') {
       missing.push({ item: '言語要件の確認', detail: signals.language.excerpt, reason: 'Knowledgeに語学力の記載がなく、本人の対応可否を確認できないため' });

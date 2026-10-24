@@ -43,7 +43,9 @@ function buildApplicationSectionHtml(job) {
       ${jd.confirmItems.map(c => `<div style="color:#7a5c00">・${escHtml(c)}</div>`).join('')}
       ${priceHtml}
       ${valueHtml}
-      <div><b>クライアントの目的:</b> ${escHtml(s.clientPurpose)}</div>
+      ${(packet.selectionSignals && packet.selectionSignals.overview)
+        ? `<div><b>案件本文の概要:</b> ${escHtml(packet.selectionSignals.overview)}</div><div style="color:#777"><b>類型の目安:</b> ${escHtml(s.clientPurpose)}</div>`
+        : `<div><b>クライアントの目的:</b> ${escHtml(s.clientPurpose)}</div>`}
       <div><b>求められる能力:</b> ${escHtml(s.requiredCapabilities)}</div>
       <div><b>必須条件:</b> ${escHtml(s.requiredConditionsText)}</div>
       <div><b>注意点:</b> ${escHtml(s.cautionText)}</div>

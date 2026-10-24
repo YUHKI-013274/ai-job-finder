@@ -273,6 +273,44 @@ function detectCreativeEntertainment(title, description) {
   return { detected, excerpt: detected ? excerpt(t) : null };
 }
 
+// ===== 利用環境（OS）の要件 =====
+// 本人の利用環境（ゆうき申告 2026-10-24／CLAUDE.md の環境欄：Windows 11）。Common Knowledge の正規データは変更せず、
+// ここに設定値として持つ。要件OSと不一致なら「明確な必須条件の不一致」、本人のOSが不明（null）なら「要確認」。
+const ENVIRONMENT = { os: 'Windows', source: 'ゆうき申告（2026-10-24）／CLAUDE.mdの環境欄（Windows 11）' };
+
+const OS_WORD = '(Mac|マック|MacBook|iMac|macOS|Windows|ウィンドウズ)';
+const OS_REQUIRED_RES = [
+  new RegExp(`${OS_WORD}(?:系)?(?:の)?(?:PC|パソコン|OS|端末)?[^。\\n]{0,6}?(?:のみ|限定|必須|専用)`, 'i'),
+  new RegExp(`${OS_WORD}[^。\\n]{0,8}(?:をお持ちの方|が必要|を使用できる方|を利用できる方)`, 'i'),
+];
+const OS_FORBIDDEN_RE = new RegExp(`${OS_WORD}[^。\\n]{0,4}(?:は|での)?(?:不可|NG|対応不可)`, 'i');
+const OS_SOFT_RE = /(歓迎|尚可|推奨|あれば|望ましい|どちらでも|問いません)/;
+const toOsName = w => (/^(mac|マック|macbook|imac|macos)$/i.test(w) ? 'Mac' : 'Windows');
+
+function detectEnvironmentRequirement(text) {
+  let soft = null;
+  for (const line of toLines(text)) {
+    for (const re of OS_REQUIRED_RES) {
+      const m = line.match(re);
+      if (!m) continue;
+      if (OS_SOFT_RE.test(line)) { soft = soft || { detected: true, level: 'soft', requiredOs: toOsName(m[1]), forbiddenOs: null, excerpt: excerpt(line) }; continue; }
+      return { detected: true, level: 'required', requiredOs: toOsName(m[1]), forbiddenOs: null, excerpt: excerpt(line) };
+    }
+    const f = line.match(OS_FORBIDDEN_RE);
+    if (f && !OS_SOFT_RE.test(line)) return { detected: true, level: 'required', requiredOs: null, forbiddenOs: toOsName(f[1]), excerpt: excerpt(line) };
+  }
+  return soft || { detected: false, level: null, requiredOs: null, forbiddenOs: null, excerpt: null };
+}
+
+// verdict: mismatch（明確な必須条件の不一致）／unknown（本人のOSが不明）／ok／none（要件なし・歓迎レベル）
+function environmentVerdict(env, ownOs = ENVIRONMENT.os) {
+  if (!env || !env.detected || env.level !== 'required') return { verdict: 'none' };
+  if (!ownOs) return { verdict: 'unknown' };
+  if (env.requiredOs && env.requiredOs !== ownOs) return { verdict: 'mismatch' };
+  if (env.forbiddenOs && env.forbiddenOs === ownOs) return { verdict: 'mismatch' };
+  return { verdict: 'ok' };
+}
+
 // ===== 資格・職業・属性・経験の限定（明確な応募資格の不一致） =====
 // 「施工管理の経験が2年以上ある方に限る」「保育士さん募集」「専門家募集」のように、応募者の資格・職業・属性を
 // 限定する明確な表現。ゆうきの確認済みの経歴領域（飲食・店舗運営・マネジメント・資料作成等）と重なる語を含む行は、
@@ -283,6 +321,8 @@ const QUALIFICATION_PATTERNS = [
   /【[^】]{0,6}(?:専門家|有資格者|現役[^】]{1,8}|(?:保育士|看護師|医師|薬剤師|栄養士|介護士|美容師)(?:さん)?)[^】]{0,6}(?:募集|限定)[^】]{0,3}】/,
   /【[^】]{0,4}(?:女性|男性)[^】]{0,10}(?:さん|の方)?募集[^】]{0,3}】/,
 ];
+// 資格職として「現在勤務している方」という応募要件（例：現在、看護師として勤務している方）
+QUALIFICATION_PATTERNS.push(/(?:保育士|看護師|医師|薬剤師|栄養士|教員|弁護士|税理士|社労士|建築士|介護士|美容師|臨床心理士|公認会計士)として(?:現在)?(?:勤務|働いて|従事|活動)/);
 // 補助金・助成金の申請業務（専門実務。evaluator.jsのSPECIALIZED_SCOPE_PATTERNSと同じ趣旨で、言い換え表記を補う）
 QUALIFICATION_PATTERNS.push(/(?:補助金|助成金)[^。\n]{0,8}申請(?:の)?(?:サポート|代行|支援|業務|実務|書類)/);
 const KNOWN_BACKGROUND = /(飲食|店舗|店長|マネージャー|マネジメント|プロジェクト|営業資料|提案|資料作成)/;
@@ -304,9 +344,14 @@ function detectQualificationMismatch(text) {
 // 対象にしない。種類が特定できない／手持ち資産が無い種類の場合は、満たすかどうかの確認事項として検出する。
 const REQ_EXP_HEADING = /(必須スキル|必須条件|必須要件|応募条件|応募資格|応募要件|重要視する点|求める人材|求めるスキル|求める経験|求める方)/;
 const REQ_EXP_LINE = /(経験(?:が|の)?(?:ある|あり|お持ち|豊富)|経験者|実務経験)/;
-const REQ_EXP_SOFT = /(歓迎|尚可|あれば|未経験|不問|問わず|なくても|優遇|あると)/;
+const REQ_EXP_SOFT = /(歓迎|尚可|あれば|未経験|不問|問わず|問いません|不要|なくても|優遇|あると)/;
 
-const REQ_EXP_GENERIC = /(社会人経験|ビジネス経験|職種指定なし|PC操作)/;
+// 厳密な「必須」見出し／行末が「経験」で終わる書き方の検出に使う補助定義（広げた検出は必須見出し配下に限定）
+const REQ_STRICT_HEADING = /(必須スキル|必須条件|必須要件)/;
+const REQ_SECTION_END = /^[■◆□▼【●]/;
+const REQ_EXP_WIDE = /(?<!未)経験(?:\s*$|が|の|を|者)|実務経験/;
+const REQ_EXP_SOFT_WIDE = /(歓迎|尚可|あれば|未経験|不問|問わ|問いません|不要|なくても|優遇|あると|社会人経験|ビジネス経験|職種指定なし|PC操作|積みたい|共有|職歴)/;
+const REQ_EXP_GENERIC =/(社会人経験|ビジネス経験|職種指定なし|PC操作)/;
 // タイトルの「〇〇経験者募集」「【〇〇経験者】」は、経験者に限る募集（「経験者歓迎」は対象外）
 const REQ_EXP_TITLE = /(?:【[^】]{0,20}経験者(?:募集)?[^】歓]{0,6}】|[^\s【】、。]{2,14}経験者募集)/;
 
@@ -327,7 +372,62 @@ function detectRequiredExperience(text) {
       return { detected: true, excerpt: excerpt(line) };
     }
   }
+  // 「必須条件」「必須スキル」「必須要件」と明記された見出しの配下に限り、「〜の商用デザイン経験」のように
+  // 行末が「経験」で終わる書き方も必須の経験として検出する（次の見出しまで。歓迎・任意・応募者の希望の文は除く）。
+  for (let i = 0; i < lines.length; i++) {
+    if (!REQ_STRICT_HEADING.test(lines[i])) continue;
+    for (let j = i + 1; j < Math.min(lines.length, i + 9); j++) {
+      const line = lines[j];
+      if (REQ_SECTION_END.test(line)) break;
+      if (!REQ_EXP_WIDE.test(line) || REQ_EXP_SOFT_WIDE.test(line)) continue;
+      const types = matchDeliverableTypes(line);
+      if (types.length > 0 && types.every(t => t.coveredBy.length > 0)) continue;
+      return { detected: true, excerpt: excerpt(line) };
+    }
+  }
   return { detected: false, excerpt: null };
+}
+
+// 必須条件の見出し配下に挙がるツールのうち、Knowledgeに使用実績が無いもの（Figma等）は、案件側が必須としている以上
+// 「軽微な確認」ではなく重要事項として扱う。ここでは名前だけを拾い、使用実績の有無（unknown）は分析結果（toolFit）と突き合わせる。
+const REQ_TOOL_NAMES = ['Figma', 'Excel', 'Word', 'Notion', 'Photoshop', 'Illustrator', 'Canva', 'PowerPoint', 'Googleスライド', 'ChatGPT', 'Claude Code', 'Dify'];
+const REQ_TOOL_SOFT = /(基本操作|基本的な|抵抗がない|使えれば|歓迎|尚可|あれば|だと尚)/;
+
+function detectRequiredTools(text) {
+  const lines = toLines(text);
+  const found = [];
+  for (let i = 0; i < lines.length; i++) {
+    if (!REQ_STRICT_HEADING.test(lines[i])) continue;
+    for (let j = i + 1; j < Math.min(lines.length, i + 9); j++) {
+      const line = lines[j];
+      if (REQ_SECTION_END.test(line)) break;
+      if (REQ_TOOL_SOFT.test(line)) continue;
+      for (const tool of REQ_TOOL_NAMES) {
+        if (line.includes(tool) && !found.some(f => f.tool === tool)) found.push({ tool, excerpt: excerpt(line) });
+      }
+    }
+  }
+  return { tools: found };
+}
+
+// ===== 案件本文の概要（Knowledgeの類型の固定文ではなく、案件自身の説明を示すための抜き出し） =====
+const GREETING_RE = /(ありがとうございます|はじめまして|こんにちは|ご覧いただ|閲覧いただ|見ていただ|お世話に|ご興味をお持ち)/;
+
+function extractOverview(description, max = 150) {
+  const picked = [];
+  for (const raw of normalizeDigits(description).split(/\r?\n/)) {
+    const l = raw.trim();
+    if (!l) continue;
+    if (GREETING_RE.test(l) && l.length < 40) continue;              // 挨拶
+    if (/^[■□◆◇●▼【\[＝=ー\-─━]/.test(l) && l.length <= 24) continue; // 見出し行
+    if (/^[「『].*[」』]$/.test(l)) continue;                          // 応募者へのキャッチコピー
+    if (l.length < 10) continue;                                     // 「そんな方へ。」等の短い接続文
+    picked.push(l.replace(/^[・\-\s]+/, ''));
+    if (picked.join(' ').length >= max) break;
+  }
+  const s = picked.join(' ');
+  if (!s) return null;
+  return s.length > max ? `${s.slice(0, max)}…` : s;
 }
 
 // ===== 必須提出物（制作実績・ポートフォリオ）と、手持ち資産との突合 =====
@@ -339,6 +439,12 @@ const DELIVERABLE_TYPES = [
     patterns: ['メニュー表', '価格表', '料金表', '価格リスト', '商品カタログ', 'カタログ'],
     coveredBy: [],
     action: 'メニュー表または価格表のサンプルを1点自主制作し、画像制作ポートフォリオ（/design）に追加してから応募する',
+  },
+  {
+    id: 'web_design', label: 'Web・LPデザイン',
+    patterns: ['Webデザイン', 'ウェブデザイン', 'LPデザイン', 'Webサイト', 'サイトデザイン', 'ブランドサイト', 'Figma', 'Makuake', 'ページのデザイン'],
+    coveredBy: [],
+    action: 'Web・LPデザインのサンプルを1点自主制作し、画像制作ポートフォリオ（/design）に追加してから応募する',
   },
   {
     id: 'sales_copy', label: 'LP・ステップメール・セールスレター',
@@ -396,10 +502,14 @@ function detectRequiredSubmission(text) {
     if (!(REQUIRED_CONTEXT.test(line) || REQUIRED_CONTEXT.test(around))) continue;
     // 種類の判定は、提出を求める行とその前後（実績の種類が前の行に書かれる形式が多い）で行う
     const window = lines.slice(Math.max(0, i - 2), i + 2).join('\n');
-    const types = matchDeliverableTypes(window);
-    const specific = types.filter(t => ['price_menu', 'sales_copy', 'manual', 'scenario'].includes(t.id));
+    const SPECIFIC_IDS = ['price_menu', 'sales_copy', 'manual', 'scenario', 'web_design'];
+    // 「LP」はライティング（LP原稿）とデザイン（LPのデザイン）の両方で使われる。デザインの文脈では原稿の型にしない
+    const designContext = /(デザイン|デザイナー|レイアウト|Figma)/.test(`${window}\n${lines[0] || ''}`);
+    const dropCopy = ts => (designContext ? ts.filter(t => t.id !== 'sales_copy') : ts);
+    const types = dropCopy(matchDeliverableTypes(window));
+    const specific = types.filter(t => SPECIFIC_IDS.includes(t.id));
     // 提出を求める行の周辺に種類が無ければ、案件タイトルが示す種類で補う
-    const titleTypes = matchDeliverableTypes(lines[0] || '').filter(t => ['price_menu', 'sales_copy', 'manual', 'scenario'].includes(t.id));
+    const titleTypes = dropCopy(matchDeliverableTypes(lines[0] || '')).filter(t => SPECIFIC_IDS.includes(t.id));
     const target = specific.length > 0 ? specific : (titleTypes.length > 0 ? titleTypes : types);
     const uncovered = target.filter(t => t.coveredBy.length === 0);
     return {
@@ -431,6 +541,9 @@ function detectSelectionSignals(title, description, price = null) {
     qualification: detectQualificationMismatch(text),
     requiredExperience: detectRequiredExperience(text),
     requiredSubmission: detectRequiredSubmission(text),
+    environment: detectEnvironmentRequirement(text),
+    requiredTools: detectRequiredTools(text).tools,
+    overview: extractOverview(description),
   };
 }
 
@@ -450,5 +563,10 @@ module.exports = {
   detectQualificationMismatch,
   detectRequiredExperience,
   detectRequiredSubmission,
+  ENVIRONMENT,
+  detectEnvironmentRequirement,
+  environmentVerdict,
+  detectRequiredTools,
+  extractOverview,
   detectSelectionSignals,
 };

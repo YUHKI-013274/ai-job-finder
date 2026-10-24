@@ -127,4 +127,4 @@ function valueTier(va, job, signals) {
   return { tier: 4, label: `${va.areaNo}${va.areaLabel}（優先度は低いが除外しない）` };
 }
 
-module.exports = { AREAS, EXPERIENCE, detectValueAxis, valueTier };
+module.exports = { AREAS, EXPERIENCE, AI_FLUFF_RE, detectValueAxis, valueTier };

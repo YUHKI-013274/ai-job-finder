@@ -174,7 +174,10 @@ function buildWorkPrompt(job, { packet } = {}) {
     `【案件URL / Job ID】\n${url}\nJob ID: ${jobId}`,
     `【報酬・締切】\n報酬: ${formatPrice(pj.price || job.price)} / 締切: ${formatDeadline(pj.deadline || job.deadline)}${describePriceTerms(p.selectionSignals, job)}`,
     `【応募判断】\n${jd.label}${rankText ? `（評価ランク${rankText}）` : ''}\n理由: ${jd.reason}${judgmentConfirm}`,
-    `【案件分析】\nクライアントの目的: ${s.clientPurpose}`,
+    // Knowledgeの類型の固定文は案件固有の目的ではないため、案件本文の概要を先に示し、固定文は「類型の目安」と区別する
+    (p.selectionSignals && p.selectionSignals.overview)
+      ? `【案件分析】\n案件本文の概要: ${p.selectionSignals.overview}\n類型の目安（Knowledgeの類型の固定文。案件固有の目的ではありません）: ${s.clientPurpose}`
+      : `【案件分析】\nクライアントの目的: ${s.clientPurpose}`,
     `【案件内容】\n${pj.description || NOT_RECORDED}`,
     `【求められる能力】\n${capabilityText}`,
     `【注意点】\n${cautionText}`,
