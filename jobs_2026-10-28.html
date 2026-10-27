@@ -1,0 +1,4274 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="AI案件">
+  <link rel="manifest" href="manifest.json">
+  <title>【AI案件】2026年10月28日水曜日</title>
+  <style>
+    :root {
+      --primary: #1a1a2e;
+      --accent: #e74c3c;
+      --bg: #f0f2f5;
+      --card-bg: #ffffff;
+      --text: #2c3e50;
+      --text-muted: #7f8c8d;
+      --radius: 14px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Yu Gothic', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      padding-bottom: 80px;
+    }
+
+    /* ===== ヘッダー ===== */
+    .header {
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 60%, #0f3460 100%);
+      color: white;
+      padding: 20px 16px 16px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+    }
+    .header-top { display: flex; justify-content: space-between; align-items: flex-start; }
+    .header h1 { font-size: 1rem; font-weight: 700; }
+    .header .date { font-size: 0.75rem; opacity: 0.7; margin-top: 2px; }
+    .header-stats {
+      display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap;
+    }
+    .stat-chip {
+      background: rgba(255,255,255,0.15);
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 0.78rem;
+      font-weight: 600;
+    }
+    .stat-chip.s { background: rgba(231,76,60,0.6); }
+    .stat-chip.a { background: rgba(230,126,34,0.6); }
+    .stat-chip.b { background: rgba(39,174,96,0.4); }
+
+    /* ===== タブ ===== */
+    .tab-bar {
+      display: flex;
+      background: white;
+      border-bottom: 2px solid #e0e0e0;
+      position: sticky;
+      top: 82px;
+      z-index: 99;
+      overflow-x: auto;
+    }
+    .tab {
+      flex: 1;
+      padding: 10px 4px;
+      text-align: center;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      border-bottom: 3px solid transparent;
+      cursor: pointer;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+    .tab.active {
+      color: var(--primary);
+      border-bottom-color: var(--primary);
+    }
+
+    /* ===== コンテンツエリア ===== */
+    .tab-content { display: none; padding: 12px; }
+    .tab-content.active { display: block; }
+
+    /* ===== TOP3セクション ===== */
+    .top3-header {
+      background: linear-gradient(135deg, #e74c3c, #c0392b);
+      color: white;
+      padding: 10px 14px;
+      border-radius: var(--radius) var(--radius) 0 0;
+      font-weight: 700;
+      font-size: 0.9rem;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .top3-section {
+      margin-bottom: 20px;
+      border-radius: var(--radius);
+      overflow: hidden;
+      box-shadow: 0 4px 16px rgba(231,76,60,0.2);
+    }
+
+    /* ===== ランクセクション ===== */
+    .rank-section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 12px;
+      margin: 16px 0 8px;
+      background: white;
+      border-radius: 8px;
+      font-weight: 700;
+      font-size: 0.9rem;
+    }
+    .count-badge {
+      color: white;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 0.75rem;
+    }
+
+    /* ===== 案件カード ===== */
+    .job-card {
+      background: var(--card-bg);
+      border-radius: var(--radius);
+      padding: 14px;
+      margin-bottom: 10px;
+      border-left: 4px solid #ddd;
+      box-shadow: 0 1px 6px rgba(0,0,0,0.07);
+    }
+    .top3-card {
+      border-radius: 0;
+      margin-bottom: 1px;
+      box-shadow: none;
+    }
+    .top3-card:last-child { border-radius: 0 0 var(--radius) var(--radius); margin-bottom: 0; }
+
+    .job-header {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 8px;
+      flex-wrap: wrap;
+    }
+    .job-number {
+      color: white;
+      width: 24px; height: 24px;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.75rem;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+    .rank-badge {
+      color: white;
+      padding: 2px 8px;
+      border-radius: 20px;
+      font-size: 0.72rem;
+      font-weight: 700;
+    }
+    .top3-badge {
+      background: #fff3cd;
+      color: #856404;
+      padding: 2px 8px;
+      border-radius: 20px;
+      font-size: 0.72rem;
+      font-weight: 700;
+    }
+    .promoted-badge {
+      background: #e0e0e0;
+      color: #555;
+      padding: 2px 8px;
+      border-radius: 20px;
+      font-size: 0.72rem;
+      font-weight: 700;
+    }
+    .tier-badge {
+      padding: 2px 8px;
+      border-radius: 20px;
+      font-size: 0.72rem;
+      font-weight: 700;
+    }
+    .jobstatus-badge {
+      padding: 2px 8px;
+      border-radius: 20px;
+      font-size: 0.7rem;
+      font-weight: 600;
+    }
+    .jobstatus-badge.new { background: #fff3cd; color: #856404; }
+    .jobstatus-badge.continuing { background: #e0e7ff; color: #3949ab; }
+    .genre-tag {
+      background: #ecf0f1;
+      color: #555;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 0.7rem;
+    }
+    .capability-badge {
+      color: white;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 0.7rem;
+      font-weight: 700;
+    }
+    .decision-source {
+      font-size: 0.7rem;
+      color: #888;
+      margin-top: 4px;
+    }
+
+    .job-title {
+      font-size: 0.95rem;
+      font-weight: 700;
+      line-height: 1.4;
+      margin-bottom: 8px;
+    }
+    .job-title a { color: var(--text); text-decoration: none; }
+
+    .job-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      margin-bottom: 10px;
+    }
+    .meta-item {
+      background: #f8f9fa;
+      padding: 3px 8px;
+      border-radius: 8px;
+      font-size: 0.75rem;
+      color: #555;
+    }
+    .keyword-tag { background: #e8f4fd; color: #2980b9; }
+
+    .scores {
+      background: rgba(0,0,0,0.03);
+      border-radius: 8px;
+      padding: 8px 10px;
+      margin-bottom: 10px;
+    }
+    .score-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 2px 0;
+    }
+    .score-label { font-size: 0.75rem; color: #666; }
+    .score-stars { font-size: 0.85rem; color: #f39c12; letter-spacing: 1px; }
+
+    .detail-section {
+      border-radius: 8px;
+      padding: 8px 10px;
+      margin-bottom: 6px;
+      font-size: 0.82rem;
+    }
+    .detail-section.reason { background: #f0f8f0; }
+    .detail-section.caution { background: #fff8f0; }
+    .detail-section.strength { background: #f0f0ff; }
+    .detail-section.missing { background: #fdf0f0; }
+    .detail-section.highvalue { background: #fdf1e6; border: 1px solid #f0c896; }
+    .detail-section.confirm { background: #eef6fb; }
+    .detail-label { font-weight: 700; font-size: 0.73rem; margin-bottom: 3px; color: #555; }
+    .detail-text { line-height: 1.5; color: #333; }
+    .signal-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+    .signal-chip {
+      background: #dff0d8;
+      color: #2e7d32;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 0.76rem;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .card-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+      flex-wrap: wrap;
+    }
+    .btn-view {
+      flex: 1;
+      display: block;
+      background: #3498db;
+      color: white;
+      text-align: center;
+      padding: 10px;
+      border-radius: 10px;
+      text-decoration: none;
+      font-size: 0.85rem;
+      font-weight: 700;
+    }
+    .btn-save {
+      background: #f8f9fa;
+      border: 2px solid #ddd;
+      color: #555;
+      padding: 10px 14px;
+      border-radius: 10px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+    .btn-save.saved {
+      background: #fff3cd;
+      border-color: #ffc107;
+      color: #856404;
+    }
+    .btn-applied {
+      background: #f8f9fa;
+      border: 2px solid #ddd;
+      color: #555;
+      padding: 10px 14px;
+      border-radius: 10px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+    .btn-applied.applied {
+      background: #eaf4ea;
+      border-color: #27ae60;
+      color: #1a7a40;
+    }
+    .job-card.applied-card {
+      opacity: 0.4;
+      position: relative;
+    }
+    .applied-overlay {
+      display: none;
+      position: absolute;
+      top: 8px; right: 8px;
+      background: #27ae60;
+      color: white;
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 10px;
+    }
+    .job-card.applied-card .applied-overlay { display: inline-block; }
+
+    .btn-skip {
+      background: #f8f9fa;
+      border: 2px solid #ddd;
+      color: #555;
+      padding: 10px 14px;
+      border-radius: 10px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+    .btn-skip.skipped {
+      background: #eceff1;
+      border-color: #607d8b;
+      color: #37474f;
+    }
+    .job-card.skipped-card {
+      opacity: 0.4;
+      position: relative;
+    }
+    .skipped-overlay {
+      display: none;
+      position: absolute;
+      top: 8px; right: 8px;
+      background: #607d8b;
+      color: white;
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 10px;
+    }
+    .job-card.skipped-card .skipped-overlay { display: inline-block; }
+    .skip-reason-text {
+      font-size: 0.75rem;
+      color: #607d8b;
+      margin-top: 4px;
+    }
+
+    /* ===== 除外カード ===== */
+    .excluded-card {
+      background: var(--card-bg);
+      border-radius: 10px;
+      padding: 10px 12px;
+      margin-bottom: 8px;
+      opacity: 0.75;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+    }
+    .excluded-header {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 6px;
+    }
+    .reason-badge {
+      color: white;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 0.7rem;
+      font-weight: 700;
+    }
+    .excluded-title { font-size: 0.85rem; margin-bottom: 4px; }
+    .excluded-title a { color: var(--text); text-decoration: none; }
+
+    /* ===== 候補リストタブ ===== */
+    .saved-empty {
+      text-align: center;
+      padding: 40px 20px;
+      color: var(--text-muted);
+      font-size: 0.9rem;
+      line-height: 1.8;
+    }
+    .saved-item {
+      background: white;
+      border-radius: 10px;
+      padding: 12px 14px;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+    }
+    .saved-rank {
+      font-weight: 700;
+      font-size: 0.9rem;
+      min-width: 28px;
+    }
+    .saved-title {
+      flex: 1;
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+    .saved-title a { color: var(--text); text-decoration: none; }
+    .btn-remove {
+      background: none;
+      border: none;
+      color: #ccc;
+      font-size: 1.2rem;
+      cursor: pointer;
+      padding: 4px;
+    }
+    .share-box {
+      background: #e8f4fd;
+      border-radius: 10px;
+      padding: 12px;
+      margin-top: 16px;
+      font-size: 0.82rem;
+      line-height: 1.6;
+    }
+    .share-box textarea {
+      width: 100%;
+      border: 1px solid #bee5f8;
+      border-radius: 8px;
+      padding: 8px;
+      font-size: 0.82rem;
+      resize: none;
+      background: white;
+      margin-top: 6px;
+      font-family: inherit;
+    }
+    .btn-copy {
+      margin-top: 8px;
+      background: #3498db;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 8px 16px;
+      font-size: 0.82rem;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .applied-export-box {
+      background: #eaf4ea;
+      border-radius: 10px;
+      padding: 12px;
+      margin-bottom: 16px;
+      font-size: 0.8rem;
+      line-height: 1.6;
+    }
+    .applied-export-box textarea {
+      width: 100%;
+      border: 1px solid #b7ddb7;
+      border-radius: 8px;
+      padding: 8px;
+      font-size: 0.78rem;
+      resize: none;
+      background: white;
+      margin-top: 6px;
+      font-family: monospace;
+    }
+
+    /* ===== フッター固定ボタン ===== */
+    .footer-fab {
+      position: fixed;
+      bottom: 16px;
+      right: 16px;
+      background: var(--primary);
+      color: white;
+      border: none;
+      border-radius: 50%;
+      width: 52px; height: 52px;
+      font-size: 1.4rem;
+      cursor: pointer;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 200;
+    }
+    .saved-count-badge {
+      position: absolute;
+      top: -4px; right: -4px;
+      background: var(--accent);
+      color: white;
+      border-radius: 50%;
+      width: 20px; height: 20px;
+      font-size: 0.65rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #applied-filter-bar, #skip-filter-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: white;
+      padding: 8px 12px;
+      border-radius: 10px;
+      margin-bottom: 10px;
+      font-size: 0.82rem;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+    }
+    #applied-filter-bar label, #skip-filter-bar label { cursor: pointer; color: #555; }
+
+    /* ===== 更新時刻 ===== */
+    .update-info {
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 0.72rem;
+      padding: 10px 0 4px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ヘッダー -->
+  <div class="header">
+    <div class="header-top">
+      <div>
+        <h1>📋 今日の応募候補</h1>
+        <div class="date">2026年10月28日水曜日</div>
+      </div>
+    </div>
+    <div class="header-stats">
+      <span class="stat-chip s">🔴 今日の最優先(S) 0件</span>
+      <span class="stat-chip a">🟠 優先応募(A) 0件</span>
+      <span class="stat-chip" style="background:rgba(211,84,0,0.55)">🔥 高単価チャレンジ 3件</span>
+      <span class="stat-chip">🌱 通常チャレンジ 0件</span>
+      <span class="stat-chip" style="background:rgba(142,68,173,0.55)">❓ 確認候補 11件</span>
+      <span class="stat-chip">🚫 見送り 94件</span>
+      <span class="stat-chip">🧩 不足資産 1件</span>
+      <span class="stat-chip">保留 0件</span>
+      <span class="stat-chip">除外 94件</span>
+    </div>
+  </div>
+
+  <!-- タブバー -->
+  <div class="tab-bar">
+    <div class="tab active" onclick="switchTab('now', this)">📋 今すぐ応募</div>
+    <div class="tab" onclick="switchTab('highvalue', this)">🔥 高単価チャレンジ</div>
+    <div class="tab" onclick="switchTab('normal', this)">🌱 通常チャレンジ</div>
+    <div class="tab" onclick="switchTab('confirm', this)">❓ 確認候補</div>
+    <div class="tab" onclick="switchTab('holds', this)">⏸ 保留</div>
+    <div class="tab" onclick="switchTab('excluded', this)">🚫 除外</div>
+    <div class="tab" onclick="switchTab('saved', this)">🔖 候補リスト</div>
+  </div>
+
+  <!-- 今すぐ応募タブ -->
+  <div id="tab-now" class="tab-content active">
+    <div class="update-info">最終更新: 2026/10/28 7:08:18</div>
+    <div id="applied-filter-bar">
+      <input type="checkbox" id="hide-applied" onchange="applyAppliedFilter()" checked>
+      <label for="hide-applied">応募済み案件を非表示にする</label>
+    </div>
+
+    <!-- TODAY TOP（今日応募すべき案件） -->
+    <div class="top3-section">
+      <div class="top3-header">🎯 今日応募すべき案件（capabilityStatus=応募可能・直接証明/強い代替証明、最大5件。無理な枠埋めはしません）</div>
+      
+    <div class="job-card rank-b top3-card"
+         data-id="13564839"
+         style="border-left-color:#27ae60; background:#f0fff4">
+
+      <div class="job-header">
+        <span class="job-number" style="background:#27ae60">1</span>
+        <span class="rank-badge" style="background:#27ae60">Bランク</span>
+        <span class="top3-badge">🎯 今日応募すべき案件</span>
+        <span class="tier-badge" style="background:#d35400; color:#fff">🔥 高単価チャレンジ</span>
+        
+        <span class="capability-badge" style="background:#2980b9">チャレンジ可能</span>
+        <span class="jobstatus-badge new">🆕 新着</span>
+        <span class="genre-tag">SEO・解説記事・体験ライティング</span>
+      </div>
+
+      <h2 class="job-title">
+        <a href="https://crowdworks.jp/public/jobs/13564839" target="_blank" rel="noopener">⚽｜スポーツ観戦中、思わず声が出てしまうことはありませんか？｜試合の体験談を紹介するライター募集｜継続依頼あり</a>
+      </h2>
+
+      <div class="job-meta">
+        <span class="meta-item">💰 10,000円</span>
+        
+        <span class="meta-item">📅 2026-11-11</span>
+        <span class="meta-item keyword-tag">🔑 ライター</span>
+      </div>
+
+      <div class="scores">
+        <div class="score-row">
+          <span class="score-label">②職能一致度</span>
+          <span class="score-stars">★★★★★</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">①証拠の強さ（ポートフォリオ活用度）</span>
+          <span class="score-stars">★★★☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">⑥単価</span>
+          <span class="score-stars">★★★★★</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">⑤継続性</span>
+          <span class="score-stars">★★★★★</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">⑧長期資産性</span>
+          <span class="score-stars">★★★★☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">④受注できる可能性</span>
+          <span class="score-stars">★★★☆☆</span>
+        </div>
+      </div>
+
+      <div class="detail-section reason">
+        <div class="detail-label">✅ この案件を選ぶ理由（証拠の強さ: 強い代替証明）</div>
+        <div class="signal-chips">
+          <span class="signal-chip">★★★★★ ライティング案件</span><span class="signal-chip">★★★★★ 高単価案件</span><span class="signal-chip">★★★★☆ 長期的な営業資産になりやすい</span><span class="signal-chip">★★★★☆ 継続案件の可能性</span><span class="signal-chip">★★★☆☆ 採用理由の証拠が強い（強い代替証明）</span><span class="signal-chip">★★★☆☆ ライティングページを営業資料にできる</span><span class="signal-chip">★★★☆☆ AI活用経験をアピールできる</span>
+        </div>
+        
+        <div class="detail-text" style="margin-top:6px">🧭 チャレンジ可能業務「SEO・解説記事・体験ライティング」に該当。制作実績としてAIライティング5記事（note系記事、SEO記事2本、比較記事、商品記事）、受注・実務経験としてテストライティング1件の契約・納品・検収・報酬支払い完了、使用可能ツール（ChatGPT・Claude）を活用を根拠に強い代替証明と判定。実績獲得目的の応募候補と判定。</div>
+        <div class="detail-text" style="margin-top:2px">使用できる能力: 情報整理力・相手目線・構成力・AI活用力・品質管理力</div>
+        <div class="decision-source">判定根拠: Sales Knowledge 6-3（案件辞典）/ 2-2（成長領域）</div>
+      </div>
+
+      
+      <div class="detail-section highvalue">
+        <div class="detail-label">🔥 高単価チャレンジと判断した理由</div>
+        <div class="detail-text">報酬10,000円で単価が高い、継続案件のシグナルがあり、次の案件・継続契約につながる可能性がある、長期的な営業資産（実績・ポートフォリオ）として残る度合いが高い</div>
+      </div>
+
+      
+
+      
+      <div class="detail-section strength">
+        <div class="detail-label">🧭 提供価値（選定の追加軸）</div>
+        <div class="detail-text">領域を特定できない（除外ではない）／得られる経験: 価値の制作物への落とし込み・成果確認・改善（2/4）</div>
+      </div>
+
+      <div class="detail-section strength">
+        <div class="detail-label">💡 提案文の軸</div>
+        <div class="detail-text" style="white-space:pre-line">ライティング実績（SEO記事・比較記事・商品レビューの自主制作）
+→ 「ライター」に沿って、検索意図と読者像を踏まえた記事構成・執筆を担当できます
+→ 検索・読者導線を意識した記事で、集客につながるコンテンツ資産を残せます</div>
+      </div>
+
+      
+      <div class="detail-section missing">
+        <div class="detail-label">🧩 不足しているもの</div>
+        <div class="detail-text">記事の外部受注実績が少ない（受注はテストライティング1件、成果物は自主制作5記事）</div>
+      </div>
+
+      
+      <div class="detail-section missing">
+        <div class="detail-label">▶ 補う行動</div>
+        <div class="detail-text">小口の記事案件で受注実績を1件積む。応募時はライティングポートフォリオ（/writing）の記事を添える</div>
+      </div>
+
+      <div class="detail-section caution">
+        <div class="detail-label">⚠️ 注意点</div>
+        <div class="detail-text">Sales Knowledgeの「対応可能業務（主戦場）」ではなく「チャレンジ可能業務（成長領域）」に該当する案件です。実績獲得目的として、代替証明・転用方法を具体的に説明してから応募してください</div>
+      </div>
+
+      <span class="applied-overlay">✅ 応募済み</span>
+      <span class="skipped-overlay">⏭ 見送り</span>
+      <div class="card-actions">
+        <a href="https://crowdworks.jp/public/jobs/13564839" target="_blank" class="btn-view">案件を見る →</a>
+        <button class="btn-save" onclick="toggleSave('13564839', '⚽｜スポーツ観戦中、思わず声が出てしまうことはありませんか？｜試合の体験談を紹介するライター募集｜継続依頼あり', 'https://crowdworks.jp/public/jobs/13564839', 'B')">
+          <span class="save-icon">🔖</span> <span class="save-text">候補に追加</span>
+        </button>
+        <button class="btn-applied" onclick="toggleApplied('13564839', '⚽｜スポーツ観戦中、思わず声が出てしまうことはありませんか？｜試合の体験談を紹介するライター募集｜継続依頼あり', 'https://crowdworks.jp/public/jobs/13564839')">
+          <span class="applied-text">✅ 応募済み</span>
+        </button>
+        <button class="btn-skip" onclick="toggleSkip('13564839', '⚽｜スポーツ観戦中、思わず声が出てしまうことはありませんか？｜試合の体験談を紹介するライター募集｜継続依頼あり', 'https://crowdworks.jp/public/jobs/13564839')">
+          <span class="skip-text">⏭ 見送り</span>
+        </button>
+      </div>
+    </div>
+  
+    </div>
+    
+
+    <!-- 残り今すぐ応募候補 -->
+    
+  </div>
+
+  <!-- 高単価チャレンジタブ -->
+  <div id="tab-highvalue" class="tab-content">
+    <div class="update-info">🔥 直接実績は不足していても、強い代替証明があり、単価・継続性・長期資産性のいずれかが高い案件。実績獲得目的で積極的にチャレンジ応募する枠</div>
+    <div class="rank-section-header" style="border-left:4px solid #27ae60">
+      <span style="color:#27ae60">Bランク</span>
+      <span class="count-badge" style="background:#27ae60">3件</span>
+    </div>
+    <div class="job-card rank-b"
+         data-id="13564843"
+         style="border-left-color:#27ae60; background:#f0fff4">
+
+      <div class="job-header">
+        <span class="job-number" style="background:#27ae60">1</span>
+        <span class="rank-badge" style="background:#27ae60">Bランク</span>
+        
+        <span class="tier-badge" style="background:#d35400; color:#fff">🔥 高単価チャレンジ</span>
+        
+        <span class="capability-badge" style="background:#2980b9">チャレンジ可能</span>
+        <span class="jobstatus-badge new">🆕 新着</span>
+        <span class="genre-tag">Canva・情報設計中心の画像制作</span>
+      </div>
+
+      <h2 class="job-title">
+        <a href="https://crowdworks.jp/public/jobs/13564843" target="_blank" rel="noopener">【初めてでもOK！】都内カフェのクリスマスイベント告知バナーの作成🎄</a>
+      </h2>
+
+      <div class="job-meta">
+        <span class="meta-item">💰 5,000円</span>
+        
+        <span class="meta-item">📅 2026-10-31</span>
+        <span class="meta-item keyword-tag">🔑 Webライティング</span>
+      </div>
+
+      <div class="scores">
+        <div class="score-row">
+          <span class="score-label">②職能一致度</span>
+          <span class="score-stars">★★☆☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">①証拠の強さ（ポートフォリオ活用度）</span>
+          <span class="score-stars">★☆☆☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">⑥単価</span>
+          <span class="score-stars">★★★★☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">⑤継続性</span>
+          <span class="score-stars">★★☆☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">⑧長期資産性</span>
+          <span class="score-stars">★★★☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">④受注できる可能性</span>
+          <span class="score-stars">★★★☆☆</span>
+        </div>
+      </div>
+
+      <div class="detail-section reason">
+        <div class="detail-label">✅ この案件を選ぶ理由（証拠の強さ: 強い代替証明）</div>
+        <div class="signal-chips">
+          <span class="signal-chip">★★★★☆ 高単価案件</span><span class="signal-chip">★★☆☆☆ その他</span><span class="signal-chip">★☆☆☆☆ 採用理由の証拠が強い（強い代替証明）</span>
+        </div>
+        
+        <div class="detail-text" style="margin-top:6px">🧭 チャレンジ可能業務「Canva・情報設計中心の画像制作」に該当。テーマ理解として飲食業22年、店長・店舗立ち上げ・売上改善・商品開発・撮影監修の経験、制作実績としてAI画像ポートフォリオ5作品、受注・実務経験としてAI画像作成サポート案件の契約成立（2026-07-26時点、納品前）、使用可能ツール（Canva）を活用を根拠に強い代替証明と判定。実績獲得目的の応募候補と判定。</div>
+        <div class="detail-text" style="margin-top:2px">使用できる能力: 相手目線・構成力・情報整理力・AI活用力・品質管理力</div>
+        <div class="decision-source">判定根拠: Sales Knowledge 6-4（案件辞典）/ 2-2（成長領域）（テーマ根拠: Sales Knowledge CARD-01/CARD-02/CARD-10）</div>
+      </div>
+
+      
+      <div class="detail-section highvalue">
+        <div class="detail-label">🔥 高単価チャレンジと判断した理由</div>
+        <div class="detail-text">報酬5,000円で単価が高い</div>
+      </div>
+
+      
+
+      
+      <div class="detail-section strength">
+        <div class="detail-label">🧭 提供価値（選定の追加軸）</div>
+        <div class="detail-text">優先度1：②価値を形にする × 収益が見込める／得られる経験: 商品・サービスの価値の明確化・価値の制作物への落とし込み（2/4）</div>
+      </div>
+
+      <div class="detail-section strength">
+        <div class="detail-label">💡 提案文の軸</div>
+        <div class="detail-text" style="white-space:pre-line">リサーチに基づく構成力・情報整理力
+→ この案件のテーマの要件を整理し、目的に合った成果物として仕上げます
+→ 要件と目的を明確にした上で、実務で使える成果物を提供できます</div>
+      </div>
+
+      
+      <div class="detail-section missing">
+        <div class="detail-label">🧩 不足しているもの</div>
+        <div class="detail-text">外部の納品済みCanva・情報設計の実績が少ない（AI画像5作品と、納品前の契約1件）</div>
+      </div>
+
+      
+      <div class="detail-section missing">
+        <div class="detail-label">▶ 補う行動</div>
+        <div class="detail-text">案件に近いテーマのサンプルを1点自主制作し、画像制作ポートフォリオ（/design）に追加してから応募する</div>
+      </div>
+
+      <div class="detail-section caution">
+        <div class="detail-label">⚠️ 注意点</div>
+        <div class="detail-text">Sales Knowledgeの「対応可能業務（主戦場）」ではなく「チャレンジ可能業務（成長領域）」に該当する案件です。実績獲得目的として、代替証明・転用方法を具体的に説明してから応募してください</div>
+      </div>
+
+      <span class="applied-overlay">✅ 応募済み</span>
+      <span class="skipped-overlay">⏭ 見送り</span>
+      <div class="card-actions">
+        <a href="https://crowdworks.jp/public/jobs/13564843" target="_blank" class="btn-view">案件を見る →</a>
+        <button class="btn-save" onclick="toggleSave('13564843', '【初めてでもOK！】都内カフェのクリスマスイベント告知バナーの作成🎄', 'https://crowdworks.jp/public/jobs/13564843', 'B')">
+          <span class="save-icon">🔖</span> <span class="save-text">候補に追加</span>
+        </button>
+        <button class="btn-applied" onclick="toggleApplied('13564843', '【初めてでもOK！】都内カフェのクリスマスイベント告知バナーの作成🎄', 'https://crowdworks.jp/public/jobs/13564843')">
+          <span class="applied-text">✅ 応募済み</span>
+        </button>
+        <button class="btn-skip" onclick="toggleSkip('13564843', '【初めてでもOK！】都内カフェのクリスマスイベント告知バナーの作成🎄', 'https://crowdworks.jp/public/jobs/13564843')">
+          <span class="skip-text">⏭ 見送り</span>
+        </button>
+      </div>
+    </div>
+  
+    <div class="job-card rank-b"
+         data-id="13564694"
+         style="border-left-color:#27ae60; background:#f0fff4">
+
+      <div class="job-header">
+        <span class="job-number" style="background:#27ae60">2</span>
+        <span class="rank-badge" style="background:#27ae60">Bランク</span>
+        
+        <span class="tier-badge" style="background:#d35400; color:#fff">🔥 高単価チャレンジ</span>
+        
+        <span class="capability-badge" style="background:#2980b9">チャレンジ可能</span>
+        <span class="jobstatus-badge new">🆕 新着</span>
+        <span class="genre-tag">SNS用画像の単発制作</span>
+      </div>
+
+      <h2 class="job-title">
+        <a href="https://crowdworks.jp/public/jobs/13564694" target="_blank" rel="noopener">美容好き歓迎‼️】美容系Instagramフィード画像制作パートナー募集</a>
+      </h2>
+
+      <div class="job-meta">
+        <span class="meta-item">💰 10,000円</span>
+        
+        <span class="meta-item">📅 2026-11-04</span>
+        <span class="meta-item keyword-tag">🔑 ライティング</span>
+      </div>
+
+      <div class="scores">
+        <div class="score-row">
+          <span class="score-label">②職能一致度</span>
+          <span class="score-stars">★★☆☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">①証拠の強さ（ポートフォリオ活用度）</span>
+          <span class="score-stars">★☆☆☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">⑥単価</span>
+          <span class="score-stars">★★★★★</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">⑤継続性</span>
+          <span class="score-stars">★★☆☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">⑧長期資産性</span>
+          <span class="score-stars">★★★☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">④受注できる可能性</span>
+          <span class="score-stars">★★★☆☆</span>
+        </div>
+      </div>
+
+      <div class="detail-section reason">
+        <div class="detail-label">✅ この案件を選ぶ理由（証拠の強さ: 強い代替証明）</div>
+        <div class="signal-chips">
+          <span class="signal-chip">★★★★★ 高単価案件</span><span class="signal-chip">★★☆☆☆ その他</span><span class="signal-chip">★★☆☆☆ AI活用経験をアピールできる</span><span class="signal-chip">★☆☆☆☆ 採用理由の証拠が強い（強い代替証明）</span>
+        </div>
+        
+        <div class="detail-text" style="margin-top:6px">🧭 チャレンジ可能業務「SNS用画像の単発制作」に該当。制作実績としてAI画像5作品、受注・実務経験としてAI画像作成サポート案件の契約成立（2026-07-26時点、納品前）、使用可能ツール（Canva）を活用を根拠に強い代替証明と判定。実績獲得目的の応募候補と判定。</div>
+        <div class="detail-text" style="margin-top:2px">使用できる能力: 相手目線・構成力・情報整理力</div>
+        <div class="decision-source">判定根拠: Sales Knowledge 6-10（案件辞典）/ 2-3（SNS用画像制作の例外）</div>
+      </div>
+
+      
+      <div class="detail-section highvalue">
+        <div class="detail-label">🔥 高単価チャレンジと判断した理由</div>
+        <div class="detail-text">報酬10,000円で単価が高い</div>
+      </div>
+
+      
+
+      
+      <div class="detail-section strength">
+        <div class="detail-label">🧭 提供価値（選定の追加軸）</div>
+        <div class="detail-text">領域を特定できない（除外ではない）／得られる経験: 価値の制作物への落とし込み（1/4）</div>
+      </div>
+
+      <div class="detail-section strength">
+        <div class="detail-label">💡 提案文の軸</div>
+        <div class="detail-text" style="white-space:pre-line">リサーチに基づく構成力・情報整理力
+→ この案件のテーマの要件を整理し、目的に合った成果物として仕上げます
+→ 要件と目的を明確にした上で、実務で使える成果物を提供できます</div>
+      </div>
+
+      
+      <div class="detail-section missing">
+        <div class="detail-label">🧩 不足しているもの</div>
+        <div class="detail-text">外部の納品済みCanva・情報設計の実績が少ない（AI画像5作品と、納品前の契約1件）</div>
+      </div>
+
+      
+      <div class="detail-section missing">
+        <div class="detail-label">▶ 補う行動</div>
+        <div class="detail-text">案件に近いテーマのサンプルを1点自主制作し、画像制作ポートフォリオ（/design）に追加してから応募する</div>
+      </div>
+
+      <div class="detail-section caution">
+        <div class="detail-label">⚠️ 注意点</div>
+        <div class="detail-text">Sales Knowledgeの「対応可能業務（主戦場）」ではなく「チャレンジ可能業務（成長領域）」に該当する案件です。実績獲得目的として、代替証明・転用方法を具体的に説明してから応募してください、「女性向け」等の表現があります。読者・商品ターゲットの説明か、応募者自身の属性条件かを案件詳細で確認してください</div>
+      </div>
+
+      <span class="applied-overlay">✅ 応募済み</span>
+      <span class="skipped-overlay">⏭ 見送り</span>
+      <div class="card-actions">
+        <a href="https://crowdworks.jp/public/jobs/13564694" target="_blank" class="btn-view">案件を見る →</a>
+        <button class="btn-save" onclick="toggleSave('13564694', '美容好き歓迎‼️】美容系Instagramフィード画像制作パートナー募集', 'https://crowdworks.jp/public/jobs/13564694', 'B')">
+          <span class="save-icon">🔖</span> <span class="save-text">候補に追加</span>
+        </button>
+        <button class="btn-applied" onclick="toggleApplied('13564694', '美容好き歓迎‼️】美容系Instagramフィード画像制作パートナー募集', 'https://crowdworks.jp/public/jobs/13564694')">
+          <span class="applied-text">✅ 応募済み</span>
+        </button>
+        <button class="btn-skip" onclick="toggleSkip('13564694', '美容好き歓迎‼️】美容系Instagramフィード画像制作パートナー募集', 'https://crowdworks.jp/public/jobs/13564694')">
+          <span class="skip-text">⏭ 見送り</span>
+        </button>
+      </div>
+    </div>
+  
+    <div class="job-card rank-b"
+         data-id="13564657"
+         style="border-left-color:#27ae60; background:#f0fff4">
+
+      <div class="job-header">
+        <span class="job-number" style="background:#27ae60">3</span>
+        <span class="rank-badge" style="background:#27ae60">Bランク</span>
+        
+        <span class="tier-badge" style="background:#d35400; color:#fff">🔥 高単価チャレンジ</span>
+        
+        <span class="capability-badge" style="background:#2980b9">チャレンジ可能</span>
+        <span class="jobstatus-badge new">🆕 新着</span>
+        <span class="genre-tag">Canva・情報設計中心の画像制作</span>
+      </div>
+
+      <h2 class="job-title">
+        <a href="https://crowdworks.jp/public/jobs/13564657" target="_blank" rel="noopener">＼美容好き歓迎／“平日夜の美容ルーティン&quot;紹介投稿作成のお仕事</a>
+      </h2>
+
+      <div class="job-meta">
+        <span class="meta-item">💰 30,000円</span>
+        
+        <span class="meta-item">📅 2026-11-01</span>
+        <span class="meta-item keyword-tag">🔑 ライティング</span>
+      </div>
+
+      <div class="scores">
+        <div class="score-row">
+          <span class="score-label">②職能一致度</span>
+          <span class="score-stars">★★☆☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">①証拠の強さ（ポートフォリオ活用度）</span>
+          <span class="score-stars">★☆☆☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">⑥単価</span>
+          <span class="score-stars">★★★★★</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">⑤継続性</span>
+          <span class="score-stars">★★☆☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">⑧長期資産性</span>
+          <span class="score-stars">★★★☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">④受注できる可能性</span>
+          <span class="score-stars">★★★☆☆</span>
+        </div>
+      </div>
+
+      <div class="detail-section reason">
+        <div class="detail-label">✅ この案件を選ぶ理由（証拠の強さ: 強い代替証明）</div>
+        <div class="signal-chips">
+          <span class="signal-chip">★★★★★ 高単価案件</span><span class="signal-chip">★★☆☆☆ その他</span><span class="signal-chip">★☆☆☆☆ 採用理由の証拠が強い（強い代替証明）</span>
+        </div>
+        
+        <div class="detail-text" style="margin-top:6px">🧭 チャレンジ可能業務「Canva・情報設計中心の画像制作」に該当。制作実績としてAI画像ポートフォリオ5作品、受注・実務経験としてAI画像作成サポート案件の契約成立（2026-07-26時点、納品前）、使用可能ツール（Canva）を活用を根拠に強い代替証明と判定。実績獲得目的の応募候補と判定。</div>
+        <div class="detail-text" style="margin-top:2px">使用できる能力: 相手目線・構成力・情報整理力・AI活用力・品質管理力</div>
+        <div class="decision-source">判定根拠: Sales Knowledge 6-4（案件辞典）/ 2-2（成長領域）</div>
+      </div>
+
+      
+      <div class="detail-section highvalue">
+        <div class="detail-label">🔥 高単価チャレンジと判断した理由</div>
+        <div class="detail-text">報酬30,000円で単価が高い</div>
+      </div>
+
+      
+
+      
+      <div class="detail-section strength">
+        <div class="detail-label">🧭 提供価値（選定の追加軸）</div>
+        <div class="detail-text">領域を特定できない（除外ではない）／得られる経験: 価値の制作物への落とし込み（1/4）</div>
+      </div>
+
+      <div class="detail-section strength">
+        <div class="detail-label">💡 提案文の軸</div>
+        <div class="detail-text" style="white-space:pre-line">リサーチに基づく構成力・情報整理力
+→ この案件のテーマの要件を整理し、目的に合った成果物として仕上げます
+→ 要件と目的を明確にした上で、実務で使える成果物を提供できます</div>
+      </div>
+
+      
+      <div class="detail-section missing">
+        <div class="detail-label">🧩 不足しているもの</div>
+        <div class="detail-text">外部の納品済みCanva・情報設計の実績が少ない（AI画像5作品と、納品前の契約1件）</div>
+      </div>
+
+      
+      <div class="detail-section missing">
+        <div class="detail-label">▶ 補う行動</div>
+        <div class="detail-text">案件に近いテーマのサンプルを1点自主制作し、画像制作ポートフォリオ（/design）に追加してから応募する</div>
+      </div>
+
+      <div class="detail-section caution">
+        <div class="detail-label">⚠️ 注意点</div>
+        <div class="detail-text">Sales Knowledgeの「対応可能業務（主戦場）」ではなく「チャレンジ可能業務（成長領域）」に該当する案件です。実績獲得目的として、代替証明・転用方法を具体的に説明してから応募してください</div>
+      </div>
+
+      <span class="applied-overlay">✅ 応募済み</span>
+      <span class="skipped-overlay">⏭ 見送り</span>
+      <div class="card-actions">
+        <a href="https://crowdworks.jp/public/jobs/13564657" target="_blank" class="btn-view">案件を見る →</a>
+        <button class="btn-save" onclick="toggleSave('13564657', '＼美容好き歓迎／“平日夜の美容ルーティン&quot;紹介投稿作成のお仕事', 'https://crowdworks.jp/public/jobs/13564657', 'B')">
+          <span class="save-icon">🔖</span> <span class="save-text">候補に追加</span>
+        </button>
+        <button class="btn-applied" onclick="toggleApplied('13564657', '＼美容好き歓迎／“平日夜の美容ルーティン&quot;紹介投稿作成のお仕事', 'https://crowdworks.jp/public/jobs/13564657')">
+          <span class="applied-text">✅ 応募済み</span>
+        </button>
+        <button class="btn-skip" onclick="toggleSkip('13564657', '＼美容好き歓迎／“平日夜の美容ルーティン&quot;紹介投稿作成のお仕事', 'https://crowdworks.jp/public/jobs/13564657')">
+          <span class="skip-text">⏭ 見送り</span>
+        </button>
+      </div>
+    </div>
+  
+  </div>
+
+  <!-- 通常チャレンジタブ -->
+  <div id="tab-normal" class="tab-content">
+    <div class="update-info">🌱 実績獲得目的のチャレンジ候補（高単価チャレンジ基準には届かないが、応募理由は作れる案件）</div>
+    
+    <div class="detail-section missing" style="margin-bottom:12px">
+      <div class="detail-label">🧩 今回見つかった営業資産の不足（重複をまとめて集計）</div>
+      <div class="detail-text">
+        外部の納品済みCanva・情報設計の実績が少ない（AI画像5作品と、納品前の契約1件）（3件）
+      </div>
+    </div>
+    <div class="saved-empty">通常チャレンジ候補はありません</div>
+  </div>
+
+  <!-- 確認候補タブ -->
+  <div id="tab-confirm" class="tab-content">
+    <div class="update-info">❓ 案件辞典・能力辞典のいずれでも応募可能／対応不可と断定できない案件。除外せず、永峯勇気本人の確認に委ねる枠</div>
+    <div class="rank-section-header" style="border-left:4px solid #27ae60">
+      <span style="color:#27ae60">Bランク</span>
+      <span class="count-badge" style="background:#27ae60">11件</span>
+    </div>
+    <div class="job-card rank-b"
+         data-id="13546231"
+         style="border-left-color:#27ae60; background:#f0fff4">
+
+      <div class="job-header">
+        <span class="job-number" style="background:#27ae60">1</span>
+        <span class="rank-badge" style="background:#27ae60">Bランク</span>
+        
+        
+        
+        <span class="capability-badge" style="background:#27ae60">応募可能</span>
+        <span class="jobstatus-badge continuing">🔁 継続候補（初回2026-10-23）</span>
+        <span class="genre-tag">BtoBライティング・構成作成</span>
+      </div>
+
+      <h2 class="job-title">
+        <a href="https://crowdworks.jp/public/jobs/13546231" target="_blank" rel="noopener">【11月・東京／大阪】展示会ブースでのリード獲得＆商談支援｜日給18,000円〜／全会期通し</a>
+      </h2>
+
+      <div class="job-meta">
+        <span class="meta-item">💰 18,000円</span>
+        
+        <span class="meta-item">📅 2026-11-03</span>
+        <span class="meta-item keyword-tag">🔑 ブログ記事作成</span>
+      </div>
+
+      <div class="scores">
+        <div class="score-row">
+          <span class="score-label">②職能一致度</span>
+          <span class="score-stars">★★☆☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">①証拠の強さ（ポートフォリオ活用度）</span>
+          <span class="score-stars">★☆☆☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">⑥単価</span>
+          <span class="score-stars">★★★★★</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">⑤継続性</span>
+          <span class="score-stars">★★☆☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">⑧長期資産性</span>
+          <span class="score-stars">★★★★☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">④受注できる可能性</span>
+          <span class="score-stars">★★★☆☆</span>
+        </div>
+      </div>
+
+      <div class="detail-section reason">
+        <div class="detail-label">✅ この案件を選ぶ理由（証拠の強さ: 直接証明）</div>
+        <div class="signal-chips">
+          <span class="signal-chip">★★★★★ 高単価案件</span><span class="signal-chip">★★★★☆ 長期的な営業資産になりやすい</span><span class="signal-chip">★★☆☆☆ その他</span><span class="signal-chip">★☆☆☆☆ 採用理由の証拠が強い（直接証明）</span>
+        </div>
+        
+        <div class="detail-text" style="margin-top:6px">🧭 対応可能業務「BtoBライティング・構成作成」に該当。制作実績としてAIライティング5記事（note系記事、SEO記事2本、比較記事、商品記事）、受注・実務経験としてBtoB業務改善提案・進捗報告3年（飲食事業）、テストライティング1件の契約・納品・検収・報酬支払い完了、使用可能ツール（ChatGPT・Claude）を活用を根拠に直接証明と判定。応募可能と判定。</div>
+        <div class="detail-text" style="margin-top:2px">使用できる能力: 情報整理力・構成力・相手目線・現場理解力</div>
+        <div class="decision-source">判定根拠: Sales Knowledge 6-2（案件辞典）/ 2-1（主戦場）</div>
+      </div>
+
+      
+
+      
+      <div class="detail-section confirm">
+        <div class="detail-label">☑️ 応募前に確認すべき条件</div>
+        <div class="detail-text">必須の経験：・BtoB営業のご経験がある方（登録済みの経験・作品で満たすか確認）</div>
+      </div>
+
+      
+      <div class="detail-section strength">
+        <div class="detail-label">🧭 提供価値（選定の追加軸）</div>
+        <div class="detail-text">領域を特定できない（除外ではない）／得られる経験: 課題・目的の理解・成果確認・改善（2/4）</div>
+      </div>
+
+      <div class="detail-section strength">
+        <div class="detail-label">💡 提案文の軸</div>
+        <div class="detail-text" style="white-space:pre-line">リサーチに基づく構成力・情報整理力
+→ この案件のテーマの要件を整理し、目的に合った成果物として仕上げます
+→ 要件と目的を明確にした上で、実務で使える成果物を提供できます</div>
+      </div>
+
+      
+
+      
+
+      <div class="detail-section caution">
+        <div class="detail-label">⚠️ 注意点</div>
+        <div class="detail-text">案件詳細で業務範囲と納期を必ず確認</div>
+      </div>
+
+      <span class="applied-overlay">✅ 応募済み</span>
+      <span class="skipped-overlay">⏭ 見送り</span>
+      <div class="card-actions">
+        <a href="https://crowdworks.jp/public/jobs/13546231" target="_blank" class="btn-view">案件を見る →</a>
+        <button class="btn-save" onclick="toggleSave('13546231', '【11月・東京／大阪】展示会ブースでのリード獲得＆商談支援｜日給18,000円〜／全会期通し', 'https://crowdworks.jp/public/jobs/13546231', 'B')">
+          <span class="save-icon">🔖</span> <span class="save-text">候補に追加</span>
+        </button>
+        <button class="btn-applied" onclick="toggleApplied('13546231', '【11月・東京／大阪】展示会ブースでのリード獲得＆商談支援｜日給18,000円〜／全会期通し', 'https://crowdworks.jp/public/jobs/13546231')">
+          <span class="applied-text">✅ 応募済み</span>
+        </button>
+        <button class="btn-skip" onclick="toggleSkip('13546231', '【11月・東京／大阪】展示会ブースでのリード獲得＆商談支援｜日給18,000円〜／全会期通し', 'https://crowdworks.jp/public/jobs/13546231')">
+          <span class="skip-text">⏭ 見送り</span>
+        </button>
+      </div>
+    </div>
+  
+    <div class="job-card rank-b"
+         data-id="13546303"
+         style="border-left-color:#27ae60; background:#f0fff4">
+
+      <div class="job-header">
+        <span class="job-number" style="background:#27ae60">2</span>
+        <span class="rank-badge" style="background:#27ae60">Bランク</span>
+        
+        
+        
+        <span class="capability-badge" style="background:#27ae60">応募可能</span>
+        <span class="jobstatus-badge continuing">🔁 継続候補（初回2026-10-22）</span>
+        <span class="genre-tag">飲食・店舗運営に関する企画・コンテンツ</span>
+      </div>
+
+      <h2 class="job-title">
+        <a href="https://crowdworks.jp/public/jobs/13546303" target="_blank" rel="noopener">【在宅ワーク】SNSマーケティングスクールのオンライン相談スタッフ募集｜営業・接客経験者歓迎</a>
+      </h2>
+
+      <div class="job-meta">
+        <span class="meta-item">💰 110,000円</span>
+        
+        <span class="meta-item">📅 2026-11-03</span>
+        <span class="meta-item keyword-tag">🔑 記事作成</span>
+      </div>
+
+      <div class="scores">
+        <div class="score-row">
+          <span class="score-label">②職能一致度</span>
+          <span class="score-stars">★★☆☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">①証拠の強さ（ポートフォリオ活用度）</span>
+          <span class="score-stars">★☆☆☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">⑥単価</span>
+          <span class="score-stars">★★★★★</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">⑤継続性</span>
+          <span class="score-stars">★★☆☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">⑧長期資産性</span>
+          <span class="score-stars">★★★★☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">④受注できる可能性</span>
+          <span class="score-stars">★★☆☆☆</span>
+        </div>
+      </div>
+
+      <div class="detail-section reason">
+        <div class="detail-label">✅ この案件を選ぶ理由（証拠の強さ: 強い代替証明）</div>
+        <div class="signal-chips">
+          <span class="signal-chip">★★★★★ 高単価案件</span><span class="signal-chip">★★★★☆ 長期的な営業資産になりやすい</span><span class="signal-chip">★★☆☆☆ その他</span><span class="signal-chip">★☆☆☆☆ 採用理由の証拠が強い（強い代替証明）</span>
+        </div>
+        
+        <div class="detail-text" style="margin-top:6px">🧭 対応可能業務「飲食・店舗運営に関する企画・コンテンツ」に該当。テーマ理解として飲食業22年、店長・店舗立ち上げ・売上改善・商品開発・撮影監修の経験、制作実績として自主制作「飲食事業改善 提案資料」（8ページ）を根拠に強い代替証明と判定。応募可能と判定。</div>
+        <div class="detail-text" style="margin-top:2px">使用できる能力: 現場理解力・相手目線・改善提案力</div>
+        <div class="decision-source">判定根拠: Sales Knowledge 6-8（案件辞典）/ 2-1（主戦場）（テーマ根拠: Sales Knowledge CARD-01/CARD-02/CARD-10）</div>
+      </div>
+
+      
+
+      
+      <div class="detail-section confirm">
+        <div class="detail-label">☑️ 応募前に確認すべき条件</div>
+        <div class="detail-text">Knowledgeだけでは対応可否を判断できない（人による確認が必要）</div>
+      </div>
+
+      
+      <div class="detail-section strength">
+        <div class="detail-label">🧭 提供価値（選定の追加軸）</div>
+        <div class="detail-text">領域を特定できない（除外ではない）／得られる経験: 課題・目的の理解（1/4）</div>
+      </div>
+
+      <div class="detail-section strength">
+        <div class="detail-label">💡 提案文の軸</div>
+        <div class="detail-text" style="white-space:pre-line">飲食店舗運営・マネジメント22年の現場経験
+→ この案件のテーマの要件を整理し、目的に合った成果物として仕上げます
+→ 現場運用を前提とした実務目線で、実際に機能する成果物を提供できます</div>
+      </div>
+
+      
+
+      
+
+      <div class="detail-section caution">
+        <div class="detail-label">⚠️ 注意点</div>
+        <div class="detail-text">「経験者歓迎」の記載があります。未経験可否や案件との適合度と合わせて判断してください</div>
+      </div>
+
+      <span class="applied-overlay">✅ 応募済み</span>
+      <span class="skipped-overlay">⏭ 見送り</span>
+      <div class="card-actions">
+        <a href="https://crowdworks.jp/public/jobs/13546303" target="_blank" class="btn-view">案件を見る →</a>
+        <button class="btn-save" onclick="toggleSave('13546303', '【在宅ワーク】SNSマーケティングスクールのオンライン相談スタッフ募集｜営業・接客経験者歓迎', 'https://crowdworks.jp/public/jobs/13546303', 'B')">
+          <span class="save-icon">🔖</span> <span class="save-text">候補に追加</span>
+        </button>
+        <button class="btn-applied" onclick="toggleApplied('13546303', '【在宅ワーク】SNSマーケティングスクールのオンライン相談スタッフ募集｜営業・接客経験者歓迎', 'https://crowdworks.jp/public/jobs/13546303')">
+          <span class="applied-text">✅ 応募済み</span>
+        </button>
+        <button class="btn-skip" onclick="toggleSkip('13546303', '【在宅ワーク】SNSマーケティングスクールのオンライン相談スタッフ募集｜営業・接客経験者歓迎', 'https://crowdworks.jp/public/jobs/13546303')">
+          <span class="skip-text">⏭ 見送り</span>
+        </button>
+      </div>
+    </div>
+  
+    <div class="job-card rank-b"
+         data-id="13564531"
+         style="border-left-color:#27ae60; background:#f0fff4">
+
+      <div class="job-header">
+        <span class="job-number" style="background:#27ae60">3</span>
+        <span class="rank-badge" style="background:#27ae60">Bランク</span>
+        
+        <span class="tier-badge" style="background:#8e44ad; color:#fff">❓ 確認候補</span>
+        
+        <span class="capability-badge" style="background:#8e44ad">確認候補</span>
+        <span class="jobstatus-badge new">🆕 新着</span>
+        <span class="genre-tag">その他</span>
+      </div>
+
+      <h2 class="job-title">
+        <a href="https://crowdworks.jp/public/jobs/13564531" target="_blank" rel="noopener">【20代歓迎◎】旅行系Instagramの投稿デザイン制作｜未経験OK🚌</a>
+      </h2>
+
+      <div class="job-meta">
+        <span class="meta-item">💰 5,000円</span>
+        
+        <span class="meta-item">📅 2026-11-08</span>
+        <span class="meta-item keyword-tag">🔑 ライティング</span>
+      </div>
+
+      <div class="scores">
+        <div class="score-row">
+          <span class="score-label">②職能一致度</span>
+          <span class="score-stars">★★☆☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">①証拠の強さ（ポートフォリオ活用度）</span>
+          <span class="score-stars">★★☆☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">⑥単価</span>
+          <span class="score-stars">★★★★☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">⑤継続性</span>
+          <span class="score-stars">★★☆☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">⑧長期資産性</span>
+          <span class="score-stars">★★☆☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">④受注できる可能性</span>
+          <span class="score-stars">★★★☆☆</span>
+        </div>
+      </div>
+
+      <div class="detail-section reason">
+        <div class="detail-label">✅ この案件を選ぶ理由（証拠の強さ: 証明不足）</div>
+        <div class="signal-chips">
+          <span class="signal-chip">★★★★☆ 高単価案件</span><span class="signal-chip">★★★☆☆ 未経験・初心者歓迎</span><span class="signal-chip">★★☆☆☆ その他</span><span class="signal-chip">★★☆☆☆ 提案・企画の余地がある（集客）</span>
+        </div>
+        
+        <div class="detail-text" style="margin-top:6px">🧭 案件辞典の主要カテゴリーには一致しないが、案件文に転用可能な能力（相手目線）に関連する語（投稿デザイン）が含まれており、対応可能とも対応不可とも断定できないため確認候補と判定</div>
+        <div class="detail-text" style="margin-top:2px">使用できる能力: 相手目線</div>
+        <div class="decision-source">判定根拠: Sales Knowledge 4章（能力辞典）※単一能力接続のため断定せず確認候補</div>
+      </div>
+
+      
+
+      
+      <div class="detail-section confirm">
+        <div class="detail-label">☑️ 応募前に確認すべき条件</div>
+        <div class="detail-text">転用可能な能力（相手目線）との関連語は見つかったが、案件の中心業務・必須条件が案件文だけでは確定できない、Knowledgeだけでは対応可否を判断できない（人による確認が必要）</div>
+      </div>
+
+      
+      <div class="detail-section strength">
+        <div class="detail-label">🧭 提供価値（選定の追加軸）</div>
+        <div class="detail-text">領域を特定できない（除外ではない）／得られる経験: 商品・サービスの価値の明確化・価値の制作物への落とし込み・成果確認・改善（3/4）</div>
+      </div>
+
+      <div class="detail-section strength">
+        <div class="detail-label">💡 提案文の軸</div>
+        <div class="detail-text" style="white-space:pre-line">リサーチに基づく構成力・情報整理力
+→ この案件のテーマの要件を整理し、目的に合った成果物として仕上げます
+→ 要件と目的を明確にした上で、実務で使える成果物を提供できます</div>
+      </div>
+
+      
+
+      
+
+      <div class="detail-section caution">
+        <div class="detail-label">⚠️ 注意点</div>
+        <div class="detail-text">案件詳細で業務範囲と納期を必ず確認</div>
+      </div>
+
+      <span class="applied-overlay">✅ 応募済み</span>
+      <span class="skipped-overlay">⏭ 見送り</span>
+      <div class="card-actions">
+        <a href="https://crowdworks.jp/public/jobs/13564531" target="_blank" class="btn-view">案件を見る →</a>
+        <button class="btn-save" onclick="toggleSave('13564531', '【20代歓迎◎】旅行系Instagramの投稿デザイン制作｜未経験OK🚌', 'https://crowdworks.jp/public/jobs/13564531', 'B')">
+          <span class="save-icon">🔖</span> <span class="save-text">候補に追加</span>
+        </button>
+        <button class="btn-applied" onclick="toggleApplied('13564531', '【20代歓迎◎】旅行系Instagramの投稿デザイン制作｜未経験OK🚌', 'https://crowdworks.jp/public/jobs/13564531')">
+          <span class="applied-text">✅ 応募済み</span>
+        </button>
+        <button class="btn-skip" onclick="toggleSkip('13564531', '【20代歓迎◎】旅行系Instagramの投稿デザイン制作｜未経験OK🚌', 'https://crowdworks.jp/public/jobs/13564531')">
+          <span class="skip-text">⏭ 見送り</span>
+        </button>
+      </div>
+    </div>
+  
+    <div class="job-card rank-b"
+         data-id="13564834"
+         style="border-left-color:#27ae60; background:#f0fff4">
+
+      <div class="job-header">
+        <span class="job-number" style="background:#27ae60">4</span>
+        <span class="rank-badge" style="background:#27ae60">Bランク</span>
+        
+        <span class="tier-badge" style="background:#d35400; color:#fff">🔥 高単価チャレンジ</span>
+        
+        <span class="capability-badge" style="background:#2980b9">チャレンジ可能</span>
+        <span class="jobstatus-badge new">🆕 新着</span>
+        <span class="genre-tag">SEO・解説記事・体験ライティング</span>
+      </div>
+
+      <h2 class="job-title">
+        <a href="https://crowdworks.jp/public/jobs/13564834" target="_blank" rel="noopener">【体験談募集⭐️】ハロウィンの思い出や楽しみ方を教えてください！</a>
+      </h2>
+
+      <div class="job-meta">
+        <span class="meta-item">💰 5,000円</span>
+        
+        <span class="meta-item">📅 2026-11-11</span>
+        <span class="meta-item keyword-tag">🔑 ライティング</span>
+      </div>
+
+      <div class="scores">
+        <div class="score-row">
+          <span class="score-label">②職能一致度</span>
+          <span class="score-stars">★★☆☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">①証拠の強さ（ポートフォリオ活用度）</span>
+          <span class="score-stars">★☆☆☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">⑥単価</span>
+          <span class="score-stars">★★★★☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">⑤継続性</span>
+          <span class="score-stars">★★☆☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">⑧長期資産性</span>
+          <span class="score-stars">★★★☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">④受注できる可能性</span>
+          <span class="score-stars">★★★☆☆</span>
+        </div>
+      </div>
+
+      <div class="detail-section reason">
+        <div class="detail-label">✅ この案件を選ぶ理由（証拠の強さ: 強い代替証明）</div>
+        <div class="signal-chips">
+          <span class="signal-chip">★★★★☆ 高単価案件</span><span class="signal-chip">★★☆☆☆ その他</span><span class="signal-chip">★★☆☆☆ AI活用経験をアピールできる</span><span class="signal-chip">★☆☆☆☆ 採用理由の証拠が強い（強い代替証明）</span>
+        </div>
+        
+        <div class="detail-text" style="margin-top:6px">🧭 チャレンジ可能業務「SEO・解説記事・体験ライティング」に該当。制作実績としてAIライティング5記事（note系記事、SEO記事2本、比較記事、商品記事）、受注・実務経験としてテストライティング1件の契約・納品・検収・報酬支払い完了、使用可能ツール（ChatGPT・Claude）を活用を根拠に強い代替証明と判定。実績獲得目的の応募候補と判定。</div>
+        <div class="detail-text" style="margin-top:2px">使用できる能力: 情報整理力・相手目線・構成力・AI活用力・品質管理力</div>
+        <div class="decision-source">判定根拠: Sales Knowledge 6-3（案件辞典）/ 2-2（成長領域）</div>
+      </div>
+
+      
+      <div class="detail-section highvalue">
+        <div class="detail-label">🔥 高単価チャレンジと判断した理由</div>
+        <div class="detail-text">報酬5,000円で単価が高い</div>
+      </div>
+
+      
+      <div class="detail-section confirm">
+        <div class="detail-label">☑️ 応募前に確認すべき条件</div>
+        <div class="detail-text">特殊な応募方式：・契約金額：応募時は455円（税抜）と入力してください</div>
+      </div>
+
+      
+      <div class="detail-section strength">
+        <div class="detail-label">🧭 提供価値（選定の追加軸）</div>
+        <div class="detail-text">領域を特定できない（除外ではない）／得られる経験: 価値の制作物への落とし込み（1/4）</div>
+      </div>
+
+      <div class="detail-section strength">
+        <div class="detail-label">💡 提案文の軸</div>
+        <div class="detail-text" style="white-space:pre-line">リサーチに基づく構成力・情報整理力
+→ この案件のテーマの要件を整理し、目的に合った成果物として仕上げます
+→ 要件と目的を明確にした上で、実務で使える成果物を提供できます</div>
+      </div>
+
+      
+
+      
+
+      <div class="detail-section caution">
+        <div class="detail-label">⚠️ 注意点</div>
+        <div class="detail-text">Sales Knowledgeの「対応可能業務（主戦場）」ではなく「チャレンジ可能業務（成長領域）」に該当する案件です。実績獲得目的として、代替証明・転用方法を具体的に説明してから応募してください</div>
+      </div>
+
+      <span class="applied-overlay">✅ 応募済み</span>
+      <span class="skipped-overlay">⏭ 見送り</span>
+      <div class="card-actions">
+        <a href="https://crowdworks.jp/public/jobs/13564834" target="_blank" class="btn-view">案件を見る →</a>
+        <button class="btn-save" onclick="toggleSave('13564834', '【体験談募集⭐️】ハロウィンの思い出や楽しみ方を教えてください！', 'https://crowdworks.jp/public/jobs/13564834', 'B')">
+          <span class="save-icon">🔖</span> <span class="save-text">候補に追加</span>
+        </button>
+        <button class="btn-applied" onclick="toggleApplied('13564834', '【体験談募集⭐️】ハロウィンの思い出や楽しみ方を教えてください！', 'https://crowdworks.jp/public/jobs/13564834')">
+          <span class="applied-text">✅ 応募済み</span>
+        </button>
+        <button class="btn-skip" onclick="toggleSkip('13564834', '【体験談募集⭐️】ハロウィンの思い出や楽しみ方を教えてください！', 'https://crowdworks.jp/public/jobs/13564834')">
+          <span class="skip-text">⏭ 見送り</span>
+        </button>
+      </div>
+    </div>
+  
+    <div class="job-card rank-b"
+         data-id="13531203"
+         style="border-left-color:#27ae60; background:#f0fff4">
+
+      <div class="job-header">
+        <span class="job-number" style="background:#27ae60">5</span>
+        <span class="rank-badge" style="background:#27ae60">Bランク</span>
+        
+        <span class="tier-badge" style="background:#8e44ad; color:#fff">❓ 確認候補</span>
+        
+        <span class="capability-badge" style="background:#8e44ad">確認候補</span>
+        <span class="jobstatus-badge continuing">🔁 継続候補（初回2026-10-18）</span>
+        <span class="genre-tag">その他</span>
+      </div>
+
+      <h2 class="job-title">
+        <a href="https://crowdworks.jp/public/jobs/13531203" target="_blank" rel="noopener">【主婦の方、育休中の方歓迎✨】SNSの投稿用の画像編集作業</a>
+      </h2>
+
+      <div class="job-meta">
+        <span class="meta-item">💰 30,000円</span>
+        
+        <span class="meta-item">📅 2026-10-29</span>
+        <span class="meta-item keyword-tag">🔑 商品レビュー記事</span>
+      </div>
+
+      <div class="scores">
+        <div class="score-row">
+          <span class="score-label">②職能一致度</span>
+          <span class="score-stars">★★☆☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">①証拠の強さ（ポートフォリオ活用度）</span>
+          <span class="score-stars">★☆☆☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">⑥単価</span>
+          <span class="score-stars">★★★★★</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">⑤継続性</span>
+          <span class="score-stars">★★☆☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">⑧長期資産性</span>
+          <span class="score-stars">★★☆☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">④受注できる可能性</span>
+          <span class="score-stars">★★★☆☆</span>
+        </div>
+      </div>
+
+      <div class="detail-section reason">
+        <div class="detail-label">✅ この案件を選ぶ理由（証拠の強さ: 証明不足）</div>
+        <div class="signal-chips">
+          <span class="signal-chip">★★★★★ 高単価案件</span><span class="signal-chip">★★☆☆☆ その他</span>
+        </div>
+        
+        <div class="detail-text" style="margin-top:6px">🧭 案件辞典の主要カテゴリーには一致しないが、案件文に転用可能な能力（相手目線）に関連する語（フィード投稿）が含まれており、対応可能とも対応不可とも断定できないため確認候補と判定</div>
+        <div class="detail-text" style="margin-top:2px">使用できる能力: 相手目線</div>
+        <div class="decision-source">判定根拠: Sales Knowledge 4章（能力辞典）※単一能力接続のため断定せず確認候補</div>
+      </div>
+
+      
+
+      
+      <div class="detail-section confirm">
+        <div class="detail-label">☑️ 応募前に確認すべき条件</div>
+        <div class="detail-text">転用可能な能力（相手目線）との関連語は見つかったが、案件の中心業務・必須条件が案件文だけでは確定できない、Knowledgeだけでは対応可否を判断できない（人による確認が必要）</div>
+      </div>
+
+      
+      <div class="detail-section strength">
+        <div class="detail-label">🧭 提供価値（選定の追加軸）</div>
+        <div class="detail-text">領域を特定できない（除外ではない）</div>
+      </div>
+
+      <div class="detail-section strength">
+        <div class="detail-label">💡 提案文の軸</div>
+        <div class="detail-text" style="white-space:pre-line">リサーチに基づく構成力・情報整理力
+→ この案件のテーマの要件を整理し、目的に合った成果物として仕上げます
+→ 要件と目的を明確にした上で、実務で使える成果物を提供できます</div>
+      </div>
+
+      
+
+      
+
+      <div class="detail-section caution">
+        <div class="detail-label">⚠️ 注意点</div>
+        <div class="detail-text">案件詳細で業務範囲と納期を必ず確認</div>
+      </div>
+
+      <span class="applied-overlay">✅ 応募済み</span>
+      <span class="skipped-overlay">⏭ 見送り</span>
+      <div class="card-actions">
+        <a href="https://crowdworks.jp/public/jobs/13531203" target="_blank" class="btn-view">案件を見る →</a>
+        <button class="btn-save" onclick="toggleSave('13531203', '【主婦の方、育休中の方歓迎✨】SNSの投稿用の画像編集作業', 'https://crowdworks.jp/public/jobs/13531203', 'B')">
+          <span class="save-icon">🔖</span> <span class="save-text">候補に追加</span>
+        </button>
+        <button class="btn-applied" onclick="toggleApplied('13531203', '【主婦の方、育休中の方歓迎✨】SNSの投稿用の画像編集作業', 'https://crowdworks.jp/public/jobs/13531203')">
+          <span class="applied-text">✅ 応募済み</span>
+        </button>
+        <button class="btn-skip" onclick="toggleSkip('13531203', '【主婦の方、育休中の方歓迎✨】SNSの投稿用の画像編集作業', 'https://crowdworks.jp/public/jobs/13531203')">
+          <span class="skip-text">⏭ 見送り</span>
+        </button>
+      </div>
+    </div>
+  
+    <div class="job-card rank-b"
+         data-id="13540097"
+         style="border-left-color:#27ae60; background:#f0fff4">
+
+      <div class="job-header">
+        <span class="job-number" style="background:#27ae60">6</span>
+        <span class="rank-badge" style="background:#27ae60">Bランク</span>
+        
+        <span class="tier-badge" style="background:#8e44ad; color:#fff">❓ 確認候補</span>
+        
+        <span class="capability-badge" style="background:#8e44ad">確認候補</span>
+        <span class="jobstatus-badge continuing">🔁 継続候補（初回2026-10-21）</span>
+        <span class="genre-tag">その他</span>
+      </div>
+
+      <h2 class="job-title">
+        <a href="https://crowdworks.jp/public/jobs/13540097" target="_blank" rel="noopener">SNS投稿制作のサポート業務</a>
+      </h2>
+
+      <div class="job-meta">
+        <span class="meta-item">💰 10,000円</span>
+        
+        <span class="meta-item">📅 2026-11-02</span>
+        <span class="meta-item keyword-tag">🔑 ライティング</span>
+      </div>
+
+      <div class="scores">
+        <div class="score-row">
+          <span class="score-label">②職能一致度</span>
+          <span class="score-stars">★☆☆☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">①証拠の強さ（ポートフォリオ活用度）</span>
+          <span class="score-stars">★☆☆☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">⑥単価</span>
+          <span class="score-stars">★★★★★</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">⑤継続性</span>
+          <span class="score-stars">★★☆☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">⑧長期資産性</span>
+          <span class="score-stars">★★☆☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">④受注できる可能性</span>
+          <span class="score-stars">★★★☆☆</span>
+        </div>
+      </div>
+
+      <div class="detail-section reason">
+        <div class="detail-label">✅ この案件を選ぶ理由（証拠の強さ: 証明不足）</div>
+        <div class="signal-chips">
+          <span class="signal-chip">★★★★★ 高単価案件</span><span class="signal-chip">★☆☆☆☆ その他</span>
+        </div>
+        
+        <div class="detail-text" style="margin-top:6px">🧭 案件辞典の主要カテゴリーには一致しないが、案件文に転用可能な能力（相手目線）に関連する語（投稿制作）が含まれており、対応可能とも対応不可とも断定できないため確認候補と判定</div>
+        <div class="detail-text" style="margin-top:2px">使用できる能力: 相手目線</div>
+        <div class="decision-source">判定根拠: Sales Knowledge 4章（能力辞典）※単一能力接続のため断定せず確認候補</div>
+      </div>
+
+      
+
+      
+      <div class="detail-section confirm">
+        <div class="detail-label">☑️ 応募前に確認すべき条件</div>
+        <div class="detail-text">転用可能な能力（相手目線）との関連語は見つかったが、案件の中心業務・必須条件が案件文だけでは確定できない、Knowledgeだけでは対応可否を判断できない（人による確認が必要）</div>
+      </div>
+
+      
+      <div class="detail-section strength">
+        <div class="detail-label">🧭 提供価値（選定の追加軸）</div>
+        <div class="detail-text">領域を特定できない（除外ではない）／得られる経験: 価値の制作物への落とし込み（1/4）</div>
+      </div>
+
+      <div class="detail-section strength">
+        <div class="detail-label">💡 提案文の軸</div>
+        <div class="detail-text" style="white-space:pre-line">リサーチに基づく構成力・情報整理力
+→ この案件のテーマの要件を整理し、目的に合った成果物として仕上げます
+→ 要件と目的を明確にした上で、実務で使える成果物を提供できます</div>
+      </div>
+
+      
+
+      
+
+      <div class="detail-section caution">
+        <div class="detail-label">⚠️ 注意点</div>
+        <div class="detail-text">単純作業（データ入力・リスト作成・情報転記等）の比重が高い案件です</div>
+      </div>
+
+      <span class="applied-overlay">✅ 応募済み</span>
+      <span class="skipped-overlay">⏭ 見送り</span>
+      <div class="card-actions">
+        <a href="https://crowdworks.jp/public/jobs/13540097" target="_blank" class="btn-view">案件を見る →</a>
+        <button class="btn-save" onclick="toggleSave('13540097', 'SNS投稿制作のサポート業務', 'https://crowdworks.jp/public/jobs/13540097', 'B')">
+          <span class="save-icon">🔖</span> <span class="save-text">候補に追加</span>
+        </button>
+        <button class="btn-applied" onclick="toggleApplied('13540097', 'SNS投稿制作のサポート業務', 'https://crowdworks.jp/public/jobs/13540097')">
+          <span class="applied-text">✅ 応募済み</span>
+        </button>
+        <button class="btn-skip" onclick="toggleSkip('13540097', 'SNS投稿制作のサポート業務', 'https://crowdworks.jp/public/jobs/13540097')">
+          <span class="skip-text">⏭ 見送り</span>
+        </button>
+      </div>
+    </div>
+  
+    <div class="job-card rank-b"
+         data-id="13551039"
+         style="border-left-color:#27ae60; background:#f0fff4">
+
+      <div class="job-header">
+        <span class="job-number" style="background:#27ae60">7</span>
+        <span class="rank-badge" style="background:#27ae60">Bランク</span>
+        
+        <span class="tier-badge" style="background:#8e44ad; color:#fff">❓ 確認候補</span>
+        
+        <span class="capability-badge" style="background:#8e44ad">確認候補</span>
+        <span class="jobstatus-badge continuing">🔁 継続候補（初回2026-10-24）</span>
+        <span class="genre-tag">その他</span>
+      </div>
+
+      <h2 class="job-title">
+        <a href="https://crowdworks.jp/public/jobs/13551039" target="_blank" rel="noopener">【未経験でもパソコンやスマホ作業に慣れていればOK】インスタグラムの投稿制作スタッフ募集📝</a>
+      </h2>
+
+      <div class="job-meta">
+        <span class="meta-item">💰 50,000円</span>
+        
+        <span class="meta-item">📅 2026-11-05</span>
+        <span class="meta-item keyword-tag">🔑 Webライティング</span>
+      </div>
+
+      <div class="scores">
+        <div class="score-row">
+          <span class="score-label">②職能一致度</span>
+          <span class="score-stars">★☆☆☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">①証拠の強さ（ポートフォリオ活用度）</span>
+          <span class="score-stars">★☆☆☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">⑥単価</span>
+          <span class="score-stars">★★★★★</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">⑤継続性</span>
+          <span class="score-stars">★★☆☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">⑧長期資産性</span>
+          <span class="score-stars">★★☆☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">④受注できる可能性</span>
+          <span class="score-stars">★★★☆☆</span>
+        </div>
+      </div>
+
+      <div class="detail-section reason">
+        <div class="detail-label">✅ この案件を選ぶ理由（証拠の強さ: 証明不足）</div>
+        <div class="signal-chips">
+          <span class="signal-chip">★★★★★ 高単価案件</span><span class="signal-chip">★☆☆☆☆ その他</span>
+        </div>
+        
+        <div class="detail-text" style="margin-top:6px">🧭 案件辞典の主要カテゴリーには一致しないが、案件文に転用可能な能力（相手目線）に関連する語（投稿制作）が含まれており、対応可能とも対応不可とも断定できないため確認候補と判定</div>
+        <div class="detail-text" style="margin-top:2px">使用できる能力: 相手目線</div>
+        <div class="decision-source">判定根拠: Sales Knowledge 4章（能力辞典）※単一能力接続のため断定せず確認候補</div>
+      </div>
+
+      
+
+      
+      <div class="detail-section confirm">
+        <div class="detail-label">☑️ 応募前に確認すべき条件</div>
+        <div class="detail-text">転用可能な能力（相手目線）との関連語は見つかったが、案件の中心業務・必須条件が案件文だけでは確定できない、Knowledgeだけでは対応可否を判断できない（人による確認が必要）</div>
+      </div>
+
+      
+      <div class="detail-section strength">
+        <div class="detail-label">🧭 提供価値（選定の追加軸）</div>
+        <div class="detail-text">領域を特定できない（除外ではない）／得られる経験: 価値の制作物への落とし込み・成果確認・改善（2/4）</div>
+      </div>
+
+      <div class="detail-section strength">
+        <div class="detail-label">💡 提案文の軸</div>
+        <div class="detail-text" style="white-space:pre-line">リサーチに基づく構成力・情報整理力
+→ この案件のテーマの要件を整理し、目的に合った成果物として仕上げます
+→ 要件と目的を明確にした上で、実務で使える成果物を提供できます</div>
+      </div>
+
+      
+
+      
+
+      <div class="detail-section caution">
+        <div class="detail-label">⚠️ 注意点</div>
+        <div class="detail-text">単純作業（データ入力・リスト作成・情報転記等）の比重が高い案件です</div>
+      </div>
+
+      <span class="applied-overlay">✅ 応募済み</span>
+      <span class="skipped-overlay">⏭ 見送り</span>
+      <div class="card-actions">
+        <a href="https://crowdworks.jp/public/jobs/13551039" target="_blank" class="btn-view">案件を見る →</a>
+        <button class="btn-save" onclick="toggleSave('13551039', '【未経験でもパソコンやスマホ作業に慣れていればOK】インスタグラムの投稿制作スタッフ募集📝', 'https://crowdworks.jp/public/jobs/13551039', 'B')">
+          <span class="save-icon">🔖</span> <span class="save-text">候補に追加</span>
+        </button>
+        <button class="btn-applied" onclick="toggleApplied('13551039', '【未経験でもパソコンやスマホ作業に慣れていればOK】インスタグラムの投稿制作スタッフ募集📝', 'https://crowdworks.jp/public/jobs/13551039')">
+          <span class="applied-text">✅ 応募済み</span>
+        </button>
+        <button class="btn-skip" onclick="toggleSkip('13551039', '【未経験でもパソコンやスマホ作業に慣れていればOK】インスタグラムの投稿制作スタッフ募集📝', 'https://crowdworks.jp/public/jobs/13551039')">
+          <span class="skip-text">⏭ 見送り</span>
+        </button>
+      </div>
+    </div>
+  
+    <div class="job-card rank-b"
+         data-id="13553498"
+         style="border-left-color:#27ae60; background:#f0fff4">
+
+      <div class="job-header">
+        <span class="job-number" style="background:#27ae60">8</span>
+        <span class="rank-badge" style="background:#27ae60">Bランク</span>
+        
+        <span class="tier-badge" style="background:#8e44ad; color:#fff">❓ 確認候補</span>
+        
+        <span class="capability-badge" style="background:#8e44ad">確認候補</span>
+        <span class="jobstatus-badge continuing">🔁 継続候補（初回2026-10-24）</span>
+        <span class="genre-tag">その他</span>
+      </div>
+
+      <h2 class="job-title">
+        <a href="https://crowdworks.jp/public/jobs/13553498" target="_blank" rel="noopener">【完全在宅🌿】ブランド・リユース商品のデータ整理サポート｜未経験・会社員歓迎/3件3,000円</a>
+      </h2>
+
+      <div class="job-meta">
+        <span class="meta-item">💰 3,000円</span>
+        
+        <span class="meta-item">📅 2026-11-05</span>
+        <span class="meta-item keyword-tag">🔑 Webコンテンツ作成</span>
+      </div>
+
+      <div class="scores">
+        <div class="score-row">
+          <span class="score-label">②職能一致度</span>
+          <span class="score-stars">★★☆☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">①証拠の強さ（ポートフォリオ活用度）</span>
+          <span class="score-stars">★☆☆☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">⑥単価</span>
+          <span class="score-stars">★★★☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">⑤継続性</span>
+          <span class="score-stars">★★☆☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">⑧長期資産性</span>
+          <span class="score-stars">★☆☆☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">④受注できる可能性</span>
+          <span class="score-stars">★★★☆☆</span>
+        </div>
+      </div>
+
+      <div class="detail-section reason">
+        <div class="detail-label">✅ この案件を選ぶ理由（証拠の強さ: 証明不足）</div>
+        <div class="signal-chips">
+          <span class="signal-chip">★★☆☆☆ その他</span>
+        </div>
+        
+        <div class="detail-text" style="margin-top:6px">🧭 案件辞典の主要カテゴリーには一致しないが、案件文に転用可能な能力（情報整理力）に関連する語（データ整理）が含まれており、対応可能とも対応不可とも断定できないため確認候補と判定</div>
+        <div class="detail-text" style="margin-top:2px">使用できる能力: 情報整理力</div>
+        <div class="decision-source">判定根拠: Sales Knowledge 4章（能力辞典）※単一能力接続のため断定せず確認候補</div>
+      </div>
+
+      
+
+      
+      <div class="detail-section confirm">
+        <div class="detail-label">☑️ 応募前に確認すべき条件</div>
+        <div class="detail-text">転用可能な能力（情報整理力）との関連語は見つかったが、案件の中心業務・必須条件が案件文だけでは確定できない、Knowledgeだけでは対応可否を判断できない（人による確認が必要）</div>
+      </div>
+
+      
+      <div class="detail-section strength">
+        <div class="detail-label">🧭 提供価値（選定の追加軸）</div>
+        <div class="detail-text">領域を特定できない（除外ではない）</div>
+      </div>
+
+      <div class="detail-section strength">
+        <div class="detail-label">💡 提案文の軸</div>
+        <div class="detail-text" style="white-space:pre-line">リサーチに基づく構成力・情報整理力
+→ この案件のテーマの要件を整理し、目的に合った成果物として仕上げます
+→ 要件と目的を明確にした上で、実務で使える成果物を提供できます</div>
+      </div>
+
+      
+
+      
+
+      <div class="detail-section caution">
+        <div class="detail-label">⚠️ 注意点</div>
+        <div class="detail-text">案件詳細で業務範囲と納期を必ず確認</div>
+      </div>
+
+      <span class="applied-overlay">✅ 応募済み</span>
+      <span class="skipped-overlay">⏭ 見送り</span>
+      <div class="card-actions">
+        <a href="https://crowdworks.jp/public/jobs/13553498" target="_blank" class="btn-view">案件を見る →</a>
+        <button class="btn-save" onclick="toggleSave('13553498', '【完全在宅🌿】ブランド・リユース商品のデータ整理サポート｜未経験・会社員歓迎/3件3,000円', 'https://crowdworks.jp/public/jobs/13553498', 'B')">
+          <span class="save-icon">🔖</span> <span class="save-text">候補に追加</span>
+        </button>
+        <button class="btn-applied" onclick="toggleApplied('13553498', '【完全在宅🌿】ブランド・リユース商品のデータ整理サポート｜未経験・会社員歓迎/3件3,000円', 'https://crowdworks.jp/public/jobs/13553498')">
+          <span class="applied-text">✅ 応募済み</span>
+        </button>
+        <button class="btn-skip" onclick="toggleSkip('13553498', '【完全在宅🌿】ブランド・リユース商品のデータ整理サポート｜未経験・会社員歓迎/3件3,000円', 'https://crowdworks.jp/public/jobs/13553498')">
+          <span class="skip-text">⏭ 見送り</span>
+        </button>
+      </div>
+    </div>
+  
+    <div class="job-card rank-b"
+         data-id="13564658"
+         style="border-left-color:#27ae60; background:#f0fff4">
+
+      <div class="job-header">
+        <span class="job-number" style="background:#27ae60">9</span>
+        <span class="rank-badge" style="background:#27ae60">Bランク</span>
+        
+        
+        
+        <span class="capability-badge" style="background:#27ae60">応募可能</span>
+        <span class="jobstatus-badge new">🆕 新着</span>
+        <span class="genre-tag">飲食・店舗運営に関する企画・コンテンツ</span>
+      </div>
+
+      <h2 class="job-title">
+        <a href="https://crowdworks.jp/public/jobs/13564658" target="_blank" rel="noopener">オーガニックカフェのロゴデザイン作成</a>
+      </h2>
+
+      <div class="job-meta">
+        <span class="meta-item">💰 5,000円</span>
+        
+        <span class="meta-item">📅 2026-11-11</span>
+        <span class="meta-item keyword-tag">🔑 ライティング</span>
+      </div>
+
+      <div class="scores">
+        <div class="score-row">
+          <span class="score-label">②職能一致度</span>
+          <span class="score-stars">★★☆☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">①証拠の強さ（ポートフォリオ活用度）</span>
+          <span class="score-stars">★☆☆☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">⑥単価</span>
+          <span class="score-stars">★★★★☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">⑤継続性</span>
+          <span class="score-stars">★★☆☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">⑧長期資産性</span>
+          <span class="score-stars">★★★★☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">④受注できる可能性</span>
+          <span class="score-stars">★★★☆☆</span>
+        </div>
+      </div>
+
+      <div class="detail-section reason">
+        <div class="detail-label">✅ この案件を選ぶ理由（証拠の強さ: 強い代替証明）</div>
+        <div class="signal-chips">
+          <span class="signal-chip">★★★★☆ 高単価案件</span><span class="signal-chip">★★★★☆ 長期的な営業資産になりやすい</span><span class="signal-chip">★★☆☆☆ その他</span><span class="signal-chip">★☆☆☆☆ 採用理由の証拠が強い（強い代替証明）</span>
+        </div>
+        
+        <div class="detail-text" style="margin-top:6px">🧭 対応可能業務「飲食・店舗運営に関する企画・コンテンツ」に該当。テーマ理解として飲食業22年、店長・店舗立ち上げ・売上改善・商品開発・撮影監修の経験、制作実績として自主制作「飲食事業改善 提案資料」（8ページ）を根拠に強い代替証明と判定。応募可能と判定。</div>
+        <div class="detail-text" style="margin-top:2px">使用できる能力: 現場理解力・相手目線・改善提案力</div>
+        <div class="decision-source">判定根拠: Sales Knowledge 6-8（案件辞典）/ 2-1（主戦場）（テーマ根拠: Sales Knowledge CARD-01/CARD-02/CARD-10）</div>
+      </div>
+
+      
+
+      
+      <div class="detail-section confirm">
+        <div class="detail-label">☑️ 応募前に確認すべき条件</div>
+        <div class="detail-text">案件全文が未確認（詳細取得の上限）</div>
+      </div>
+
+      
+      <div class="detail-section strength">
+        <div class="detail-label">🧭 提供価値（選定の追加軸）</div>
+        <div class="detail-text">領域を特定できない（除外ではない）</div>
+      </div>
+
+      <div class="detail-section strength">
+        <div class="detail-label">💡 提案文の軸</div>
+        <div class="detail-text" style="white-space:pre-line">リサーチに基づく構成力・情報整理力
+→ この案件のテーマの要件を整理し、目的に合った成果物として仕上げます
+→ 要件と目的を明確にした上で、実務で使える成果物を提供できます</div>
+      </div>
+
+      
+
+      
+
+      <div class="detail-section caution">
+        <div class="detail-label">⚠️ 注意点</div>
+        <div class="detail-text">案件詳細で業務範囲と納期を必ず確認</div>
+      </div>
+
+      <span class="applied-overlay">✅ 応募済み</span>
+      <span class="skipped-overlay">⏭ 見送り</span>
+      <div class="card-actions">
+        <a href="https://crowdworks.jp/public/jobs/13564658" target="_blank" class="btn-view">案件を見る →</a>
+        <button class="btn-save" onclick="toggleSave('13564658', 'オーガニックカフェのロゴデザイン作成', 'https://crowdworks.jp/public/jobs/13564658', 'B')">
+          <span class="save-icon">🔖</span> <span class="save-text">候補に追加</span>
+        </button>
+        <button class="btn-applied" onclick="toggleApplied('13564658', 'オーガニックカフェのロゴデザイン作成', 'https://crowdworks.jp/public/jobs/13564658')">
+          <span class="applied-text">✅ 応募済み</span>
+        </button>
+        <button class="btn-skip" onclick="toggleSkip('13564658', 'オーガニックカフェのロゴデザイン作成', 'https://crowdworks.jp/public/jobs/13564658')">
+          <span class="skip-text">⏭ 見送り</span>
+        </button>
+      </div>
+    </div>
+  
+    <div class="job-card rank-b"
+         data-id="13536982"
+         style="border-left-color:#27ae60; background:#f0fff4">
+
+      <div class="job-header">
+        <span class="job-number" style="background:#27ae60">10</span>
+        <span class="rank-badge" style="background:#27ae60">Bランク</span>
+        
+        <span class="tier-badge" style="background:#e0e0e0; color:#555">⏳ 条件確認後に応募</span>
+        <span class="promoted-badge">💰 金額確認待ち</span>
+        <span class="capability-badge" style="background:#27ae60">応募可能</span>
+        <span class="jobstatus-badge continuing">🔁 継続候補（初回2026-10-16）</span>
+        <span class="genre-tag">飲食・店舗運営に関する企画・コンテンツ</span>
+      </div>
+
+      <h2 class="job-title">
+        <a href="https://crowdworks.jp/public/jobs/13536982" target="_blank" rel="noopener">新規オープンのカフェダイニング＆バーのロゴ募集</a>
+      </h2>
+
+      <div class="job-meta">
+        <span class="meta-item">💰 要確認</span>
+        
+        <span class="meta-item">📅 2026-10-29</span>
+        <span class="meta-item keyword-tag">🔑 記事作成</span>
+      </div>
+
+      <div class="scores">
+        <div class="score-row">
+          <span class="score-label">②職能一致度</span>
+          <span class="score-stars">★★☆☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">①証拠の強さ（ポートフォリオ活用度）</span>
+          <span class="score-stars">★☆☆☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">⑥単価</span>
+          <span class="score-stars">★★★☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">⑤継続性</span>
+          <span class="score-stars">★★☆☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">⑧長期資産性</span>
+          <span class="score-stars">★★★☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">④受注できる可能性</span>
+          <span class="score-stars">★★★☆☆</span>
+        </div>
+      </div>
+
+      <div class="detail-section reason">
+        <div class="detail-label">✅ この案件を選ぶ理由（証拠の強さ: 強い代替証明）</div>
+        <div class="signal-chips">
+          <span class="signal-chip">★★☆☆☆ その他</span><span class="signal-chip">★☆☆☆☆ 採用理由の証拠が強い（強い代替証明）</span>
+        </div>
+        
+        <div class="detail-text" style="margin-top:6px">🧭 対応可能業務「飲食・店舗運営に関する企画・コンテンツ」に該当。テーマ理解として飲食業22年、店長・店舗立ち上げ・売上改善・商品開発・撮影監修の経験、制作実績として自主制作「飲食事業改善 提案資料」（8ページ）を根拠に強い代替証明と判定。応募可能と判定。</div>
+        <div class="detail-text" style="margin-top:2px">使用できる能力: 現場理解力・相手目線・改善提案力</div>
+        <div class="decision-source">判定根拠: Sales Knowledge 6-8（案件辞典）/ 2-1（主戦場）（テーマ根拠: Sales Knowledge CARD-01/CARD-02/CARD-10）</div>
+      </div>
+
+      
+
+      
+      <div class="detail-section confirm">
+        <div class="detail-label">☑️ 応募前に確認すべき条件</div>
+        <div class="detail-text">報酬額（案件詳細で確認）、案件全文が未確認（詳細取得の上限）</div>
+      </div>
+
+      
+      <div class="detail-section strength">
+        <div class="detail-label">🧭 提供価値（選定の追加軸）</div>
+        <div class="detail-text">領域を特定できない（除外ではない）</div>
+      </div>
+
+      <div class="detail-section strength">
+        <div class="detail-label">💡 提案文の軸</div>
+        <div class="detail-text" style="white-space:pre-line">リサーチに基づく構成力・情報整理力
+→ この案件のテーマの要件を整理し、目的に合った成果物として仕上げます
+→ 要件と目的を明確にした上で、実務で使える成果物を提供できます</div>
+      </div>
+
+      
+
+      
+
+      <div class="detail-section caution">
+        <div class="detail-label">⚠️ 注意点</div>
+        <div class="detail-text">報酬額が確認できないため応募候補（TOP5）には入れていません。案件詳細で金額を確認してから判断してください</div>
+      </div>
+
+      <span class="applied-overlay">✅ 応募済み</span>
+      <span class="skipped-overlay">⏭ 見送り</span>
+      <div class="card-actions">
+        <a href="https://crowdworks.jp/public/jobs/13536982" target="_blank" class="btn-view">案件を見る →</a>
+        <button class="btn-save" onclick="toggleSave('13536982', '新規オープンのカフェダイニング＆バーのロゴ募集', 'https://crowdworks.jp/public/jobs/13536982', 'B')">
+          <span class="save-icon">🔖</span> <span class="save-text">候補に追加</span>
+        </button>
+        <button class="btn-applied" onclick="toggleApplied('13536982', '新規オープンのカフェダイニング＆バーのロゴ募集', 'https://crowdworks.jp/public/jobs/13536982')">
+          <span class="applied-text">✅ 応募済み</span>
+        </button>
+        <button class="btn-skip" onclick="toggleSkip('13536982', '新規オープンのカフェダイニング＆バーのロゴ募集', 'https://crowdworks.jp/public/jobs/13536982')">
+          <span class="skip-text">⏭ 見送り</span>
+        </button>
+      </div>
+    </div>
+  
+    <div class="job-card rank-b"
+         data-id="13564851"
+         style="border-left-color:#27ae60; background:#f0fff4">
+
+      <div class="job-header">
+        <span class="job-number" style="background:#27ae60">11</span>
+        <span class="rank-badge" style="background:#27ae60">Bランク</span>
+        
+        <span class="tier-badge" style="background:#8e44ad; color:#fff">❓ 確認候補</span>
+        
+        <span class="capability-badge" style="background:#8e44ad">確認候補</span>
+        <span class="jobstatus-badge new">🆕 新着</span>
+        <span class="genre-tag">優先度低め（動画・撮影・音声系）</span>
+      </div>
+
+      <h2 class="job-title">
+        <a href="https://crowdworks.jp/public/jobs/13564851" target="_blank" rel="noopener">【20代活躍】旅・おでかけ系Instagramの投稿制作スタッフ募集♩マニュアル完備◎長期パートナー</a>
+      </h2>
+
+      <div class="job-meta">
+        <span class="meta-item">💰 30,000円</span>
+        
+        <span class="meta-item">📅 2026-11-02</span>
+        <span class="meta-item keyword-tag">🔑 動画制作</span>
+      </div>
+
+      <div class="scores">
+        <div class="score-row">
+          <span class="score-label">②職能一致度</span>
+          <span class="score-stars">★☆☆☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">①証拠の強さ（ポートフォリオ活用度）</span>
+          <span class="score-stars">★☆☆☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">⑥単価</span>
+          <span class="score-stars">★★★★★</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">⑤継続性</span>
+          <span class="score-stars">★★☆☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">⑧長期資産性</span>
+          <span class="score-stars">★★☆☆☆</span>
+        </div>
+        <div class="score-row">
+          <span class="score-label">④受注できる可能性</span>
+          <span class="score-stars">★★★★☆</span>
+        </div>
+      </div>
+
+      <div class="detail-section reason">
+        <div class="detail-label">✅ この案件を選ぶ理由（証拠の強さ: 証明不足）</div>
+        <div class="signal-chips">
+          <span class="signal-chip">★★★★★ 高単価案件</span><span class="signal-chip">★★★★☆ 受注できる可能性が高い</span><span class="signal-chip">★☆☆☆☆ 優先度低め（動画・撮影・音声系）</span>
+        </div>
+        
+        <div class="detail-text" style="margin-top:6px">🧭 案件辞典の主要カテゴリーには一致しないが、案件文に転用可能な能力（相手目線）に関連する語（投稿制作）が含まれており、対応可能とも対応不可とも断定できないため確認候補と判定</div>
+        <div class="detail-text" style="margin-top:2px">使用できる能力: 相手目線</div>
+        <div class="decision-source">判定根拠: Sales Knowledge 4章（能力辞典）※単一能力接続のため断定せず確認候補</div>
+      </div>
+
+      
+
+      
+      <div class="detail-section confirm">
+        <div class="detail-label">☑️ 応募前に確認すべき条件</div>
+        <div class="detail-text">転用可能な能力（相手目線）との関連語は見つかったが、案件の中心業務・必須条件が案件文だけでは確定できない、案件全文が未確認（詳細取得の上限）</div>
+      </div>
+
+      
+      <div class="detail-section strength">
+        <div class="detail-label">🧭 提供価値（選定の追加軸）</div>
+        <div class="detail-text">領域を特定できない（除外ではない）</div>
+      </div>
+
+      <div class="detail-section strength">
+        <div class="detail-label">💡 提案文の軸</div>
+        <div class="detail-text" style="white-space:pre-line">リサーチに基づく構成力・情報整理力
+→ 「動画制作」の要件を整理し、目的に合った成果物として仕上げます
+→ 要件と目的を明確にした上で、実務で使える成果物を提供できます</div>
+      </div>
+
+      
+
+      
+
+      <div class="detail-section caution">
+        <div class="detail-label">⚠️ 注意点</div>
+        <div class="detail-text">案件詳細で業務範囲と納期を必ず確認</div>
+      </div>
+
+      <span class="applied-overlay">✅ 応募済み</span>
+      <span class="skipped-overlay">⏭ 見送り</span>
+      <div class="card-actions">
+        <a href="https://crowdworks.jp/public/jobs/13564851" target="_blank" class="btn-view">案件を見る →</a>
+        <button class="btn-save" onclick="toggleSave('13564851', '【20代活躍】旅・おでかけ系Instagramの投稿制作スタッフ募集♩マニュアル完備◎長期パートナー', 'https://crowdworks.jp/public/jobs/13564851', 'B')">
+          <span class="save-icon">🔖</span> <span class="save-text">候補に追加</span>
+        </button>
+        <button class="btn-applied" onclick="toggleApplied('13564851', '【20代活躍】旅・おでかけ系Instagramの投稿制作スタッフ募集♩マニュアル完備◎長期パートナー', 'https://crowdworks.jp/public/jobs/13564851')">
+          <span class="applied-text">✅ 応募済み</span>
+        </button>
+        <button class="btn-skip" onclick="toggleSkip('13564851', '【20代活躍】旅・おでかけ系Instagramの投稿制作スタッフ募集♩マニュアル完備◎長期パートナー', 'https://crowdworks.jp/public/jobs/13564851')">
+          <span class="skip-text">⏭ 見送り</span>
+        </button>
+      </div>
+    </div>
+  
+  </div>
+
+  <!-- 保留タブ -->
+  <div id="tab-holds" class="tab-content">
+    <div class="update-info">単価不明等、情報不足で判断できない案件のみ（今後の参考用）</div>
+    <div class="saved-empty">保留案件はありません</div>
+  </div>
+
+  <!-- 除外タブ -->
+  <div id="tab-excluded" class="tab-content">
+    <div class="update-info">応募済み・見送り・既出・募集終了・単価が低い・条件不一致・SNS運用代行・リスクありの案件（理由付き）</div>
+    <div id="skip-filter-bar">
+      <input type="checkbox" id="show-skipped" onchange="applySkippedFilter()">
+      <label for="show-skipped">見送り案件も表示する</label>
+    </div>
+    <div class="rank-section-header" style="border-left:4px solid #e67e22">
+      <span style="color:#e67e22">単価が低すぎる</span>
+      <span class="count-badge" style="background:#e67e22">33件</span>
+    </div>
+    <div class="excluded-card" data-reason="単価が低すぎる">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#e67e22">単価が低すぎる</span>
+        <span class="genre-tag">ライティング</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13544681" target="_blank" rel="noopener">【未経験OK】Webライティングに挑戦したい方募集｜在宅・継続案件あり</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 0円</span>
+      </div>
+      
+      
+      
+    </div>
+  
+
+    <div class="excluded-card" data-reason="単価が低すぎる">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#e67e22">単価が低すぎる</span>
+        <span class="genre-tag">ライティング</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13564832" target="_blank" rel="noopener">迷っている人の参考になる、美容費のリアルな使い道を聞かせてください✨</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 2円</span>
+      </div>
+      
+      
+      
+    </div>
+  
+
+    <div class="excluded-card" data-reason="単価が低すぎる">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#e67e22">単価が低すぎる</span>
+        <span class="genre-tag">ライティング</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13564826" target="_blank" rel="noopener">【簡単アンケート】秋の過ごし方＆生活の変化について</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 5円</span>
+      </div>
+      
+      
+      
+    </div>
+  
+
+    <div class="excluded-card" data-reason="単価が低すぎる">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#e67e22">単価が低すぎる</span>
+        <span class="genre-tag">ライティング</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13564825" target="_blank" rel="noopener">教材の閲読とフィードバックのお仕事</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 110円</span>
+      </div>
+      
+      
+      
+    </div>
+  
+
+    <div class="excluded-card" data-reason="単価が低すぎる">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#e67e22">単価が低すぎる</span>
+        <span class="genre-tag">ライティング</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13564824" target="_blank" rel="noopener">超カンタン！未経験OK！食生活に関するアンケート</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 5円</span>
+      </div>
+      
+      
+      
+    </div>
+  
+
+    <div class="excluded-card" data-reason="単価が低すぎる">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#e67e22">単価が低すぎる</span>
+        <span class="genre-tag">ライティング</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13564803" target="_blank" rel="noopener">【1問10秒】どんな作業スタイルが合っていますか？</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 5円</span>
+      </div>
+      
+      
+      
+    </div>
+  
+
+    <div class="excluded-card" data-reason="単価が低すぎる">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#e67e22">単価が低すぎる</span>
+        <span class="genre-tag">ライティング</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13552765" target="_blank" rel="noopener">1分でサクッと回答！「みんなのお掃除事情」カンタン意識調査（初心者向け）</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 11円</span>
+      </div>
+      
+      
+      
+    </div>
+  
+
+    <div class="excluded-card" data-reason="単価が低すぎる">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#e67e22">単価が低すぎる</span>
+        <span class="genre-tag">ライティング</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13559150" target="_blank" rel="noopener">【未経験OK！】ライティングに挑戦したい方募集｜完全在宅・継続案件前提！</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 3円</span>
+      </div>
+      
+      
+      
+    </div>
+  
+
+    <div class="excluded-card" data-reason="単価が低すぎる">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#e67e22">単価が低すぎる</span>
+        <span class="genre-tag">ライティング</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13564733" target="_blank" rel="noopener">食生活に関するアンケート</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 5円</span>
+      </div>
+      
+      
+      
+    </div>
+  
+
+    <div class="excluded-card" data-reason="単価が低すぎる">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#e67e22">単価が低すぎる</span>
+        <span class="genre-tag">ライティング</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13564730" target="_blank" rel="noopener">【400〜500文字】リゾートバイト派遣会社を利用した方の口コミ募集</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 0円</span>
+      </div>
+      
+      
+      
+    </div>
+  
+
+    <div class="excluded-card" data-reason="単価が低すぎる">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#e67e22">単価が低すぎる</span>
+        <span class="genre-tag">ライティング</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13564706" target="_blank" rel="noopener">(1人1回答)【指定地域の募集のみ】ダイエットやジムに関心を持つ方に向けてのアンケート　20歳～45歳の男女</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 5円</span>
+      </div>
+      
+      
+      
+    </div>
+  
+
+    <div class="excluded-card" data-reason="単価が低すぎる">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#e67e22">単価が低すぎる</span>
+        <span class="genre-tag">ライティング</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13564680" target="_blank" rel="noopener">【2分で完了☆】朝食のバイキングでご当地グルメが美味しいホテルを教えてください！</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 5円</span>
+      </div>
+      
+      
+      
+    </div>
+  
+
+    <div class="excluded-card" data-reason="単価が低すぎる">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#e67e22">単価が低すぎる</span>
+        <span class="genre-tag">ライティング</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13564678" target="_blank" rel="noopener">【2分で完了☆】駅からのアクセスが便利なビジネスホテルチェーンを教えてください！</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 5円</span>
+      </div>
+      
+      
+      
+    </div>
+  
+
+    <div class="excluded-card" data-reason="単価が低すぎる">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#e67e22">単価が低すぎる</span>
+        <span class="genre-tag">ライティング</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13564673" target="_blank" rel="noopener">【2分で完了☆】大浴場が充実しているビジネスホテルチェーンを教えてください！</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 5円</span>
+      </div>
+      
+      
+      
+    </div>
+  
+
+    <div class="excluded-card" data-reason="単価が低すぎる">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#e67e22">単価が低すぎる</span>
+        <span class="genre-tag">ライティング</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13564670" target="_blank" rel="noopener">【2分で完了☆】冷凍食品の品揃えが充実しているスーパーを教えてください！</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 5円</span>
+      </div>
+      
+      
+      
+    </div>
+  
+
+    <div class="excluded-card" data-reason="単価が低すぎる">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#e67e22">単価が低すぎる</span>
+        <span class="genre-tag">ライティング</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13564668" target="_blank" rel="noopener">【2分で完了☆】お肉をまとめ買いするなら選びたいスーパーを教えてください！</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 5円</span>
+      </div>
+      
+      
+      
+    </div>
+  
+
+    <div class="excluded-card" data-reason="単価が低すぎる">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#e67e22">単価が低すぎる</span>
+        <span class="genre-tag">ライティング</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13564667" target="_blank" rel="noopener">【2分で完了☆】焼き鳥や揚げ物の惣菜が充実しているスーパーを教えてください！</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 5円</span>
+      </div>
+      
+      
+      
+    </div>
+  
+
+    <div class="excluded-card" data-reason="単価が低すぎる">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#e67e22">単価が低すぎる</span>
+        <span class="genre-tag">ライティング</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13564665" target="_blank" rel="noopener">【2分で完了☆】お祝いの席で利用したい和食チェーンを教えてください！</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 5円</span>
+      </div>
+      
+      
+      
+    </div>
+  
+
+    <div class="excluded-card" data-reason="単価が低すぎる">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#e67e22">単価が低すぎる</span>
+        <span class="genre-tag">ライティング</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13564662" target="_blank" rel="noopener">【2分で完了☆】本格的な洋食を手軽に楽しめるファミレスを教えてください！</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 5円</span>
+      </div>
+      
+      
+      
+    </div>
+  
+
+    <div class="excluded-card" data-reason="単価が低すぎる">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#e67e22">単価が低すぎる</span>
+        <span class="genre-tag">ライティング</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13564661" target="_blank" rel="noopener">【2分で完了☆】寒い日の夜にガッツリ食べたいラーメンチェーンを教えてください！</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 5円</span>
+      </div>
+      
+      
+      
+    </div>
+  
+
+    <div class="excluded-card" data-reason="単価が低すぎる">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#e67e22">単価が低すぎる</span>
+        <span class="genre-tag">ライティング</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13564660" target="_blank" rel="noopener">【2分で完了☆】忙しい日のランチに利用したい牛丼チェーンを教えてください！</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 5円</span>
+      </div>
+      
+      
+      
+    </div>
+  
+
+    <div class="excluded-card" data-reason="単価が低すぎる">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#e67e22">単価が低すぎる</span>
+        <span class="genre-tag">ライティング</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13564656" target="_blank" rel="noopener">【2分で完了☆】休日に家族で食べに行きたいうどんチェーンを教えてください！</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 5円</span>
+      </div>
+      
+      
+      
+    </div>
+  
+
+    <div class="excluded-card" data-reason="単価が低すぎる">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#e67e22">単価が低すぎる</span>
+        <span class="genre-tag">ライティング</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13564655" target="_blank" rel="noopener">【2分で完了☆】仕事終わりに立ち寄りたい居酒屋チェーンを教えてください！</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 5円</span>
+      </div>
+      
+      
+      
+    </div>
+  
+
+    <div class="excluded-card" data-reason="単価が低すぎる">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#e67e22">単価が低すぎる</span>
+        <span class="genre-tag">Webライティング</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13541532" target="_blank" rel="noopener">【会社員の方歓迎】AIエージェントをテーマにした記事作成</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 6円</span>
+      </div>
+      
+      
+      
+    </div>
+  
+
+    <div class="excluded-card" data-reason="単価が低すぎる">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#e67e22">単価が低すぎる</span>
+        <span class="genre-tag">記事作成</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13563617" target="_blank" rel="noopener">【初心者歓迎】AIを活用したWebライター募集｜在宅で始める文章作成のお仕事・継続依頼あり</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 5円</span>
+      </div>
+      
+      
+      
+    </div>
+  
+
+    <div class="excluded-card" data-reason="単価が低すぎる">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#e67e22">単価が低すぎる</span>
+        <span class="genre-tag">記事執筆</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13550602" target="_blank" rel="noopener">【初心者OK・在宅作業】SNSコンテンツ制作スタッフ募集（投稿制作）</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 5円</span>
+      </div>
+      
+      
+      
+    </div>
+  
+
+    <div class="excluded-card" data-reason="単価が低すぎる">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#e67e22">単価が低すぎる</span>
+        <span class="genre-tag">ブログ記事作成</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13541521" target="_blank" rel="noopener">＼看護・介護の経験が記事になる／現場×AIをテーマにしたライター募集｜AI使用OK・テストあり</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 7円</span>
+      </div>
+      
+      
+      
+    </div>
+  
+
+    <div class="excluded-card" data-reason="単価が低すぎる">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#e67e22">単価が低すぎる</span>
+        <span class="genre-tag">SEO記事</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13547435" target="_blank" rel="noopener">【未経験OK】AIを活用した簡単な文章作成｜初心者ライター歓迎！</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 5円</span>
+      </div>
+      
+      
+      
+    </div>
+  
+
+    <div class="excluded-card" data-reason="単価が低すぎる">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#e67e22">単価が低すぎる</span>
+        <span class="genre-tag">Webコンテンツ作成</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13555439" target="_blank" rel="noopener">【主婦様・ママさん大歓迎🙌】インスタ投稿のためのサポート業務</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 3円</span>
+      </div>
+      
+      
+      
+    </div>
+  
+
+    <div class="excluded-card" data-reason="単価が低すぎる">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#e67e22">単価が低すぎる</span>
+        <span class="genre-tag">商品レビュー記事</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13556655" target="_blank" rel="noopener">🥯【パン好きさん必見！】休日に行きたい、おすすめのベーカリーを教えてください🥖｜未経験OK◎</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 5円</span>
+      </div>
+      
+      
+      
+    </div>
+  
+
+    <div class="excluded-card" data-reason="単価が低すぎる">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#e67e22">単価が低すぎる</span>
+        <span class="genre-tag">ChatGPT記事作成</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13554701" target="_blank" rel="noopener">【初心者歓迎・継続依頼あり】日常で感じた「秋のひととき」をテーマにした体験記事の執筆｜お試しライターさん歓迎</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 100円</span>
+      </div>
+      
+      
+      
+    </div>
+  
+
+    <div class="excluded-card" data-reason="単価が低すぎる">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#e67e22">単価が低すぎる</span>
+        <span class="genre-tag">AI業務改善</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13555243" target="_blank" rel="noopener">【隙間時間/未経験OK】TikTokの軽作業をお手伝いいただける方を募集！主婦の方歓迎</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 30円</span>
+      </div>
+      
+      
+      
+    </div>
+  
+
+    <div class="excluded-card" data-reason="単価が低すぎる">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#e67e22">単価が低すぎる</span>
+        <span class="genre-tag">AI導入支援</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13562645" target="_blank" rel="noopener">【未経験OK／AI活用OK】在宅で始めるWebライター募集｜1記事200文字〜・継続で報酬アップ</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 5円</span>
+      </div>
+      
+      
+      
+    </div>
+  <div class="rank-section-header" style="border-left:4px solid #8e44ad">
+      <span style="color:#8e44ad">条件不一致</span>
+      <span class="count-badge" style="background:#8e44ad">2件</span>
+    </div>
+    <div class="excluded-card" data-reason="条件不一致">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#8e44ad">条件不一致</span>
+        <span class="genre-tag">ライティング</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13564782" target="_blank" rel="noopener">【女性限定】背面の動画撮影をお願いします【非公開】</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 3,300円</span>
+      </div>
+      
+      
+      
+    </div>
+  
+
+    <div class="excluded-card" data-reason="条件不一致">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#8e44ad">条件不一致</span>
+        <span class="genre-tag">コラム執筆</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13553246" target="_blank" rel="noopener">【在宅・顔出し不要】音声ライブコンテンツの出演者募集｜未経験歓迎</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 要確認</span>
+      </div>
+      
+      
+      
+    </div>
+  <div class="rank-section-header" style="border-left:4px solid #8e44ad">
+      <span style="color:#8e44ad">条件不一致（属性）</span>
+      <span class="count-badge" style="background:#8e44ad">1件</span>
+    </div>
+    <div class="excluded-card" data-reason="条件不一致（属性）">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#8e44ad">条件不一致（属性）</span>
+        <span class="genre-tag">ライティング</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13564771" target="_blank" rel="noopener">【顔出し無し】座っている姿の動画撮影をお願いできる女性の募集</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 1,100円</span>
+      </div>
+      
+      
+      
+    </div>
+  <div class="rank-section-header" style="border-left:4px solid #16a085">
+      <span style="color:#16a085">SNS運用代行</span>
+      <span class="count-badge" style="background:#16a085">4件</span>
+    </div>
+    <div class="excluded-card" data-reason="SNS運用代行">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#16a085">SNS運用代行</span>
+        <span class="genre-tag">ライティング</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13549861" target="_blank" rel="noopener">【急募】Instagram・TikTok運用ディレクター｜企画〜分析まで一気通貫/SNS運用・ショート動画マーケ【複数案件】</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 50,000円</span>
+      </div>
+      
+      
+      
+    </div>
+  
+
+    <div class="excluded-card" data-reason="SNS運用代行">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#16a085">SNS運用代行</span>
+        <span class="genre-tag">ライティング</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13564043" target="_blank" rel="noopener">【3分簡単アンケート】SNS運用代行のお仕事に興味がある人向けのアンケート【承認率100％】</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 5円</span>
+      </div>
+      
+      
+      
+    </div>
+  
+
+    <div class="excluded-card" data-reason="SNS運用代行">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#16a085">SNS運用代行</span>
+        <span class="genre-tag">ライティング</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13564696" target="_blank" rel="noopener">【アウトドア好き必見‼️】キャンプ道具・アウトドア系Instagram画像制作パートナー募集</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 10,000円</span>
+      </div>
+      
+      
+      
+    </div>
+  
+
+    <div class="excluded-card" data-reason="SNS運用代行">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#16a085">SNS運用代行</span>
+        <span class="genre-tag">AI活用</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13534016" target="_blank" rel="noopener">【初心者OK】SNS投稿の補助スタッフ募集！</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 10,000円</span>
+      </div>
+      
+      
+      
+    </div>
+  <div class="rank-section-header" style="border-left:4px solid #c0392b">
+      <span style="color:#c0392b">対応不可（Knowledge判定）</span>
+      <span class="count-badge" style="background:#c0392b">54件</span>
+    </div>
+    <div class="excluded-card" data-reason="対応不可（Knowledge判定）">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#c0392b">対応不可（Knowledge判定）</span>
+        <span class="genre-tag">ライティング</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13532218" target="_blank" rel="noopener">≪長期依頼≫YouTubeチャンネル登録者数10万人を超える野球系YouTube動画の編集者様を募集しております。</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 10,000円</span>
+      </div>
+      
+      
+      <div class="skip-reason-text">🧭 対応可能業務・チャレンジ可能業務のいずれにも該当せず、能力辞典上の転用可能な関連もSales Knowledgeで確認できないため対応不可と判定（判定根拠: Sales Knowledge 1-4（証明できない案件の判断方法））</div>
+    </div>
+  
+
+    <div class="excluded-card" data-reason="対応不可（Knowledge判定）">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#c0392b">対応不可（Knowledge判定）</span>
+        <span class="genre-tag">ライティング</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13564836" target="_blank" rel="noopener">【名古屋市内・屋外】動画に出演いただける60代以上の男性を募集します（未経験歓迎 / 代理応募可）</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 1,000円</span>
+      </div>
+      
+      
+      <div class="skip-reason-text">🧭 対応可能業務・チャレンジ可能業務のいずれにも該当せず、能力辞典上の転用可能な関連もSales Knowledgeで確認できないため対応不可と判定（判定根拠: Sales Knowledge 1-4（証明できない案件の判断方法））</div>
+    </div>
+  
+
+    <div class="excluded-card" data-reason="対応不可（Knowledge判定）">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#c0392b">対応不可（Knowledge判定）</span>
+        <span class="genre-tag">ライティング</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13564835" target="_blank" rel="noopener">【11/7(土)〜8日(日)】袋封入作業</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 要確認</span>
+      </div>
+      
+      
+      <div class="skip-reason-text">🧭 対応可能業務・チャレンジ可能業務のいずれにも該当せず、能力辞典上の転用可能な関連もSales Knowledgeで確認できないため対応不可と判定（判定根拠: Sales Knowledge 1-4（証明できない案件の判断方法））</div>
+    </div>
+  
+
+    <div class="excluded-card" data-reason="対応不可（Knowledge判定）">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#c0392b">対応不可（Knowledge判定）</span>
+        <span class="genre-tag">ライティング</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13564831" target="_blank" rel="noopener">【11/7(土)〜8日(日)】封入作業</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 要確認</span>
+      </div>
+      
+      
+      <div class="skip-reason-text">🧭 対応可能業務・チャレンジ可能業務のいずれにも該当せず、能力辞典上の転用可能な関連もSales Knowledgeで確認できないため対応不可と判定（判定根拠: Sales Knowledge 1-4（証明できない案件の判断方法））</div>
+    </div>
+  
+
+    <div class="excluded-card" data-reason="対応不可（Knowledge判定）">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#c0392b">対応不可（Knowledge判定）</span>
+        <span class="genre-tag">ライティング</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13538127" target="_blank" rel="noopener">動画編集者へのはじめの一歩！ショート動画作成のお仕事</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 5,000円</span>
+      </div>
+      
+      
+      <div class="skip-reason-text">🧭 対応不可業務・非希望領域「動画編集（動画シナリオ・台本作成等の文章タスクを除く）」に該当するため対応不可と判定（判定根拠: Sales Knowledge 2-1/2-2（対応可能業務・チャレンジ可能業務のいずれにも動画編集の記載なし））</div>
+    </div>
+  
+
+    <div class="excluded-card" data-reason="対応不可（Knowledge判定）">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#c0392b">対応不可（Knowledge判定）</span>
+        <span class="genre-tag">ライティング</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13564817" target="_blank" rel="noopener">concrete5で作成したホームページのバージョンアップ</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 要確認</span>
+      </div>
+      
+      
+      <div class="skip-reason-text">🧭 対応可能業務・チャレンジ可能業務のいずれにも該当せず、能力辞典上の転用可能な関連もSales Knowledgeで確認できないため対応不可と判定（判定根拠: Sales Knowledge 1-4（証明できない案件の判断方法））</div>
+    </div>
+  
+
+    <div class="excluded-card" data-reason="対応不可（Knowledge判定）">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#c0392b">対応不可（Knowledge判定）</span>
+        <span class="genre-tag">ライティング</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13564398" target="_blank" rel="noopener">未経験者歓迎！継続あり！文字起こしのお仕事です！</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 8,800円</span>
+      </div>
+      
+      
+      <div class="skip-reason-text">🧭 対応可能業務・チャレンジ可能業務のいずれにも該当せず、能力辞典上の転用可能な関連もSales Knowledgeで確認できないため対応不可と判定（判定根拠: Sales Knowledge 1-4（証明できない案件の判断方法））</div>
+    </div>
+  
+
+    <div class="excluded-card" data-reason="対応不可（Knowledge判定）">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#c0392b">対応不可（Knowledge判定）</span>
+        <span class="genre-tag">ライティング</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13564386" target="_blank" rel="noopener">簡単なPC作業！継続あり！Excelシートへのデータ入力</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 要確認</span>
+      </div>
+      
+      
+      <div class="skip-reason-text">🧭 対応可能業務・チャレンジ可能業務のいずれにも該当せず、能力辞典上の転用可能な関連もSales Knowledgeで確認できないため対応不可と判定（判定根拠: Sales Knowledge 1-4（証明できない案件の判断方法））</div>
+    </div>
+  
+
+    <div class="excluded-card" data-reason="対応不可（Knowledge判定）">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#c0392b">対応不可（Knowledge判定）</span>
+        <span class="genre-tag">ライティング</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13564373" target="_blank" rel="noopener">未経験者OKです！継続あり！音声データの文字起こし</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 11,000円</span>
+      </div>
+      
+      
+      <div class="skip-reason-text">🧭 対応可能業務・チャレンジ可能業務のいずれにも該当せず、能力辞典上の転用可能な関連もSales Knowledgeで確認できないため対応不可と判定（判定根拠: Sales Knowledge 1-4（証明できない案件の判断方法））</div>
+    </div>
+  
+
+    <div class="excluded-card" data-reason="対応不可（Knowledge判定）">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#c0392b">対応不可（Knowledge判定）</span>
+        <span class="genre-tag">ライティング</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13561205" target="_blank" rel="noopener">【動画編集のスキルを活かしたい方へ✨】未経験の方も歓迎！｜流れに沿って作成の料理系ショート動画編集🌷｜サポート体制◎</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 3,300円</span>
+      </div>
+      
+      
+      <div class="skip-reason-text">🧭 対応不可業務・非希望領域「動画編集（動画シナリオ・台本作成等の文章タスクを除く）」に該当するため対応不可と判定（判定根拠: Sales Knowledge 2-1/2-2（対応可能業務・チャレンジ可能業務のいずれにも動画編集の記載なし））</div>
+    </div>
+  
+
+    <div class="excluded-card" data-reason="対応不可（Knowledge判定）">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#c0392b">対応不可（Knowledge判定）</span>
+        <span class="genre-tag">ライティング</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13564785" target="_blank" rel="noopener">【継続案件・実績公開可】インタビュー系YouTube動画の編集</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 1,320円</span>
+      </div>
+      
+      
+      <div class="skip-reason-text">🧭 対応可能業務・チャレンジ可能業務のいずれにも該当せず、能力辞典上の転用可能な関連もSales Knowledgeで確認できないため対応不可と判定（判定根拠: Sales Knowledge 1-4（証明できない案件の判断方法））</div>
+    </div>
+  
+
+    <div class="excluded-card" data-reason="対応不可（Knowledge判定）">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#c0392b">対応不可（Knowledge判定）</span>
+        <span class="genre-tag">ライティング</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13543046" target="_blank" rel="noopener">初案件にピッタリの簡単ショート動画制作！【未経験可】</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 5,000円</span>
+      </div>
+      
+      
+      <div class="skip-reason-text">🧭 対応不可業務・非希望領域「動画編集（動画シナリオ・台本作成等の文章タスクを除く）」に該当するため対応不可と判定（判定根拠: Sales Knowledge 2-1/2-2（対応可能業務・チャレンジ可能業務のいずれにも動画編集の記載なし））</div>
+    </div>
+  
+
+    <div class="excluded-card" data-reason="対応不可（Knowledge判定）">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#c0392b">対応不可（Knowledge判定）</span>
+        <span class="genre-tag">ライティング</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13564778" target="_blank" rel="noopener">【完全在宅／未経験・ブランク大歓迎】コツコツ入力するだけ！アンケートデータのExcel入力・事務サポート✨（マニュアル完備）</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 要確認</span>
+      </div>
+      
+      
+      <div class="skip-reason-text">🧭 対応不可業務・非希望領域「単純作業・視聴・アンケート・紹介のみで長期資産にならない案件」に該当するため対応不可と判定（判定根拠: Sales Knowledge 2-3（対象外・優先しない：単純作業中心で長期資産にならない案件））</div>
+    </div>
+  
+
+    <div class="excluded-card" data-reason="対応不可（Knowledge判定）">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#c0392b">対応不可（Knowledge判定）</span>
+        <span class="genre-tag">ライティング</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13564777" target="_blank" rel="noopener">【佐賀県・11/3限定】バルーンフェスタの写真撮影代行／スマホOK・初心者歓迎</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 5,000円</span>
+      </div>
+      
+      
+      <div class="skip-reason-text">🧭 対応可能業務・チャレンジ可能業務のいずれにも該当せず、能力辞典上の転用可能な関連もSales Knowledgeで確認できないため対応不可と判定（判定根拠: Sales Knowledge 1-4（証明できない案件の判断方法））</div>
+    </div>
+  
+
+    <div class="excluded-card" data-reason="対応不可（Knowledge判定）">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#c0392b">対応不可（Knowledge判定）</span>
+        <span class="genre-tag">ライティング</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13564770" target="_blank" rel="noopener">【高単価・継続案件】ビジネス系YouTube動画の編集</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 3,300円</span>
+      </div>
+      
+      
+      <div class="skip-reason-text">🧭 対応可能業務・チャレンジ可能業務のいずれにも該当せず、能力辞典上の転用可能な関連もSales Knowledgeで確認できないため対応不可と判定（判定根拠: Sales Knowledge 1-4（証明できない案件の判断方法））</div>
+    </div>
+  
+
+    <div class="excluded-card" data-reason="対応不可（Knowledge判定）">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#c0392b">対応不可（Knowledge判定）</span>
+        <span class="genre-tag">ライティング</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13564751" target="_blank" rel="noopener">【月40,000円も可！】音声生成＋動画編集のお仕事！</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 40,000円</span>
+      </div>
+      
+      
+      <div class="skip-reason-text">🧭 対応不可業務・非希望領域「動画編集（動画シナリオ・台本作成等の文章タスクを除く）」に該当するため対応不可と判定（判定根拠: Sales Knowledge 2-1/2-2（対応可能業務・チャレンジ可能業務のいずれにも動画編集の記載なし））</div>
+    </div>
+  
+
+    <div class="excluded-card" data-reason="対応不可（Knowledge判定）">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#c0392b">対応不可（Knowledge判定）</span>
+        <span class="genre-tag">ライティング</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13564732" target="_blank" rel="noopener">車イベント動画撮影　11/8 (日)　お台場</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 10,000円</span>
+      </div>
+      
+      
+      <div class="skip-reason-text">🧭 対応可能業務・チャレンジ可能業務のいずれにも該当せず、能力辞典上の転用可能な関連もSales Knowledgeで確認できないため対応不可と判定（判定根拠: Sales Knowledge 1-4（証明できない案件の判断方法））</div>
+    </div>
+  
+
+    <div class="excluded-card" data-reason="対応不可（Knowledge判定）">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#c0392b">対応不可（Knowledge判定）</span>
+        <span class="genre-tag">ライティング</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13564722" target="_blank" rel="noopener">【初心者歓迎】簡単なショート動画編集！</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 5,000円</span>
+      </div>
+      
+      
+      <div class="skip-reason-text">🧭 対応不可業務・非希望領域「動画編集（動画シナリオ・台本作成等の文章タスクを除く）」に該当するため対応不可と判定（判定根拠: Sales Knowledge 2-1/2-2（対応可能業務・チャレンジ可能業務のいずれにも動画編集の記載なし））</div>
+    </div>
+  
+
+    <div class="excluded-card" data-reason="対応不可（Knowledge判定）">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#c0392b">対応不可（Knowledge判定）</span>
+        <span class="genre-tag">ライティング</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13564701" target="_blank" rel="noopener">【医療職の方活躍中/継続あり】医療系Instagramのフィード画像作成【1本3,000円〜】</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 3,000円</span>
+      </div>
+      
+      
+      <div class="skip-reason-text">🧭 対応可能業務・チャレンジ可能業務のいずれにも該当せず、能力辞典上の転用可能な関連もSales Knowledgeで確認できないため対応不可と判定（判定根拠: Sales Knowledge 1-4（証明できない案件の判断方法））</div>
+    </div>
+  
+
+    <div class="excluded-card" data-reason="対応不可（Knowledge判定）">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#c0392b">対応不可（Knowledge判定）</span>
+        <span class="genre-tag">ライティング</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13564697" target="_blank" rel="noopener">【医療職の方、大歓迎⭕️】医療系Instagramのリール編集パートナー募集</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 10,000円</span>
+      </div>
+      
+      
+      <div class="skip-reason-text">🧭 対応不可業務・非希望領域「動画編集（動画シナリオ・台本作成等の文章タスクを除く）」に該当するため対応不可と判定（判定根拠: Sales Knowledge 2-1/2-2（対応可能業務・チャレンジ可能業務のいずれにも動画編集の記載なし））</div>
+    </div>
+  
+
+    <div class="excluded-card" data-reason="対応不可（Knowledge判定）">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#c0392b">対応不可（Knowledge判定）</span>
+        <span class="genre-tag">ライティング</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13529404" target="_blank" rel="noopener">【1本1,500円〜】ビジネス系ショート動画編集者募集【長期契約】</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 1,500円</span>
+      </div>
+      
+      
+      <div class="skip-reason-text">🧭 対応不可業務・非希望領域「動画編集（動画シナリオ・台本作成等の文章タスクを除く）」に該当するため対応不可と判定（判定根拠: Sales Knowledge 2-1/2-2（対応可能業務・チャレンジ可能業務のいずれにも動画編集の記載なし））</div>
+    </div>
+  
+
+    <div class="excluded-card" data-reason="対応不可（Knowledge判定）">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#c0392b">対応不可（Knowledge判定）</span>
+        <span class="genre-tag">ライティング</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13476769" target="_blank" rel="noopener">【1本10,000円】ビジネス系の動画編集者募集【長期契約可能】</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 10,000円</span>
+      </div>
+      
+      
+      <div class="skip-reason-text">🧭 対応不可業務・非希望領域「動画編集（動画シナリオ・台本作成等の文章タスクを除く）」に該当するため対応不可と判定（判定根拠: Sales Knowledge 2-1/2-2（対応可能業務・チャレンジ可能業務のいずれにも動画編集の記載なし））</div>
+    </div>
+  
+
+    <div class="excluded-card" data-reason="対応不可（Knowledge判定）">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#c0392b">対応不可（Knowledge判定）</span>
+        <span class="genre-tag">Webライティング</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13537461" target="_blank" rel="noopener">【賞金30万円】スロットゲームのキービジュアル募集｜提出はイラスト1枚だけ・継続依頼あり</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 要確認</span>
+      </div>
+      
+      
+      <div class="skip-reason-text">🧭 対応可能業務・チャレンジ可能業務のいずれにも該当せず、能力辞典上の転用可能な関連もSales Knowledgeで確認できないため対応不可と判定（判定根拠: Sales Knowledge 1-4（証明できない案件の判断方法））</div>
+    </div>
+  
+
+    <div class="excluded-card" data-reason="対応不可（Knowledge判定）">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#c0392b">対応不可（Knowledge判定）</span>
+        <span class="genre-tag">Webライティング</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13535529" target="_blank" rel="noopener">【1本4,000円〜／追加募集！】SNSショート動画編集スタッフ募集｜完全在宅・継続案件あり・初心者歓迎！</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 4,000円</span>
+      </div>
+      
+      
+      <div class="skip-reason-text">🧭 対応不可業務・非希望領域「動画編集（動画シナリオ・台本作成等の文章タスクを除く）」に該当するため対応不可と判定（判定根拠: Sales Knowledge 2-1/2-2（対応可能業務・チャレンジ可能業務のいずれにも動画編集の記載なし））</div>
+    </div>
+  
+
+    <div class="excluded-card" data-reason="対応不可（Knowledge判定）">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#c0392b">対応不可（Knowledge判定）</span>
+        <span class="genre-tag">Webライティング</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13544285" target="_blank" rel="noopener">SNSで使用する縦型ショート動画の編集をお願いできる方募集</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 30,000円</span>
+      </div>
+      
+      
+      <div class="skip-reason-text">🧭 対応可能業務・チャレンジ可能業務のいずれにも該当せず、能力辞典上の転用可能な関連もSales Knowledgeで確認できないため対応不可と判定（判定根拠: Sales Knowledge 1-4（証明できない案件の判断方法））</div>
+    </div>
+  
+
+    <div class="excluded-card" data-reason="対応不可（Knowledge判定）">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#c0392b">対応不可（Knowledge判定）</span>
+        <span class="genre-tag">記事作成</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13541198" target="_blank" rel="noopener">【税理士事務所経験者／完全リモート/都内在住歓迎】決算・申告まで自走できる会計税務シニア募集</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 要確認</span>
+      </div>
+      
+      
+      <div class="skip-reason-text">🧭 対応可能業務・チャレンジ可能業務のいずれにも該当せず、能力辞典上の転用可能な関連もSales Knowledgeで確認できないため対応不可と判定（判定根拠: Sales Knowledge 1-4（証明できない案件の判断方法））</div>
+    </div>
+  
+
+    <div class="excluded-card" data-reason="対応不可（Knowledge判定）">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#c0392b">対応不可（Knowledge判定）</span>
+        <span class="genre-tag">記事執筆</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13531070" target="_blank" rel="noopener">【子育てママさん、育休中の方大活躍中！】インスタグラムDM送信の作業依頼！</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 10,000円</span>
+      </div>
+      
+      
+      <div class="skip-reason-text">🧭 対応可能業務・チャレンジ可能業務のいずれにも該当せず、能力辞典上の転用可能な関連もSales Knowledgeで確認できないため対応不可と判定（判定根拠: Sales Knowledge 1-4（証明できない案件の判断方法））</div>
+    </div>
+  
+
+    <div class="excluded-card" data-reason="対応不可（Knowledge判定）">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#c0392b">対応不可（Knowledge判定）</span>
+        <span class="genre-tag">記事執筆</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13540062" target="_blank" rel="noopener">【SNSデザイン】SNS投稿用のデザイン制作スタッフ増枠募集♪</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 30,000円</span>
+      </div>
+      
+      
+      <div class="skip-reason-text">🧭 対応可能業務・チャレンジ可能業務のいずれにも該当せず、能力辞典上の転用可能な関連もSales Knowledgeで確認できないため対応不可と判定（判定根拠: Sales Knowledge 1-4（証明できない案件の判断方法））</div>
+    </div>
+  
+
+    <div class="excluded-card" data-reason="対応不可（Knowledge判定）">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#c0392b">対応不可（Knowledge判定）</span>
+        <span class="genre-tag">記事執筆</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13540051" target="_blank" rel="noopener">【未経験OK】画像加工のお仕事（マニュアルあり）</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 30,000円</span>
+      </div>
+      
+      
+      <div class="skip-reason-text">🧭 対応可能業務・チャレンジ可能業務のいずれにも該当せず、能力辞典上の転用可能な関連もSales Knowledgeで確認できないため対応不可と判定（判定根拠: Sales Knowledge 1-4（証明できない案件の判断方法））</div>
+    </div>
+  
+
+    <div class="excluded-card" data-reason="対応不可（Knowledge判定）">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#c0392b">対応不可（Knowledge判定）</span>
+        <span class="genre-tag">ブログ記事作成</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13540160" target="_blank" rel="noopener">【初心者OK】動画編集に挑戦したい方にピッタリのスタート案件</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 30,000円</span>
+      </div>
+      
+      
+      <div class="skip-reason-text">🧭 対応不可業務・非希望領域「動画編集（動画シナリオ・台本作成等の文章タスクを除く）」に該当するため対応不可と判定（判定根拠: Sales Knowledge 2-1/2-2（対応可能業務・チャレンジ可能業務のいずれにも動画編集の記載なし））</div>
+    </div>
+  
+
+    <div class="excluded-card" data-reason="対応不可（Knowledge判定）">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#c0392b">対応不可（Knowledge判定）</span>
+        <span class="genre-tag">ブログ記事作成</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13560310" target="_blank" rel="noopener">【リモートOK】20〜30代のチームで活動中！SNSマーケティングのサポートに挑戦しませんか♪</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 10,000円</span>
+      </div>
+      
+      
+      <div class="skip-reason-text">🧭 対応可能業務・チャレンジ可能業務のいずれにも該当せず、能力辞典上の転用可能な関連もSales Knowledgeで確認できないため対応不可と判定（判定根拠: Sales Knowledge 1-4（証明できない案件の判断方法））</div>
+    </div>
+  
+
+    <div class="excluded-card" data-reason="対応不可（Knowledge判定）">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#c0392b">対応不可（Knowledge判定）</span>
+        <span class="genre-tag">SEO記事作成</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13544301" target="_blank" rel="noopener">【1時間で6,000円】戸建てにお住まいの方｜無料診断アンケート募集【未経験歓迎！】</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 6,000円</span>
+      </div>
+      
+      
+      <div class="skip-reason-text">🧭 対応不可業務・非希望領域「単純作業・視聴・アンケート・紹介のみで長期資産にならない案件」に該当するため対応不可と判定（判定根拠: Sales Knowledge 2-3（対象外・優先しない：単純作業中心で長期資産にならない案件））</div>
+    </div>
+  
+
+    <div class="excluded-card" data-reason="対応不可（Knowledge判定）">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#c0392b">対応不可（Knowledge判定）</span>
+        <span class="genre-tag">SEO記事作成</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13561062" target="_blank" rel="noopener">【これから動画編集で食べていきたいと考えている方！】ゲーム好き！初心者ok！VtuberのYouTube編集 学生・主婦 大歓迎</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 30,000円</span>
+      </div>
+      
+      
+      <div class="skip-reason-text">🧭 対応不可業務・非希望領域「動画編集（動画シナリオ・台本作成等の文章タスクを除く）」に該当するため対応不可と判定（判定根拠: Sales Knowledge 2-1/2-2（対応可能業務・チャレンジ可能業務のいずれにも動画編集の記載なし））</div>
+    </div>
+  
+
+    <div class="excluded-card" data-reason="対応不可（Knowledge判定）">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#c0392b">対応不可（Knowledge判定）</span>
+        <span class="genre-tag">SEO記事作成</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13555292" target="_blank" rel="noopener">これから動画編集で稼ぎたい方にピッタリのスタート案件！</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 5,000円</span>
+      </div>
+      
+      
+      <div class="skip-reason-text">🧭 対応不可業務・非希望領域「動画編集（動画シナリオ・台本作成等の文章タスクを除く）」に該当するため対応不可と判定（判定根拠: Sales Knowledge 2-1/2-2（対応可能業務・チャレンジ可能業務のいずれにも動画編集の記載なし））</div>
+    </div>
+  
+
+    <div class="excluded-card" data-reason="対応不可（Knowledge判定）">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#c0392b">対応不可（Knowledge判定）</span>
+        <span class="genre-tag">Webコンテンツ作成</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13538102" target="_blank" rel="noopener">【未経験でも継続的にご依頼できる方を優先します】ECサイトの商品画像デザイン✨</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 30,000円</span>
+      </div>
+      
+      
+      <div class="skip-reason-text">🧭 対応可能業務・チャレンジ可能業務のいずれにも該当せず、能力辞典上の転用可能な関連もSales Knowledgeで確認できないため対応不可と判定（判定根拠: Sales Knowledge 1-4（証明できない案件の判断方法））</div>
+    </div>
+  
+
+    <div class="excluded-card" data-reason="対応不可（Knowledge判定）">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#c0392b">対応不可（Knowledge判定）</span>
+        <span class="genre-tag">Webコンテンツ作成</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13528260" target="_blank" rel="noopener">【テンプレ・マニュアルあり】自然スポットの縦型ショート動画の編集スタッフ募集</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 5,000円</span>
+      </div>
+      
+      
+      <div class="skip-reason-text">🧭 対応可能業務・チャレンジ可能業務のいずれにも該当せず、能力辞典上の転用可能な関連もSales Knowledgeで確認できないため対応不可と判定（判定根拠: Sales Knowledge 1-4（証明できない案件の判断方法））</div>
+    </div>
+  
+
+    <div class="excluded-card" data-reason="対応不可（Knowledge判定）">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#c0392b">対応不可（Knowledge判定）</span>
+        <span class="genre-tag">コラム執筆</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13532822" target="_blank" rel="noopener">【初案件可】簡単なショート動画編集に携わっていただける編集者を募集！</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 5,000円</span>
+      </div>
+      
+      
+      <div class="skip-reason-text">🧭 対応不可業務・非希望領域「動画編集（動画シナリオ・台本作成等の文章タスクを除く）」に該当するため対応不可と判定（判定根拠: Sales Knowledge 2-1/2-2（対応可能業務・チャレンジ可能業務のいずれにも動画編集の記載なし））</div>
+    </div>
+  
+
+    <div class="excluded-card" data-reason="対応不可（Knowledge判定）">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#c0392b">対応不可（Knowledge判定）</span>
+        <span class="genre-tag">note記事作成</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13558535" target="_blank" rel="noopener">【在宅×YouTube】チャンネルの品質向上を担える編集クリエイター様急募！【長期依頼】</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 250,000円</span>
+      </div>
+      
+      
+      <div class="skip-reason-text">🧭 対応不可業務・非希望領域「動画編集（動画シナリオ・台本作成等の文章タスクを除く）」に該当するため対応不可と判定（判定根拠: Sales Knowledge 2-1/2-2（対応可能業務・チャレンジ可能業務のいずれにも動画編集の記載なし））</div>
+    </div>
+  
+
+    <div class="excluded-card" data-reason="対応不可（Knowledge判定）">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#c0392b">対応不可（Knowledge判定）</span>
+        <span class="genre-tag">商品レビュー記事</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13553797" target="_blank" rel="noopener">【完全在宅×未経験OK】SNS投稿スタッフ｜賃貸マンション　不動産物件</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 300,000円</span>
+      </div>
+      
+      
+      <div class="skip-reason-text">🧭 対応可能業務・チャレンジ可能業務のいずれにも該当せず、能力辞典上の転用可能な関連もSales Knowledgeで確認できないため対応不可と判定（判定根拠: Sales Knowledge 1-4（証明できない案件の判断方法））</div>
+    </div>
+  
+
+    <div class="excluded-card" data-reason="対応不可（Knowledge判定）">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#c0392b">対応不可（Knowledge判定）</span>
+        <span class="genre-tag">商品レビュー記事</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13559845" target="_blank" rel="noopener">【在宅・時間自由】SNS投稿／ショート動画の作成｜未経験から長期で稼げる継続案件</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 要確認</span>
+      </div>
+      
+      
+      <div class="skip-reason-text">🧭 対応可能業務・チャレンジ可能業務のいずれにも該当せず、能力辞典上の転用可能な関連もSales Knowledgeで確認できないため対応不可と判定（判定根拠: Sales Knowledge 1-4（証明できない案件の判断方法））</div>
+    </div>
+  
+
+    <div class="excluded-card" data-reason="対応不可（Knowledge判定）">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#c0392b">対応不可（Knowledge判定）</span>
+        <span class="genre-tag">商品レビュー記事</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13564852" target="_blank" rel="noopener">カフェ好き歓迎◎お気に入りのカフェをショート動画に☕️未経験から動画編集に挑戦したい方🌼</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 10,000円</span>
+      </div>
+      
+      
+      <div class="skip-reason-text">🧭 対応不可業務・非希望領域「動画編集（動画シナリオ・台本作成等の文章タスクを除く）」に該当するため対応不可と判定（判定根拠: Sales Knowledge 2-1/2-2（対応可能業務・チャレンジ可能業務のいずれにも動画編集の記載なし））</div>
+    </div>
+  
+
+    <div class="excluded-card" data-reason="対応不可（Knowledge判定）">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#c0392b">対応不可（Knowledge判定）</span>
+        <span class="genre-tag">比較記事作成</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13547298" target="_blank" rel="noopener">【営業経験者優遇】オンライン営業メンバー増枠募集 (toC向け)</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 50,000円</span>
+      </div>
+      
+      
+      <div class="skip-reason-text">🧭 対応可能業務・チャレンジ可能業務のいずれにも該当せず、能力辞典上の転用可能な関連もSales Knowledgeで確認できないため対応不可と判定（判定根拠: Sales Knowledge 1-4（証明できない案件の判断方法））</div>
+    </div>
+  
+
+    <div class="excluded-card" data-reason="対応不可（Knowledge判定）">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#c0392b">対応不可（Knowledge判定）</span>
+        <span class="genre-tag">比較記事作成</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13553150" target="_blank" rel="noopener">運転手を募集中</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 200,000円</span>
+      </div>
+      
+      
+      <div class="skip-reason-text">🧭 対応可能業務・チャレンジ可能業務のいずれにも該当せず、能力辞典上の転用可能な関連もSales Knowledgeで確認できないため対応不可と判定（判定根拠: Sales Knowledge 1-4（証明できない案件の判断方法））</div>
+    </div>
+  
+
+    <div class="excluded-card" data-reason="対応不可（Knowledge判定）">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#c0392b">対応不可（Knowledge判定）</span>
+        <span class="genre-tag">AIライティング</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13564853" target="_blank" rel="noopener">車系・洗車系YouTube動画編集（バラエティ風テロップ歓迎）｜トーク動画／報酬1万円／継続依頼あり</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 10,000円</span>
+      </div>
+      
+      
+      <div class="skip-reason-text">🧭 対応不可業務・非希望領域「動画編集（動画シナリオ・台本作成等の文章タスクを除く）」に該当するため対応不可と判定（判定根拠: Sales Knowledge 2-1/2-2（対応可能業務・チャレンジ可能業務のいずれにも動画編集の記載なし））</div>
+    </div>
+  
+
+    <div class="excluded-card" data-reason="対応不可（Knowledge判定）">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#c0392b">対応不可（Knowledge判定）</span>
+        <span class="genre-tag">ChatGPT記事作成</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13564855" target="_blank" rel="noopener">【20代活躍】美容・ライフスタイル系Instagramのリール動画編集スタッフ募集！マニュアル完備</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 30,000円</span>
+      </div>
+      
+      
+      <div class="skip-reason-text">🧭 対応不可業務・非希望領域「動画編集（動画シナリオ・台本作成等の文章タスクを除く）」に該当するため対応不可と判定（判定根拠: Sales Knowledge 2-1/2-2（対応可能業務・チャレンジ可能業務のいずれにも動画編集の記載なし））</div>
+    </div>
+  
+
+    <div class="excluded-card" data-reason="対応不可（Knowledge判定）">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#c0392b">対応不可（Knowledge判定）</span>
+        <span class="genre-tag">Claude</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13538308" target="_blank" rel="noopener">歌うことが好きな方、音楽を通じた活動に興味のある方を募集しています</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 要確認</span>
+      </div>
+      
+      
+      <div class="skip-reason-text">🧭 対応可能業務・チャレンジ可能業務のいずれにも該当せず、能力辞典上の転用可能な関連もSales Knowledgeで確認できないため対応不可と判定（判定根拠: Sales Knowledge 1-4（証明できない案件の判断方法））</div>
+    </div>
+  
+
+    <div class="excluded-card" data-reason="対応不可（Knowledge判定）">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#c0392b">対応不可（Knowledge判定）</span>
+        <span class="genre-tag">Claude</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13559389" target="_blank" rel="noopener">【週1〜/フルリモートOK/時給2000〜4000円】子ども向けオンライン運動教室の運動コーチ職を募集！</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 4000円</span>
+      </div>
+      
+      
+      <div class="skip-reason-text">🧭 対応可能業務・チャレンジ可能業務のいずれにも該当せず、能力辞典上の転用可能な関連もSales Knowledgeで確認できないため対応不可と判定（判定根拠: Sales Knowledge 1-4（証明できない案件の判断方法））</div>
+    </div>
+  
+
+    <div class="excluded-card" data-reason="対応不可（Knowledge判定）">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#c0392b">対応不可（Knowledge判定）</span>
+        <span class="genre-tag">生成AI</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13544163" target="_blank" rel="noopener">【初心者・経験者歓迎】企業・店舗のYouTube動画の継続編集・月5本程度の継続依頼</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 要確認</span>
+      </div>
+      
+      
+      <div class="skip-reason-text">🧭 対応不可業務・非希望領域「動画編集（動画シナリオ・台本作成等の文章タスクを除く）」に該当するため対応不可と判定（判定根拠: Sales Knowledge 2-1/2-2（対応可能業務・チャレンジ可能業務のいずれにも動画編集の記載なし））</div>
+    </div>
+  
+
+    <div class="excluded-card" data-reason="対応不可（Knowledge判定）">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#c0392b">対応不可（Knowledge判定）</span>
+        <span class="genre-tag">生成AI</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13564856" target="_blank" rel="noopener">【SNS動画編集】女子旅Vlogショート動画制作！初心者も安心のマニュアル完備◎カフェや自宅での作業♩</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 30,000円</span>
+      </div>
+      
+      
+      <div class="skip-reason-text">🧭 対応不可業務・非希望領域「動画編集（動画シナリオ・台本作成等の文章タスクを除く）」に該当するため対応不可と判定（判定根拠: Sales Knowledge 2-1/2-2（対応可能業務・チャレンジ可能業務のいずれにも動画編集の記載なし））</div>
+    </div>
+  
+
+    <div class="excluded-card" data-reason="対応不可（Knowledge判定）">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#c0392b">対応不可（Knowledge判定）</span>
+        <span class="genre-tag">AI導入支援</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13535123" target="_blank" rel="noopener">【超カンタン！】完全在宅・スキマ時間｜インスタグラムDM送信｜女性ファッション誌の広告企画｜短期OK｜主婦の方大歓迎！</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 5,000円</span>
+      </div>
+      
+      
+      <div class="skip-reason-text">🧭 対応可能業務・チャレンジ可能業務のいずれにも該当せず、能力辞典上の転用可能な関連もSales Knowledgeで確認できないため対応不可と判定（判定根拠: Sales Knowledge 1-4（証明できない案件の判断方法））</div>
+    </div>
+  
+
+    <div class="excluded-card" data-reason="対応不可（Knowledge判定）">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#c0392b">対応不可（Knowledge判定）</span>
+        <span class="genre-tag">AIコンサル</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13555723" target="_blank" rel="noopener">【継続依頼・初心者可】元アイドル・タレント等の個人YouTubeチャンネル動画編集 1本7000円~</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 7000円</span>
+      </div>
+      
+      
+      <div class="skip-reason-text">🧭 対応不可業務・非希望領域「動画編集（動画シナリオ・台本作成等の文章タスクを除く）」に該当するため対応不可と判定（判定根拠: Sales Knowledge 2-1/2-2（対応可能業務・チャレンジ可能業務のいずれにも動画編集の記載なし））</div>
+    </div>
+  
+
+    <div class="excluded-card" data-reason="対応不可（Knowledge判定）">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#c0392b">対応不可（Knowledge判定）</span>
+        <span class="genre-tag">自動化</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13551269" target="_blank" rel="noopener">【未経験歓迎！】SNSのデザイン制作スタッフを募集いたします！</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 30,000円</span>
+      </div>
+      
+      
+      <div class="skip-reason-text">🧭 対応可能業務・チャレンジ可能業務のいずれにも該当せず、能力辞典上の転用可能な関連もSales Knowledgeで確認できないため対応不可と判定（判定根拠: Sales Knowledge 1-4（証明できない案件の判断方法））</div>
+    </div>
+  
+
+    <div class="excluded-card" data-reason="対応不可（Knowledge判定）">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#c0392b">対応不可（Knowledge判定）</span>
+        <span class="genre-tag">SEO・解説記事・体験ライティング</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13535855" target="_blank" rel="noopener">【在宅×YouTube】新チャンネルの動画ディレクター募集│長期依頼/企画/台本</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 250,000円</span>
+      </div>
+      <div class="skip-reason-text">見送り理由: Stage1判定: 見送り（案件詳細の全文再評価で「対応不可（Knowledge判定）」に該当した）</div>
+      
+      <div class="skip-reason-text">🧭 チャレンジ可能業務「SEO・解説記事・体験ライティング」に該当。制作実績としてAIライティング5記事（note系記事、SEO記事2本、比較記事、商品記事）、受注・実務経験としてテストライティング1件の契約・納品・検収・報酬支払い完了、使用可能ツール（ChatGPT・Claude）を活用を根拠に強い代替証明と判定。実績獲得目的の応募候補と判定。（判定根拠: Sales Knowledge 6-3（案件辞典）/ 2-2（成長領域））</div>
+    </div>
+  
+
+    <div class="excluded-card" data-reason="対応不可（Knowledge判定）">
+      <div class="excluded-header">
+        <span class="reason-badge" style="background:#c0392b">対応不可（Knowledge判定）</span>
+        <span class="genre-tag">その他</span>
+      </div>
+      <div class="excluded-title">
+        <a href="https://crowdworks.jp/public/jobs/13535259" target="_blank" rel="noopener">【未経験可】企業チャンネルの&quot;YouTube運用ディレクター&quot;を大募集！【複数案件の継続依頼可能・20代活躍中】</a>
+      </div>
+      <div class="job-meta">
+        <span class="meta-item">💰 100,000円</span>
+      </div>
+      <div class="skip-reason-text">見送り理由: Stage1判定: 見送り（案件詳細の全文再評価で「SNS運用代行」に該当した）</div>
+      
+      <div class="skip-reason-text">🧭 案件辞典の主要カテゴリーには一致しないが、案件文に転用可能な能力（改善提案力）に関連する語（改善提案）が含まれており、対応可能とも対応不可とも断定できないため確認候補と判定（判定根拠: Sales Knowledge 4章（能力辞典）※単一能力接続のため断定せず確認候補）</div>
+    </div>
+  
+  </div>
+
+  <!-- 候補リストタブ -->
+  <div id="tab-saved" class="tab-content">
+    <div id="applied-export-container"></div>
+    <div id="skipped-export-container"></div>
+    <div id="saved-list-container">
+      <div class="saved-empty">
+        🔖 「候補に追加」を押した案件がここに表示されます<br><br>
+        気になる案件を3件選んで、ChatGPTへ共有しましょう
+      </div>
+    </div>
+  </div>
+
+  <!-- FABボタン（候補リストへ） -->
+  <button class="footer-fab" onclick="switchTab('saved', null)" style="position:relative">
+    🔖
+    <span id="saved-count-badge" class="saved-count-badge" style="display:none">0</span>
+  </button>
+
+  <script>
+    // ===== タブ切り替え =====
+    const TAB_NAMES = ['now', 'highvalue', 'normal', 'confirm', 'holds', 'excluded', 'saved'];
+    function switchTab(name, el) {
+      document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.getElementById('tab-' + name).classList.add('active');
+      if (el) el.classList.add('active');
+      else {
+        const idx = TAB_NAMES.indexOf(name);
+        const tabs = document.querySelectorAll('.tab');
+        if (tabs[idx]) tabs[idx].classList.add('active');
+      }
+      if (name === 'saved') renderSavedList();
+    }
+
+    // ===== 候補保存（localStorage） =====
+    const STORAGE_KEY = 'ai_jobs_saved_v2';
+
+    function getSaved() {
+      try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); }
+      catch { return []; }
+    }
+    function setSaved(list) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+    }
+
+    function toggleSave(id, title, url, rank) {
+      let saved = getSaved();
+      const exists = saved.find(j => j.id === id);
+      if (exists) {
+        saved = saved.filter(j => j.id !== id);
+      } else {
+        saved.push({ id, title, url, rank, savedAt: new Date().toISOString() });
+      }
+      setSaved(saved);
+      updateSaveButtons();
+    }
+
+    function updateSaveButtons() {
+      const saved = getSaved();
+      const ids = new Set(saved.map(j => j.id));
+      document.querySelectorAll('.job-card').forEach(card => {
+        const id = card.dataset.id;
+        const btn = card.querySelector('.btn-save');
+        const text = card.querySelector('.save-text');
+        if (!btn) return;
+        if (ids.has(id)) {
+          btn.classList.add('saved');
+          if (text) text.textContent = '候補に追加済み';
+        } else {
+          btn.classList.remove('saved');
+          if (text) text.textContent = '候補に追加';
+        }
+      });
+      const badge = document.getElementById('saved-count-badge');
+      badge.textContent = saved.length;
+      badge.style.display = saved.length > 0 ? 'flex' : 'none';
+    }
+
+    function renderSavedList() {
+      const saved = getSaved();
+      const container = document.getElementById('saved-list-container');
+      renderAppliedExport();
+      renderSkippedExport();
+      if (saved.length === 0) {
+        container.innerHTML = '<div class="saved-empty">🔖 「候補に追加」を押した案件がここに表示されます<br><br>気になる案件を3件選んで、ChatGPTへ共有しましょう</div>';
+        return;
+      }
+      const rankColors = { S: '#e74c3c', A: '#e67e22', B: '#27ae60', C: '#7f8c8d' };
+      let html = '<div style="padding:12px 0">';
+      html += '<div style="font-size:0.82rem; color:#666; margin-bottom:10px">候補リスト（' + saved.length + '件） — ChatGPTへコピーして応募文を作成しましょう</div>';
+      saved.forEach(j => {
+        html += '<div class="saved-item">';
+        html += '<span class="saved-rank" style="color:' + (rankColors[j.rank]||'#333') + '">' + j.rank + '</span>';
+        html += '<span class="saved-title"><a href="' + j.url + '" target="_blank">' + escHtml(j.title) + '</a></span>';
+        html += '<button class="btn-remove" onclick="removeSaved(\'' + j.id + '\')" title="削除">✕</button>';
+        html += '</div>';
+      });
+
+      // ChatGPT共有テキスト生成
+      const shareText = generateShareText(saved);
+      html += '<div class="share-box">';
+      html += '<div style="font-weight:700; margin-bottom:4px">📤 ChatGPTへ共有するテキスト</div>';
+      html += '<textarea id="share-textarea" rows="8" readonly>' + escHtml(shareText) + '</textarea>';
+      html += '<button class="btn-copy" onclick="copyShareText()">📋 コピーする</button>';
+      html += '</div>';
+      html += '</div>';
+      container.innerHTML = html;
+    }
+
+    function removeSaved(id) {
+      const saved = getSaved().filter(j => j.id !== id);
+      setSaved(saved);
+      updateSaveButtons();
+      renderSavedList();
+    }
+
+    function generateShareText(saved) {
+      let text = '以下のクラウドワークス案件に応募したいです。\n';
+      text += '私のプロフィール：飲食業界22年・店長マネージャー経験・ChatGPT/Claude活用・業務改善得意・採用面接300名以上\n\n';
+      saved.forEach((j, i) => {
+        text += (i+1) + '. 【' + j.rank + 'ランク】' + j.title + '\n';
+        text += '   URL: ' + j.url + '\n\n';
+      });
+      text += 'それぞれに合った応募文を書いてください。';
+      return text;
+    }
+
+    function copyShareText() {
+      const ta = document.getElementById('share-textarea');
+      navigator.clipboard.writeText(ta.value).then(() => {
+        const btn = document.querySelector('.btn-copy');
+        btn.textContent = '✅ コピーしました';
+        setTimeout(() => { btn.textContent = '📋 コピーする'; }, 2000);
+      }).catch(() => {
+        ta.select();
+        document.execCommand('copy');
+      });
+    }
+
+    function escHtml(str) {
+      return String(str||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    // ===== 応募済み管理 =====
+    // ここでの「応募済み」はブラウザ内の一時的な表示切替のみ。
+    // 次回検索で永久に除外するには、ターミナルで mark-applied.js を実行して data/applied_jobs.json に登録する。
+    const APPLIED_KEY = 'ai_jobs_applied_v1';
+
+    function getApplied() {
+      try { return JSON.parse(localStorage.getItem(APPLIED_KEY) || '[]'); }
+      catch { return []; }
+    }
+    function setApplied(list) {
+      localStorage.setItem(APPLIED_KEY, JSON.stringify(list));
+    }
+
+    function toggleApplied(id, title, url) {
+      let applied = getApplied();
+      const exists = applied.find(j => j.id === id);
+      if (exists) {
+        applied = applied.filter(j => j.id !== id);
+      } else {
+        applied.push({ id, title, url, appliedAt: new Date().toISOString() });
+      }
+      setApplied(applied);
+      updateAppliedButtons();
+      applyAppliedFilter();
+      renderAppliedExport();
+    }
+
+    function updateAppliedButtons() {
+      const applied = getApplied();
+      const ids = new Set(applied.map(j => j.id));
+      document.querySelectorAll('.job-card').forEach(card => {
+        const id = card.dataset.id;
+        const btn = card.querySelector('.btn-applied');
+        const text = card.querySelector('.applied-text');
+        if (!btn) return;
+        if (ids.has(id)) {
+          btn.classList.add('applied');
+          card.classList.add('applied-card');
+          if (text) text.textContent = '↩ 応募済み解除';
+        } else {
+          btn.classList.remove('applied');
+          card.classList.remove('applied-card');
+          if (text) text.textContent = '✅ 応募済み';
+        }
+      });
+    }
+
+    function applyAppliedFilter() {
+      const hide = document.getElementById('hide-applied') && document.getElementById('hide-applied').checked;
+      const applied = getApplied();
+      const ids = new Set(applied.map(j => j.id));
+      document.querySelectorAll('.job-card').forEach(card => {
+        if (ids.has(card.dataset.id)) {
+          card.style.display = hide ? 'none' : '';
+        }
+      });
+    }
+
+    function renderAppliedExport() {
+      const container = document.getElementById('applied-export-container');
+      if (!container) return;
+      const applied = getApplied();
+      if (applied.length === 0) {
+        container.innerHTML = '';
+        return;
+      }
+      const ids = applied.map(j => j.id).join(' ');
+      const cmd = 'node mark-applied.js ' + ids;
+      container.innerHTML =
+        '<div class="applied-export-box">' +
+        '<div style="font-weight:700; margin-bottom:4px">✅ 応募済み登録コマンド（PCのターミナルで実行）</div>' +
+        '<div>このコマンドを実行すると、次回以降の検索でこれらの案件を表示しなくなります。</div>' +
+        '<textarea id="applied-export-textarea" rows="2" readonly>' + escHtml(cmd) + '</textarea>' +
+        '<button class="btn-copy" onclick="copyAppliedExport()">📋 コマンドをコピー</button>' +
+        '</div>';
+    }
+
+    function copyAppliedExport() {
+      const ta = document.getElementById('applied-export-textarea');
+      navigator.clipboard.writeText(ta.value).then(() => {
+        const btn = event.target;
+        const original = btn.textContent;
+        btn.textContent = '✅ コピーしました';
+        setTimeout(() => { btn.textContent = original; }, 2000);
+      }).catch(() => {
+        ta.select();
+        document.execCommand('copy');
+      });
+    }
+
+    // ===== 見送り管理 =====
+    // ここでの「見送り」もブラウザ内の一時保存のみ。
+    // 次回検索で永久に除外するには、ターミナルで mark-skipped.js を実行して data/job_status.json に登録する。
+    const SKIPPED_KEY = 'ai_jobs_skipped_v1';
+
+    function getSkipped() {
+      try { return JSON.parse(localStorage.getItem(SKIPPED_KEY) || '[]'); }
+      catch { return []; }
+    }
+    function setSkipped(list) {
+      localStorage.setItem(SKIPPED_KEY, JSON.stringify(list));
+    }
+
+    function toggleSkip(id, title, url) {
+      let skipped = getSkipped();
+      const exists = skipped.find(j => j.id === id);
+      if (exists) {
+        skipped = skipped.filter(j => j.id !== id);
+      } else {
+        const reason = window.prompt('見送り理由を入力してください（省略可）', '') || '理由未記入';
+        skipped.push({ id, title, url, reason, skippedAt: new Date().toISOString() });
+      }
+      setSkipped(skipped);
+      updateSkipButtons();
+      renderSkippedExport();
+    }
+
+    function updateSkipButtons() {
+      const skipped = getSkipped();
+      const ids = new Set(skipped.map(j => j.id));
+      document.querySelectorAll('.job-card').forEach(card => {
+        const id = card.dataset.id;
+        const btn = card.querySelector('.btn-skip');
+        const text = card.querySelector('.skip-text');
+        if (!btn) return;
+        if (ids.has(id)) {
+          btn.classList.add('skipped');
+          card.classList.add('skipped-card');
+          if (text) text.textContent = '↩ 見送り解除';
+        } else {
+          btn.classList.remove('skipped');
+          card.classList.remove('skipped-card');
+          if (text) text.textContent = '⏭ 見送り';
+        }
+      });
+    }
+
+    function applySkippedFilter() {
+      const show = document.getElementById('show-skipped') && document.getElementById('show-skipped').checked;
+      document.querySelectorAll('.excluded-card').forEach(card => {
+        if (card.dataset.reason === '見送り') {
+          card.style.display = show ? '' : 'none';
+        }
+      });
+    }
+
+    function renderSkippedExport() {
+      const container = document.getElementById('skipped-export-container');
+      if (!container) return;
+      const skipped = getSkipped();
+      if (skipped.length === 0) {
+        container.innerHTML = '';
+        return;
+      }
+      const args = skipped.map(j => '"' + j.id + '|' + j.reason.replace(/"/g, '') + '"').join(' ');
+      const cmd = 'node mark-skipped.js ' + args;
+      container.innerHTML =
+        '<div class="applied-export-box">' +
+        '<div style="font-weight:700; margin-bottom:4px">⏭ 見送り登録コマンド（PCのターミナルで実行）</div>' +
+        '<div>このコマンドを実行すると、次回以降の検索でこれらの案件を表示しなくなります。</div>' +
+        '<textarea id="skipped-export-textarea" rows="2" readonly>' + escHtml(cmd) + '</textarea>' +
+        '<button class="btn-copy" onclick="copySkippedExport()">📋 コマンドをコピー</button>' +
+        '</div>';
+    }
+
+    function copySkippedExport() {
+      const ta = document.getElementById('skipped-export-textarea');
+      navigator.clipboard.writeText(ta.value).then(() => {
+        const btn = event.target;
+        const original = btn.textContent;
+        btn.textContent = '✅ コピーしました';
+        setTimeout(() => { btn.textContent = original; }, 2000);
+      }).catch(() => {
+        ta.select();
+        document.execCommand('copy');
+      });
+    }
+
+    // 初期化
+    updateSaveButtons();
+    updateAppliedButtons();
+    applyAppliedFilter();
+    updateSkipButtons();
+    applySkippedFilter();
+  </script>
+</body>
+</html>
